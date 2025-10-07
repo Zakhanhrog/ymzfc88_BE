@@ -38,6 +38,7 @@ public class TransactionService {
     private final PaymentMethodRepository paymentMethodRepository;
     private final UserRepository userRepository;
     private final UserPaymentMethodRepository userPaymentMethodRepository;
+    private final FileStorageService fileStorageService;
     
     /**
      * Tạo yêu cầu nạp tiền
@@ -70,6 +71,24 @@ public class TransactionService {
         // Tạo transaction code
         String transactionCode = generateTransactionCode("DEP");
         
+        // Xử lý ảnh bill nếu có
+        String billImageUrl = null;
+        if (request.getBillImage() != null && !request.getBillImage().trim().isEmpty()) {
+            if (fileStorageService.isValidBase64Image(request.getBillImage())) {
+                try {
+                    billImageUrl = fileStorageService.saveBase64Image(
+                        request.getBillImage(), 
+                        request.getBillImageName()
+                    );
+                } catch (Exception e) {
+                    log.warn("Failed to save bill image for transaction {}: {}", transactionCode, e.getMessage());
+                    // Không throw exception, vẫn cho phép tạo transaction
+                }
+            } else {
+                log.warn("Invalid base64 image data for transaction {}", transactionCode);
+            }
+        }
+        
         Transaction transaction = Transaction.builder()
                 .transactionCode(transactionCode)
                 .user(user)
@@ -82,7 +101,9 @@ public class TransactionService {
                 .methodAccount(paymentMethod.getAccountNumber())
                 .description(request.getDescription())
                 .referenceCode(request.getReferenceCode())
-                .billImage(request.getBillImage())
+                .billImage(request.getBillImage()) // Lưu base64 để backup
+                .billImageName(request.getBillImageName())
+                .billImageUrl(billImageUrl) // URL của file đã lưu
                 .build();
         
         Transaction savedTransaction = transactionRepository.save(transaction);

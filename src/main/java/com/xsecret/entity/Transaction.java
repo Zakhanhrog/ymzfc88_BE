@@ -68,8 +68,14 @@ public class Transaction {
     @Column(name = "reference_code", length = 100)
     private String referenceCode;
     
-    @Column(name = "bill_image", length = 500)
+    @Column(name = "bill_image", columnDefinition = "LONGTEXT")
     private String billImage;
+    
+    @Column(name = "bill_image_name", length = 255)
+    private String billImageName;
+    
+    @Column(name = "bill_image_url", length = 500)
+    private String billImageUrl;
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "processed_by")

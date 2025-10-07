@@ -22,6 +22,12 @@ public class DepositRequestDto {
     @Size(max = 100, message = "Reference code cannot exceed 100 characters")
     private String referenceCode;
     
-    @Size(max = 500, message = "Bill image URL cannot exceed 500 characters")
+    // Base64 image string
     private String billImage;
+    
+    @Size(max = 255, message = "Bill image name cannot exceed 255 characters")
+    private String billImageName;
+    
+    @Size(max = 500, message = "Bill image URL cannot exceed 500 characters")
+    private String billImageUrl;
 }

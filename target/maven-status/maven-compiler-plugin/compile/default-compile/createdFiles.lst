@@ -5,6 +5,7 @@ com/xsecret/dto/request/LoginRequest.class
 com/xsecret/repository/UserRepository.class
 com/xsecret/entity/UserPaymentMethod$UserPaymentMethodBuilder.class
 com/xsecret/entity/User$UserBuilder.class
+com/xsecret/service/FileStorageService.class
 com/xsecret/controller/WalletController.class
 com/xsecret/dto/response/UserResponse$UserResponseBuilder.class
 com/xsecret/dto/request/WithdrawRequestDto.class
@@ -13,6 +14,7 @@ com/xsecret/entity/Transaction.class
 com/xsecret/service/AuthService.class
 com/xsecret/dto/response/TransactionResponseDto$TransactionResponseDtoBuilder.class
 com/xsecret/dto/request/CreateUserRequestDto$CreateUserRequestDtoBuilder.class
+com/xsecret/controller/FileController.class
 com/xsecret/entity/PaymentMethod.class
 com/xsecret/dto/request/PaymentMethodRequestDto.class
 com/xsecret/repository/UserWalletRepository.class
@@ -48,6 +50,7 @@ com/xsecret/service/UserService.class
 com/xsecret/dto/response/ApiResponse$ApiResponseBuilder.class
 com/xsecret/dto/UserPaymentMethodRequestDto.class
 com/xsecret/dto/response/JwtResponse.class
+com/xsecret/config/FileUploadConfig.class
 com/xsecret/dto/request/ProcessTransactionRequestDto.class
 com/xsecret/entity/RefreshToken.class
 com/xsecret/dto/response/TransactionResponseDto.class

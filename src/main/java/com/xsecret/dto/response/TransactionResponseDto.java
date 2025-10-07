@@ -33,6 +33,8 @@ public class TransactionResponseDto {
     private String adminNote;
     private String referenceCode;
     private String billImage;
+    private String billImageName;
+    private String billImageUrl;
     private String processedByUsername;
     private LocalDateTime processedAt;
     private LocalDateTime createdAt;
@@ -59,6 +61,8 @@ public class TransactionResponseDto {
                 .adminNote(entity.getAdminNote())
                 .referenceCode(entity.getReferenceCode())
                 .billImage(entity.getBillImage())
+                .billImageName(entity.getBillImageName())
+                .billImageUrl(entity.getBillImageUrl())
                 .processedByUsername(entity.getProcessedBy() != null ? 
                     entity.getProcessedBy().getUsername() : null)
                 .processedAt(entity.getProcessedAt())
