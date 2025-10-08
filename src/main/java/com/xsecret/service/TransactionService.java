@@ -39,6 +39,7 @@ public class TransactionService {
     private final UserRepository userRepository;
     private final UserPaymentMethodRepository userPaymentMethodRepository;
     private final FileStorageService fileStorageService;
+    private final PointService pointService;
     
     /**
      * Tạo yêu cầu nạp tiền
@@ -140,6 +141,21 @@ public class TransactionService {
             throw new RuntimeException("Insufficient balance");
         }
         
+        // Kiểm tra số điểm
+        if (request.getPoints() != null) {
+            // Validate tính nhất quán giữa điểm và tiền (1000đ = 1 điểm)
+            BigDecimal expectedAmount = BigDecimal.valueOf(request.getPoints() * 1000);
+            if (request.getAmount().compareTo(expectedAmount) != 0) {
+                throw new RuntimeException("Amount and points mismatch. Expected: " + expectedAmount + " VND for " + request.getPoints() + " points");
+            }
+            
+            // Kiểm tra user có đủ điểm không
+            Integer userPoints = pointService.getUserPointsBalance(user.getId());
+            if (userPoints < request.getPoints()) {
+                throw new RuntimeException("Insufficient points. You have " + userPoints + " points but trying to withdraw " + request.getPoints() + " points");
+            }
+        }
+        
         // Tính fee (có thể set fee cố định hoặc tính theo % cho withdraw)
         BigDecimal fee = BigDecimal.ZERO; // Có thể customize fee cho withdraw
         BigDecimal netAmount = request.getAmount().subtract(fee);
@@ -159,12 +175,39 @@ public class TransactionService {
                 .description(request.getDescription())
                 .note("Account: " + userPaymentMethod.getAccountName() + " - " + userPaymentMethod.getAccountNumber() + 
                      " (" + userPaymentMethod.getType().name() + ")" +
-                     (userPaymentMethod.getBankCode() != null ? " - " + userPaymentMethod.getBankCode() : ""))
+                     (userPaymentMethod.getBankCode() != null ? " - " + userPaymentMethod.getBankCode() : "") +
+                     (request.getPoints() != null ? " | Points: " + request.getPoints() : ""))
                 .build();
         
         Transaction savedTransaction = transactionRepository.save(transaction);
-        log.info("Created user withdraw request: {} for user: {} amount: {} using payment method: {}", 
-                transactionCode, username, request.getAmount(), userPaymentMethod.getName());
+        
+        // Sau khi save, set payment method info để hiển thị trong admin (không save lại)
+        // Tạo transient PaymentMethod object để mapping
+        PaymentMethod displayPaymentMethod = new PaymentMethod();
+        displayPaymentMethod.setId(userPaymentMethod.getId());
+        displayPaymentMethod.setType(userPaymentMethod.getType());
+        displayPaymentMethod.setName(userPaymentMethod.getName());
+        displayPaymentMethod.setAccountNumber(userPaymentMethod.getAccountNumber());
+        displayPaymentMethod.setAccountName(userPaymentMethod.getAccountName());
+        displayPaymentMethod.setBankCode(userPaymentMethod.getBankCode());
+        
+        savedTransaction.setPaymentMethod(displayPaymentMethod);
+        
+        // Trừ điểm ngay lập tức khi tạo withdraw request (để tránh abuse)
+        if (request.getPoints() != null) {
+            try {
+                pointService.deductPointsFromWithdraw(user, request.getPoints(), savedTransaction.getId());
+                log.info("Deducted {} points from user {} for withdraw request {}", 
+                        request.getPoints(), username, transactionCode);
+            } catch (Exception e) {
+                // Rollback transaction nếu trừ điểm thất bại
+                transactionRepository.delete(savedTransaction);
+                throw new RuntimeException("Failed to deduct points: " + e.getMessage());
+            }
+        }
+        
+        log.info("Created user withdraw request: {} for user: {} amount: {} points: {} using payment method: {}", 
+                transactionCode, username, request.getAmount(), request.getPoints(), userPaymentMethod.getName());
         
         return TransactionResponseDto.fromEntity(savedTransaction);
     }
@@ -264,6 +307,14 @@ public class TransactionService {
                 user.setBalance(user.getBalance() + amountToAdd.doubleValue());
                 log.info("Added {} to user {} balance. New balance: {}", 
                         amountToAdd, user.getUsername(), user.getBalance());
+                
+                // Cộng điểm khi nạp tiền thành công (1000đ = 1 điểm)
+                try {
+                    pointService.addPointsFromDeposit(user, amountToAdd, transaction.getId());
+                } catch (Exception e) {
+                    log.error("Failed to add points for deposit transaction {}: {}", 
+                             transaction.getTransactionCode(), e.getMessage());
+                }
             } else if (transaction.getType() == Transaction.TransactionType.WITHDRAW) {
                 // Rút tiền: trừ từ số dư
                 user.setBalance(user.getBalance() - transaction.getAmount().doubleValue());
@@ -274,6 +325,36 @@ public class TransactionService {
             
         } else {
             transaction.setStatus(Transaction.TransactionStatus.REJECTED);
+            
+            // Nếu là withdraw bị reject, hoàn lại điểm đã trừ
+            if (transaction.getType() == Transaction.TransactionType.WITHDRAW) {
+                try {
+                    // Parse số điểm từ note của transaction
+                    String note = transaction.getNote();
+                    if (note != null && note.contains("Points: ")) {
+                        String pointsStr = note.substring(note.indexOf("Points: ") + 8);
+                        // Lấy số điểm (có thể có thêm text sau)
+                        int endIndex = pointsStr.indexOf(" ");
+                        if (endIndex == -1) endIndex = pointsStr.length();
+                        
+                        try {
+                            Integer pointsToRefund = Integer.parseInt(pointsStr.substring(0, endIndex).trim());
+                            
+                            // Hoàn lại điểm
+                            pointService.refundPointsFromRejectedWithdraw(
+                                transaction.getUser(), pointsToRefund, transaction.getId());
+                            
+                            log.info("Refunded {} points to user {} for rejected withdraw transaction {}", 
+                                    pointsToRefund, transaction.getUser().getUsername(), transaction.getTransactionCode());
+                        } catch (NumberFormatException e) {
+                            log.warn("Could not parse points from transaction note: {}", note);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to refund points for rejected withdraw transaction {}: {}", 
+                             transaction.getTransactionCode(), e.getMessage());
+                }
+            }
         }
         
         Transaction processedTransaction = transactionRepository.save(transaction);
@@ -291,7 +372,7 @@ public class TransactionService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
         Page<Transaction> transactions = transactionRepository.findByUserOrderByCreatedAtDesc(user, pageable);
-        return transactions.map(TransactionResponseDto::fromEntity);
+        return transactions.map(this::enrichTransactionWithPaymentMethod);
     }
     
     /**
@@ -303,7 +384,7 @@ public class TransactionService {
         
         List<Transaction> transactions = transactionRepository.findByUserAndType(user, type);
         return transactions.stream()
-                .map(TransactionResponseDto::fromEntity)
+                .map(this::enrichTransactionWithPaymentMethod)
                 .collect(Collectors.toList());
     }
     
@@ -313,7 +394,7 @@ public class TransactionService {
     public Page<TransactionResponseDto> getPendingTransactions(Pageable pageable) {
         Page<Transaction> transactions = transactionRepository.findByStatusOrderByCreatedAtAsc(
                 Transaction.TransactionStatus.PENDING, pageable);
-        return transactions.map(TransactionResponseDto::fromEntity);
+        return transactions.map(this::enrichTransactionWithPaymentMethod);
     }
     
     /**
@@ -328,7 +409,53 @@ public class TransactionService {
         
         Page<Transaction> transactions = transactionRepository.findTransactionsWithFilters(
                 type, status, startDate, endDate, pageable);
-        return transactions.map(TransactionResponseDto::fromEntity);
+        return transactions.map(this::enrichTransactionWithPaymentMethod);
+    }
+    
+    /**
+     * Helper method để enrich payment method data cho withdraw transactions
+     */
+    private TransactionResponseDto enrichTransactionWithPaymentMethod(Transaction transaction) {
+        // Nếu là withdraw transaction và chưa có payment method, tìm và set data
+        if (transaction.getType() == Transaction.TransactionType.WITHDRAW && 
+            transaction.getPaymentMethod() == null && 
+            transaction.getNote() != null && 
+            transaction.getNote().contains("Account:")) {
+            
+            try {
+                // Extract UserPaymentMethod info từ note và methodAccount
+                String note = transaction.getNote();
+                String methodAccount = transaction.getMethodAccount();
+                
+                if (methodAccount != null) {
+                    // Tìm UserPaymentMethod dựa trên user và account number
+                    User transactionUser = transaction.getUser();
+                    List<UserPaymentMethod> userPaymentMethods = userPaymentMethodRepository.findByUserOrderByIsDefaultDescCreatedAtDesc(transactionUser);
+                    
+                    UserPaymentMethod matchingMethod = userPaymentMethods.stream()
+                        .filter(upm -> upm.getAccountNumber().equals(methodAccount))
+                        .findFirst()
+                        .orElse(null);
+                    
+                    if (matchingMethod != null) {
+                        // Tạo transient PaymentMethod object để hiển thị
+                        PaymentMethod displayPaymentMethod = new PaymentMethod();
+                        displayPaymentMethod.setId(matchingMethod.getId());
+                        displayPaymentMethod.setType(matchingMethod.getType());
+                        displayPaymentMethod.setName(matchingMethod.getName());
+                        displayPaymentMethod.setAccountNumber(matchingMethod.getAccountNumber());
+                        displayPaymentMethod.setAccountName(matchingMethod.getAccountName());
+                        displayPaymentMethod.setBankCode(matchingMethod.getBankCode());
+                        
+                        transaction.setPaymentMethod(displayPaymentMethod);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Failed to enrich payment method for transaction {}: {}", transaction.getId(), e.getMessage());
+            }
+        }
+        
+        return TransactionResponseDto.fromEntity(transaction);
     }
     
     /**
@@ -346,7 +473,7 @@ public class TransactionService {
             throw new RuntimeException("Access denied");
         }
         
-        return TransactionResponseDto.fromEntity(transaction);
+        return enrichTransactionWithPaymentMethod(transaction);
     }
     
     /**

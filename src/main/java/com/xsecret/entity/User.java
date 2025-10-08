@@ -53,6 +53,10 @@ public class User {
     @Builder.Default
     private Double balance = 0.0;
 
+    @Column(name = "points")
+    @Builder.Default
+    private Long points = 0L;
+
     @Column(name = "kyc_verified")
     @Builder.Default
     private Boolean kycVerified = false;

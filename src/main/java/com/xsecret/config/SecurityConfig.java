@@ -71,6 +71,7 @@ public class SecurityConfig {
                     .requestMatchers("/wallet/**").hasAnyRole("USER", "ADMIN")
                     .requestMatchers("/transactions/**").hasAnyRole("USER", "ADMIN")
                     .requestMatchers("/user-payment-methods/**").hasAnyRole("USER", "ADMIN")
+                    .requestMatchers("/points/**").hasAnyRole("USER", "ADMIN")
                     // All other requests need authentication
                     .anyRequest().authenticated()
             )
