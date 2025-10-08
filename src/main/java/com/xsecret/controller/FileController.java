@@ -45,6 +45,32 @@ public class FileController {
         }
     }
     
+    @GetMapping("/kyc/{filename}")
+    public ResponseEntity<byte[]> getKycImage(@PathVariable String filename) {
+        try {
+            // Đường dẫn đến file ảnh KYC
+            Path filePath = Paths.get("uploads/kyc/" + filename);
+            
+            if (!Files.exists(filePath)) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            // Đọc file thành byte array
+            byte[] imageBytes = Files.readAllBytes(filePath);
+            
+            // Xác định content type dựa trên extension
+            String contentType = getContentType(filename);
+            
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_TYPE, contentType)
+                    .header(HttpHeaders.CACHE_CONTROL, "max-age=3600") // Cache 1 hour
+                    .body(imageBytes);
+                    
+        } catch (IOException e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+    
     private String getContentType(String filename) {
         String extension = filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
         switch (extension) {

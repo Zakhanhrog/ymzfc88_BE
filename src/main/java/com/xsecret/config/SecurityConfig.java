@@ -60,10 +60,17 @@ public class SecurityConfig {
                     .requestMatchers("/auth/**").permitAll()
                     .requestMatchers("/admin/login").permitAll()
                     .requestMatchers("/h2-console/**").permitAll()
+                    .requestMatchers("/uploads/**").permitAll()
+                    .requestMatchers("/files/**").permitAll()
                     // Admin endpoints
                     .requestMatchers("/admin/**").hasRole("ADMIN")
+                    .requestMatchers("/kyc/admin/**").hasRole("ADMIN")
                     // User endpoints
                     .requestMatchers("/user/**").hasAnyRole("USER", "ADMIN")
+                    .requestMatchers("/kyc/**").hasAnyRole("USER", "ADMIN")
+                    .requestMatchers("/wallet/**").hasAnyRole("USER", "ADMIN")
+                    .requestMatchers("/transactions/**").hasAnyRole("USER", "ADMIN")
+                    .requestMatchers("/user-payment-methods/**").hasAnyRole("USER", "ADMIN")
                     // All other requests need authentication
                     .anyRequest().authenticated()
             )

@@ -120,6 +120,13 @@ public class TransactionService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
+        // Kiểm tra xem người dùng có bị khóa rút tiền không
+        if (user.getWithdrawalLocked() != null && user.getWithdrawalLocked()) {
+            String reason = user.getWithdrawalLockReason() != null ? 
+                user.getWithdrawalLockReason() : "Tài khoản của bạn đã bị khóa rút tiền";
+            throw new RuntimeException("WITHDRAWAL_LOCKED: " + reason);
+        }
+        
         UserPaymentMethod userPaymentMethod = userPaymentMethodRepository.findById(request.getUserPaymentMethodId())
                 .orElseThrow(() -> new RuntimeException("User payment method not found"));
         
@@ -168,6 +175,13 @@ public class TransactionService {
     public TransactionResponseDto createWithdrawRequest(WithdrawRequestDto request, String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        // Kiểm tra xem người dùng có bị khóa rút tiền không
+        if (user.getWithdrawalLocked() != null && user.getWithdrawalLocked()) {
+            String reason = user.getWithdrawalLockReason() != null ? 
+                user.getWithdrawalLockReason() : "Tài khoản của bạn đã bị khóa rút tiền";
+            throw new RuntimeException("WITHDRAWAL_LOCKED: " + reason);
+        }
         
         PaymentMethod paymentMethod = paymentMethodRepository.findById(request.getPaymentMethodId())
                 .orElseThrow(() -> new RuntimeException("Payment method not found"));

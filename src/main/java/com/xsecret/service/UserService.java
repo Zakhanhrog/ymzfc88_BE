@@ -273,4 +273,44 @@ public class UserService {
         user.setLastLogin(LocalDateTime.now());
         userRepository.save(user);
     }
+
+    /**
+     * Khóa rút tiền cho người dùng
+     */
+    @Transactional
+    public User lockWithdrawal(Long userId, String reason, Long adminId) {
+        log.info("Locking withdrawal for user: {} by admin: {}", userId, adminId);
+        User user = getUserById(userId);
+        
+        user.setWithdrawalLocked(true);
+        user.setWithdrawalLockReason(reason);
+        user.setWithdrawalLockedAt(LocalDateTime.now());
+        user.setWithdrawalLockedBy(adminId);
+        
+        return userRepository.save(user);
+    }
+
+    /**
+     * Mở khóa rút tiền cho người dùng
+     */
+    @Transactional
+    public User unlockWithdrawal(Long userId) {
+        log.info("Unlocking withdrawal for user: {}", userId);
+        User user = getUserById(userId);
+        
+        user.setWithdrawalLocked(false);
+        user.setWithdrawalLockReason(null);
+        user.setWithdrawalLockedAt(null);
+        user.setWithdrawalLockedBy(null);
+        
+        return userRepository.save(user);
+    }
+
+    /**
+     * Kiểm tra xem người dùng có bị khóa rút tiền không
+     */
+    public boolean isWithdrawalLocked(Long userId) {
+        User user = getUserById(userId);
+        return user.getWithdrawalLocked() != null && user.getWithdrawalLocked();
+    }
 }

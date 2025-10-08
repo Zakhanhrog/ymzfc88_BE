@@ -22,6 +22,11 @@ public class UserResponse {
     private User.Role role;
     private User.UserStatus status;
     private Double balance;
+    private Boolean kycVerified;
+    private Boolean withdrawalLocked;
+    private String withdrawalLockReason;
+    private LocalDateTime withdrawalLockedAt;
+    private Long withdrawalLockedBy;
     private LocalDateTime lastLogin;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

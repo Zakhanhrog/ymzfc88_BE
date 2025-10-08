@@ -5,11 +5,17 @@ import com.xsecret.dto.request.RefreshTokenRequest;
 import com.xsecret.dto.request.RegisterRequest;
 import com.xsecret.dto.response.ApiResponse;
 import com.xsecret.dto.response.JwtResponse;
+import com.xsecret.dto.response.UserResponse;
+import com.xsecret.entity.User;
+import com.xsecret.mapper.UserMapper;
+import com.xsecret.security.UserPrincipal;
 import com.xsecret.service.AuthService;
+import com.xsecret.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -20,6 +26,8 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final UserService userService;
+    private final UserMapper userMapper;
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<JwtResponse>> login(@Valid @RequestBody LoginRequest loginRequest) {
@@ -55,5 +63,15 @@ public class AuthController {
         authService.logout(request.getRefreshToken());
         
         return ResponseEntity.ok(ApiResponse.success("Đăng xuất thành công", "Logged out successfully"));
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<UserResponse>> getCurrentUser(@AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("Get current user info request: {}", userPrincipal.getUsername());
+        
+        User user = userService.getUserById(userPrincipal.getId());
+        UserResponse userResponse = userMapper.toUserResponse(user);
+        
+        return ResponseEntity.ok(ApiResponse.success(userResponse));
     }
 }

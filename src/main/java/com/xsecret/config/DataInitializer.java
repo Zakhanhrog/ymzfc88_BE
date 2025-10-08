@@ -4,6 +4,7 @@ import com.xsecret.entity.PaymentMethod;
 import com.xsecret.entity.User;
 import com.xsecret.repository.PaymentMethodRepository;
 import com.xsecret.repository.UserRepository;
+import com.xsecret.service.SystemSettingsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,6 +22,7 @@ public class DataInitializer implements CommandLineRunner {
     private final UserRepository userRepository;
     private final PaymentMethodRepository paymentMethodRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SystemSettingsService systemSettingsService;
 
     @Value("${app.admin.default-username}")
     private String defaultAdminUsername;
@@ -35,6 +37,7 @@ public class DataInitializer implements CommandLineRunner {
     public void run(String... args) throws Exception {
         initializeAdminUser();
         initializePaymentMethods();
+        initializeSystemSettings();
     }
 
     private void initializeAdminUser() {
@@ -115,5 +118,11 @@ public class DataInitializer implements CommandLineRunner {
         } else {
             log.info("Payment methods already exist, count: {}", paymentMethodRepository.count());
         }
+    }
+
+    private void initializeSystemSettings() {
+        log.info("Initializing system settings...");
+        systemSettingsService.initializeDefaultSettings();
+        log.info("System settings initialization completed");
     }
 }

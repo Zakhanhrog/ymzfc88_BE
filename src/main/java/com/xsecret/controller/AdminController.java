@@ -17,6 +17,7 @@ import com.xsecret.mapper.UserMapper;
 import com.xsecret.security.UserPrincipal;
 import com.xsecret.service.AuthService;
 import com.xsecret.service.PaymentMethodService;
+import com.xsecret.service.SystemSettingsService;
 import com.xsecret.service.TransactionService;
 import com.xsecret.service.UserService;
 import jakarta.validation.Valid;
@@ -50,6 +51,7 @@ public class AdminController {
     private final UserMapper userMapper;
     private final TransactionService transactionService;
     private final PaymentMethodService paymentMethodService;
+    private final SystemSettingsService systemSettingsService;
 
     @PostMapping("/login")
     @PreAuthorize("permitAll()")
@@ -570,6 +572,81 @@ public class AdminController {
         } catch (Exception e) {
             log.error("Error getting withdraw statistics", e);
             return ResponseEntity.ok(ApiResponse.success(java.util.Map.of()));
+        }
+    }
+    
+    // ======================== WITHDRAWAL LOCK MANAGEMENT ========================
+    
+    /**
+     * Khóa rút tiền cho người dùng
+     */
+    @PostMapping("/users/{userId}/lock-withdrawal")
+    public ResponseEntity<ApiResponse<UserResponse>> lockWithdrawal(
+            @PathVariable Long userId,
+            @RequestParam(required = false) String reason,
+            @AuthenticationPrincipal UserPrincipal adminPrincipal) {
+        try {
+            log.info("Admin {} locking withdrawal for user {}", adminPrincipal.getId(), userId);
+            
+            // Nếu không có lý do, sử dụng lý do mặc định từ system settings
+            String lockReason = reason;
+            if (lockReason == null || lockReason.trim().isEmpty()) {
+                lockReason = systemSettingsService.getDefaultWithdrawalLockReason();
+                log.info("Using default withdrawal lock reason for user {}", userId);
+            }
+            
+            User user = userService.lockWithdrawal(userId, lockReason, adminPrincipal.getId());
+            UserResponse userResponse = userMapper.toUserResponse(user);
+            
+            return ResponseEntity.ok(ApiResponse.success("Khóa rút tiền thành công", userResponse));
+        } catch (Exception e) {
+            log.error("Error locking withdrawal for user {}", userId, e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+    
+    /**
+     * Mở khóa rút tiền cho người dùng
+     */
+    @PostMapping("/users/{userId}/unlock-withdrawal")
+    public ResponseEntity<ApiResponse<UserResponse>> unlockWithdrawal(
+            @PathVariable Long userId,
+            @AuthenticationPrincipal UserPrincipal adminPrincipal) {
+        try {
+            log.info("Admin {} unlocking withdrawal for user {}", adminPrincipal.getId(), userId);
+            
+            User user = userService.unlockWithdrawal(userId);
+            UserResponse userResponse = userMapper.toUserResponse(user);
+            
+            return ResponseEntity.ok(ApiResponse.success("Mở khóa rút tiền thành công", userResponse));
+        } catch (Exception e) {
+            log.error("Error unlocking withdrawal for user {}", userId, e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+    
+    /**
+     * Kiểm tra trạng thái khóa rút tiền của người dùng
+     */
+    @GetMapping("/users/{userId}/withdrawal-lock-status")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getWithdrawalLockStatus(
+            @PathVariable Long userId) {
+        try {
+            User user = userService.getUserById(userId);
+            
+            java.util.Map<String, Object> status = new java.util.HashMap<>();
+            status.put("locked", user.getWithdrawalLocked() != null && user.getWithdrawalLocked());
+            status.put("reason", user.getWithdrawalLockReason());
+            status.put("lockedAt", user.getWithdrawalLockedAt());
+            status.put("lockedBy", user.getWithdrawalLockedBy());
+            
+            return ResponseEntity.ok(ApiResponse.success(status));
+        } catch (Exception e) {
+            log.error("Error getting withdrawal lock status for user {}", userId, e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
         }
     }
 }

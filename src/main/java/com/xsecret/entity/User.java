@@ -53,6 +53,23 @@ public class User {
     @Builder.Default
     private Double balance = 0.0;
 
+    @Column(name = "kyc_verified")
+    @Builder.Default
+    private Boolean kycVerified = false;
+
+    @Column(name = "withdrawal_locked")
+    @Builder.Default
+    private Boolean withdrawalLocked = false;
+
+    @Column(name = "withdrawal_lock_reason")
+    private String withdrawalLockReason;
+
+    @Column(name = "withdrawal_locked_at")
+    private LocalDateTime withdrawalLockedAt;
+
+    @Column(name = "withdrawal_locked_by")
+    private Long withdrawalLockedBy; // Admin user ID who locked
+
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
 
