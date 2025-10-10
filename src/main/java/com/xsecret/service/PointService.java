@@ -168,17 +168,18 @@ public class PointService {
                     return userPointRepository.save(newUserPoint);
                 });
 
-        BigDecimal balanceBefore = userPoint.getTotalPoints();
+        // Sử dụng user.points làm chuẩn để tránh không đồng bộ
+        BigDecimal balanceBefore = BigDecimal.valueOf(user.getPoints() != null ? user.getPoints() : 0L);
         BigDecimal balanceAfter = balanceBefore.add(points);
 
-        // Update user points
+        // Update user points first (chuẩn)
+        user.setPoints(balanceAfter.longValue());
+        userRepository.save(user);
+
+        // Sync userPoint với user.points
         userPoint.setTotalPoints(balanceAfter);
         userPoint.setLifetimeEarned(userPoint.getLifetimeEarned().add(points));
         userPointRepository.save(userPoint);
-
-        // Update user entity
-        user.setPoints(balanceAfter.longValue());
-        userRepository.save(user);
 
         // Create transaction record
         PointTransaction transaction = PointTransaction.builder()
@@ -204,7 +205,8 @@ public class PointService {
         UserPoint userPoint = userPointRepository.findByUser(user)
                 .orElseThrow(() -> new RuntimeException("User points not found"));
 
-        BigDecimal balanceBefore = userPoint.getTotalPoints();
+        // Sử dụng user.points làm chuẩn để tránh không đồng bộ
+        BigDecimal balanceBefore = BigDecimal.valueOf(user.getPoints() != null ? user.getPoints() : 0L);
         
         if (balanceBefore.compareTo(points) < 0) {
             throw new RuntimeException("Insufficient points");
@@ -212,14 +214,14 @@ public class PointService {
 
         BigDecimal balanceAfter = balanceBefore.subtract(points);
 
-        // Update user points
+        // Update user points first (chuẩn)
+        user.setPoints(balanceAfter.longValue());
+        userRepository.save(user);
+
+        // Sync userPoint với user.points
         userPoint.setTotalPoints(balanceAfter);
         userPoint.setLifetimeSpent(userPoint.getLifetimeSpent().add(points));
         userPointRepository.save(userPoint);
-
-        // Update user entity
-        user.setPoints(balanceAfter.longValue());
-        userRepository.save(user);
 
         // Create transaction record
         PointTransaction transaction = PointTransaction.builder()

@@ -51,20 +51,25 @@ public class BetService {
                 .orElseThrow(() -> new RuntimeException("User không tồn tại"));
 
         // Tính toán - sử dụng điểm để đặt cược
-        BigDecimal betPoints = request.getBetAmount(); // Số điểm cược (nhận trực tiếp từ frontend)
+        BigDecimal betPoints = request.getBetAmount(); // Tổng số điểm cược (chia đều cho các số)
         List<String> selectedNumbers = parseSelectedNumbers(convertToJsonString(request.getSelectedNumbers()));
         int selectedCount = selectedNumbers.size();
         
-        // Tiền đặt cược = số điểm cược × đơn giá × số lô đã chọn
-        BigDecimal betAmount = betPoints.multiply(request.getPricePerPoint()).multiply(BigDecimal.valueOf(selectedCount));
-        BigDecimal potentialWin = betAmount.multiply(request.getOdds()); // Tiền thắng tiềm năng
+        // Tiền đặt cược = số điểm × đơn giá × số lượng số
+        // Ví dụ: 10 điểm × 27 × 3 số = 810
+        BigDecimal totalBetAmount = betPoints.multiply(request.getPricePerPoint()).multiply(BigDecimal.valueOf(selectedCount));
+        
+        // Tiền thắng nếu tất cả trúng = số điểm × tỷ lệ × số lượng số
+        // Ví dụ: 10 điểm × 99 × 3 số = 2,970
+        BigDecimal potentialWin = betPoints.multiply(request.getOdds()).multiply(BigDecimal.valueOf(selectedCount));
+        BigDecimal potentialProfit = potentialWin.subtract(totalBetAmount); // Chỉ tính tiền lãi
 
         // Log bet calculation
-        log.info("Bet calculation - betPoints: {}, selectedCount: {}, betAmount: {}, userPoints: {}, pricePerPoint: {}", 
-                betPoints, selectedCount, betAmount, user.getPoints(), request.getPricePerPoint());
+        log.info("Bet calculation - betPoints: {}, selectedCount: {}, totalBetAmount: {}, userPoints: {}, pricePerPoint: {}, potentialWin: {}", 
+                betPoints, selectedCount, totalBetAmount, user.getPoints(), request.getPricePerPoint(), potentialWin);
 
-        // Kiểm tra số điểm có đủ không (trừ tiền đặt cược)
-        long pointsToDeductLong = betAmount.longValue();
+        // Kiểm tra số điểm có đủ không (trừ tổng tiền đặt cược)
+        long pointsToDeductLong = totalBetAmount.longValue();
         if (user.getPoints() < pointsToDeductLong) {
             throw new RuntimeException("Số điểm không đủ để đặt cược. Cần: " + pointsToDeductLong + " điểm, hiện có: " + user.getPoints() + " điểm");
         }
@@ -88,11 +93,11 @@ public class BetService {
                 .region(request.getRegion())
                 .betType(request.getBetType())
                 .selectedNumbers(convertToJsonString(request.getSelectedNumbers()))
-                .betAmount(betPoints) // Số điểm cược
+                .betAmount(betPoints) // Tổng số điểm cược (chia đều cho các số)
                 .pricePerPoint(request.getPricePerPoint()) // Đơn giá 1 điểm
-                .totalAmount(betAmount) // Tổng tiền cược (điểm)
+                .totalAmount(totalBetAmount) // Tổng tiền cược (điểm)
                 .odds(request.getOdds())
-                .potentialWin(potentialWin) // Tiền thắng tiềm năng (điểm)
+                .potentialWin(potentialWin) // Tổng tiền có thể nhận (gốc + lãi)
                 .status(Bet.BetStatus.PENDING)
                 .resultDate(getCurrentDateString())
                 .build();
@@ -160,6 +165,9 @@ public class BetService {
 
     /**
      * Kiểm tra kết quả cho 1 bet cụ thể
+     * LOGIC CUỐI CÙNG: 
+     * 1. Đặt cược: Trừ toàn bộ tiền cược
+     * 2. Thắng cược: Cộng CHỈ tiền lãi của số trúng (thua mất luôn, không hoàn vốn)
      */
     @Transactional
     public void checkBetResult(Bet bet) {
@@ -174,44 +182,69 @@ public class BetService {
         if (isWin) {
             bet.setStatus(Bet.BetStatus.WON);
             
-            // Tính tiền thắng: cộng tiền thắng của từng số trúng
+            // Tính tiền thắng: cộng TOÀN BỘ tiền thắng (bao gồm cả vốn)
             BigDecimal winAmount;
             if ("loto2s".equals(bet.getBetType()) || "loto-2-so".equals(bet.getBetType())) {
                 // Cho loto2s: tính tiền thắng dựa trên số lượng số trúng
                 List<String> winningNumbers = parseSelectedNumbers(bet.getWinningNumbers());
                 int winningCount = winningNumbers.size();
                 
-                // Tiền thắng = (số điểm cược × đơn giá × tỷ lệ cược) × số lượng số trúng
-                // Ví dụ: 1 điểm × 27,000 VND/điểm × 99 × 1 số trúng = 2,673,000 VND
-                BigDecimal betPoints = bet.getBetAmount(); // Số điểm cược
-                BigDecimal singleBetAmount = betPoints.multiply(bet.getPricePerPoint()); // Tiền cược cho 1 số
-                BigDecimal singleWinAmount = singleBetAmount.multiply(bet.getOdds()); // Tiền thắng cho 1 số
-                winAmount = singleWinAmount.multiply(BigDecimal.valueOf(winningCount)); // Tổng tiền thắng
+                // Logic mới: số điểm × tỷ lệ × số trúng + bonus cho trúng nhiều lần
+                // Ví dụ: 10 điểm × 99 × 2 số trúng = 1,980
+                BigDecimal totalBetPoints = bet.getBetAmount(); // Số điểm cược (10)
+                List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
                 
-                log.info("Loto2s win calculation: {} winning numbers, {} points per number, {} VND per win, total: {} VND", 
-                        winningCount, betPoints, singleWinAmount, winAmount);
+                // Đếm số lần mỗi số được chọn trúng trong kết quả
+                BigDecimal totalWinAmount = BigDecimal.ZERO;
+                
+                for (String selectedNumber : selectedNumbers) {
+                    // Đếm số lần số này xuất hiện trong winningNumbers
+                    long winCount = winningNumbers.stream().filter(wn -> wn.equals(selectedNumber)).count();
+                    
+                    if (winCount > 0) {
+                        // Lần đầu: tiền thắng đầy đủ (đã bao gồm trừ gốc logic)
+                        BigDecimal baseWin = totalBetPoints.multiply(bet.getOdds());
+                        totalWinAmount = totalWinAmount.add(baseWin);
+                        
+                        // Từ lần thứ 2 trở đi: chỉ cộng thêm lãi (không trừ gốc)
+                        if (winCount > 1) {
+                            BigDecimal bonusWin = totalBetPoints.multiply(bet.getOdds()).multiply(BigDecimal.valueOf(winCount - 1));
+                            totalWinAmount = totalWinAmount.add(bonusWin);
+                            
+                            log.info("Bonus win for number {} (won {} times): base={}, bonus={}", 
+                                    selectedNumber, winCount, baseWin, bonusWin);
+                        }
+                    }
+                }
+                
+                winAmount = totalWinAmount;
+                
+                log.info("Loto2s win calculation with bonus: total selected numbers: {}, total win amount: {} points", 
+                        selectedNumbers.size(), totalWinAmount);
             } else {
-                // Các loại khác: giữ nguyên logic cũ
-                winAmount = bet.getPotentialWin();
+                // Các loại khác: chỉ cộng tiền lãi (trừ vốn vì đã bị trừ khi đặt cược)
+                winAmount = bet.getPotentialWin().subtract(bet.getTotalAmount()); // Chỉ lãi, không bao gồm vốn
             }
             
             bet.setWinAmount(winAmount);
             
-            // Cộng tiền thắng vào tài khoản (đã là điểm)
+            // Cộng tiền LÃI vào tài khoản (thua là mất luôn, không hoàn vốn)
             User user = bet.getUser();
-            BigDecimal winPoints = winAmount; // Đã là điểm rồi, không cần chia 1000
+            BigDecimal profitPoints = winAmount; // Chỉ là tiền lãi
             
             long pointsBefore = user.getPoints();
-            long pointsAfter = pointsBefore + winPoints.longValue();
-            user.setPoints(pointsAfter);
-            userRepository.save(user);
             
-            // Cập nhật UserPoint entity để đồng bộ
-            pointService.addPoints(user, winPoints, 
+            // Cộng tiền lãi vào tài khoản:
+            // 1. Cộng điểm lãi vào user.points
+            // 2. Cập nhật UserPoint entity
+            // 3. Tạo PointTransaction record
+            pointService.addPoints(user, profitPoints, 
                 com.xsecret.entity.PointTransaction.PointTransactionType.BET_WIN,
-                "Thắng cược: " + winAmount + " điểm", "BET", bet.getId(), null);
+                "Thắng cược (chỉ lãi): " + winAmount + " điểm", "BET", bet.getId(), null);
             
-            log.info("Bet {} WON! Win amount: {} points. User points: {} -> {}", bet.getId(), winAmount, pointsBefore, pointsAfter);
+            long pointsAfter = user.getPoints();
+            log.info("Bet {} WON! Profit amount: {} points (thua mất luôn, không hoàn vốn). User points: {} -> {}", 
+                    bet.getId(), winAmount, pointsBefore, pointsAfter);
         } else {
             bet.setStatus(Bet.BetStatus.LOST);
             bet.setWinAmount(BigDecimal.ZERO);
@@ -244,7 +277,7 @@ public class BetService {
             // Mock kết quả xổ số (thay thế bằng API thật sau)
             List<String> lotteryResults = getMockLotteryResults();
             
-            // Tìm tất cả số trúng
+            // Tìm TẤT CẢ số trúng (không break để đếm được nhiều lần)
             List<String> winningNumbers = new ArrayList<>();
             for (String selectedNumber : selectedNumbers) {
                 for (String result : lotteryResults) {
@@ -253,7 +286,7 @@ public class BetService {
                         if (selectedNumber.equals(lastTwoDigits)) {
                             winningNumbers.add(selectedNumber);
                             log.info("Loto2s WIN: Selected {} matches last 2 digits of {}", selectedNumber, result);
-                            break; // Chỉ cần tìm thấy 1 lần trùng là đủ
+                            // KHÔNG BREAK để có thể tìm thấy số trúng nhiều lần
                         }
                     }
                 }
@@ -277,19 +310,28 @@ public class BetService {
     
     /**
      * Mock kết quả xổ số (thay thế bằng API thật sau)
+     * ĐÃ SỬA ĐỂ TEST TRÚNG 2 LẦN - CHỈ TÍNH 2 SỐ CUỐI
      */
     private List<String> getMockLotteryResults() {
-        // Mock kết quả xổ số Miền Bắc
+        // Mock kết quả có số 45 xuất hiện 2 lần và số 88 xuất hiện 2 lần để test
         return List.of(
-            "09565", // Giải đặc biệt
-            "12345", // Giải nhất
-            "23456", // Giải nhì
-            "34567", // Giải ba
-            "45678", // Giải tư
-            "56789", // Giải năm
-            "67890", // Giải sáu
-            "78901"  // Giải bảy
+            "12345", // Giải đặc biệt - 2 số cuối: 45
+            "67845", // Giải nhất - 2 số cuối: 45  
+            "23488", // Giải nhì - 2 số cuối: 88
+            "34567", // Giải ba - 2 số cuối: 67
+            "78988", // Giải tư - 2 số cuối: 88
+            "56789", // Giải năm - 2 số cuối: 89
+            "67890", // Giải sáu - 2 số cuối: 90
+            "11223"  // Giải bảy - 2 số cuối: 23
         );
+        
+        // KẾT QUẢ TRÚNG (CHỈ TÍNH 2 SỐ CUỐI):
+        // - Số 45: trúng 2 lần (12345→45, 67845→45)
+        // - Số 88: trúng 2 lần (23488→88, 78988→88)  
+        // - Số 67: trúng 1 lần (34567→67)
+        // - Số 89: trúng 1 lần (56789→89)
+        // - Số 90: trúng 1 lần (67890→90)
+        // - Số 23: trúng 1 lần (11223→23)
     }
     
     /**
@@ -297,7 +339,8 @@ public class BetService {
      */
     private List<String> parseSelectedNumbers(String selectedNumbersJson) {
         try {
-            return objectMapper.readValue(selectedNumbersJson, List.class);
+            return objectMapper.readValue(selectedNumbersJson, 
+                objectMapper.getTypeFactory().constructCollectionType(List.class, String.class));
         } catch (Exception e) {
             log.error("Error parsing selected numbers: {}", e.getMessage());
             return List.of();
@@ -326,45 +369,12 @@ public class BetService {
     }
 
     /**
-     * Hủy bet (chỉ được hủy khi chưa có kết quả)
+     * Hủy bet - CHỨC NĂNG ĐÃ BỊ VÔ HIỆU HÓA
+     * Đặt cược rồi thì không được hủy để tránh xung đột logic
      */
     @Transactional
     public BetResponse cancelBet(Long betId, Long userId) {
-        Bet bet = betRepository.findById(betId)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy bet với ID: " + betId));
-
-        if (!bet.getUser().getId().equals(userId)) {
-            throw new RuntimeException("Bạn không có quyền hủy bet này");
-        }
-
-        if (bet.getStatus() != Bet.BetStatus.PENDING) {
-            throw new RuntimeException("Không thể hủy bet đã có kết quả");
-        }
-
-        // Hoàn điểm
-        User user = bet.getUser();
-        BigDecimal refundAmount = bet.getTotalAmount();
-        BigDecimal refundPoints = refundAmount.divide(BigDecimal.valueOf(1000), 0, java.math.RoundingMode.UP);
-        
-        long pointsBefore = user.getPoints();
-        long pointsAfter = pointsBefore + refundPoints.longValue();
-        user.setPoints(pointsAfter);
-        userRepository.save(user);
-        
-        // Cập nhật UserPoint entity để đồng bộ
-        pointService.addPoints(user, refundPoints, 
-            com.xsecret.entity.PointTransaction.PointTransactionType.BET_REFUND,
-            "Hoàn cược: " + refundAmount + " VND (" + refundPoints + " điểm)", "BET", bet.getId(), null);
-        
-        log.info("Refunded {} points to user {}. Points: {} -> {}", refundPoints, userId, pointsBefore, pointsAfter);
-
-        // Cập nhật trạng thái bet
-        bet.setStatus(Bet.BetStatus.CANCELLED);
-        bet.setUpdatedAt(LocalDateTime.now());
-        betRepository.save(bet);
-
-        log.info("Bet {} cancelled by user {}", betId, userId);
-        return BetResponse.fromEntity(bet);
+        throw new RuntimeException("Chức năng hủy cược đã bị vô hiệu hóa. Một khi đã đặt cược thì không thể hủy.");
     }
 
     private String convertToJsonString(List<String> list) {
@@ -410,6 +420,28 @@ public class BetService {
         
         // Refresh bet để lấy dữ liệu mới nhất
         bet = betRepository.findById(betId).orElse(bet);
+        return BetResponse.fromEntity(bet);
+    }
+
+    /**
+     * Đánh dấu bet đã xem kết quả (dismiss)
+     */
+    @Transactional
+    public BetResponse dismissBetResult(Long betId, Long userId) {
+        Bet bet = betRepository.findById(betId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy bet với ID: " + betId));
+
+        // Kiểm tra quyền truy cập
+        if (!bet.getUser().getId().equals(userId)) {
+            throw new RuntimeException("Bạn không có quyền thao tác bet này");
+        }
+
+        // Chỉ cho phép dismiss bet đã có kết quả (WON hoặc LOST)
+        if (bet.getStatus() == Bet.BetStatus.PENDING) {
+            throw new RuntimeException("Không thể đóng bet chưa có kết quả");
+        }
+
+        log.info("User {} dismissed bet {} with status {}", userId, betId, bet.getStatus());
         return BetResponse.fromEntity(bet);
     }
 

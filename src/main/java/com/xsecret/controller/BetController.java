@@ -183,33 +183,19 @@ public class BetController {
     }
 
     /**
-     * Hủy bet
+     * Hủy bet - CHỨC NĂNG ĐÃ BỊ VÔ HIỆU HÓA
+     * Đặt cược rồi thì không được hủy
      */
     @PostMapping("/{betId}/cancel")
     public ResponseEntity<Map<String, Object>> cancelBet(
             @PathVariable Long betId,
             Authentication authentication) {
         
-        try {
-            Long userId = getCurrentUserId(authentication);
-            BetResponse bet = betService.cancelBet(betId, userId);
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Hủy cược thành công");
-            response.put("data", bet);
-            
-            return ResponseEntity.ok(response);
-            
-        } catch (Exception e) {
-            log.error("Error cancelling bet: {}", e.getMessage());
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("message", e.getMessage());
-            
-            return ResponseEntity.badRequest().body(response);
-        }
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", false);
+        response.put("message", "Chức năng hủy cược đã bị vô hiệu hóa. Một khi đã đặt cược thì không thể hủy.");
+        
+        return ResponseEntity.badRequest().body(response);
     }
 
     /**
@@ -233,7 +219,11 @@ public class BetController {
             response.put("currentPoints", user.getPoints());
             
             if (bet.getStatus().equals("WON")) {
-                response.put("message", "🎉 Chúc mừng! Bạn đã thắng " + bet.getWinAmount() + " điểm!");
+                String winningNumbersStr = "";
+                if (bet.getWinningNumbers() != null && !bet.getWinningNumbers().isEmpty()) {
+                    winningNumbersStr = " Số trúng: " + String.join(", ", bet.getWinningNumbers()) + ".";
+                }
+                response.put("message", "🎉 Chúc mừng! Bạn đã thắng " + bet.getWinAmount() + " điểm!" + winningNumbersStr);
             } else if (bet.getStatus().equals("LOST")) {
                 response.put("message", "Rất tiếc! Bạn đã trượt cược này.");
             } else {
@@ -275,6 +265,36 @@ public class BetController {
             
         } catch (Exception e) {
             log.error("Error checking bet results: {}", e.getMessage());
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+
+    /**
+     * Đánh dấu bet đã xem kết quả (dismiss)
+     */
+    @PostMapping("/{betId}/dismiss")
+    public ResponseEntity<Map<String, Object>> dismissBetResult(
+            @PathVariable Long betId,
+            Authentication authentication) {
+        
+        try {
+            Long userId = getCurrentUserId(authentication);
+            BetResponse bet = betService.dismissBetResult(betId, userId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("data", bet);
+            response.put("message", "Đã đóng thông báo kết quả cược");
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error dismissing bet result: {}", e.getMessage());
             
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
