@@ -201,23 +201,6 @@ public class AdminController {
         }
     }
 
-    @PutMapping("/users/{id}/balance")
-    public ResponseEntity<ApiResponse<UserResponse>> updateUserBalance(
-            @PathVariable Long id,
-            @RequestParam Double balance) {
-        log.info("Updating balance for user: {} to {}", id, balance);
-        
-        try {
-            User user = userService.updateUserBalance(id, balance);
-            UserResponse userResponse = userMapper.toUserResponse(user);
-            return ResponseEntity.ok(ApiResponse.success("Cập nhật số dư thành công", userResponse));
-        } catch (Exception e) {
-            log.error("Error updating balance", e);
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.error(e.getMessage()));
-        }
-    }
-
     @GetMapping("/users/stats")
     public ResponseEntity<ApiResponse<Object>> getUserStats() {
         log.info("Getting user statistics");

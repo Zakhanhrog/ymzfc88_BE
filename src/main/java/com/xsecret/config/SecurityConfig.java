@@ -62,6 +62,11 @@ public class SecurityConfig {
                     .requestMatchers("/h2-console/**").permitAll()
                     .requestMatchers("/uploads/**").permitAll()
                     .requestMatchers("/files/**").permitAll()
+                    .requestMatchers("/api/betting-odds/**").permitAll() // Public betting odds for users
+                    .requestMatchers("/betting-odds/**").permitAll() // Public betting odds for users (without /api)
+                    .requestMatchers("/api/bets/**").hasAnyRole("USER", "ADMIN") // Betting endpoints for authenticated users
+                    .requestMatchers("/bets/**").hasAnyRole("USER", "ADMIN") // Betting endpoints for authenticated users (without /api)
+                    .requestMatchers("/test/**").permitAll() // Test endpoints
                     // Admin endpoints
                     .requestMatchers("/admin/**").hasRole("ADMIN")
                     .requestMatchers("/kyc/admin/**").hasRole("ADMIN")
@@ -87,8 +92,15 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(Arrays.asList("*"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedOrigins(Arrays.asList(
+            "http://localhost:3000",
+            "http://localhost:5173", 
+            "http://localhost:8080",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:8080"
+        ));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);

@@ -21,7 +21,7 @@ public class WalletController {
     private final TransactionService transactionService;
     
     /**
-     * Lấy số dư ví của user hiện tại
+     * Lấy điểm và thông tin ví của user hiện tại
      */
     @GetMapping("/balance")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getWalletBalance(Authentication authentication) {
@@ -32,7 +32,7 @@ public class WalletController {
             Map<String, Double> transactionStats = transactionService.calculateUserTransactionStats(user.getUsername());
             
             Map<String, Object> walletData = new HashMap<>();
-            walletData.put("balance", user.getBalance() != null ? user.getBalance() : 0.0);
+            walletData.put("points", user.getPoints() != null ? user.getPoints() : 0L);
             walletData.put("totalDeposit", transactionStats.getOrDefault("totalDeposit", 0.0));
             walletData.put("totalWithdraw", transactionStats.getOrDefault("totalWithdraw", 0.0));
             walletData.put("totalBonus", 0.0); // Có thể tính từ bonus transactions sau
@@ -58,7 +58,7 @@ public class WalletController {
             userInfo.put("username", user.getUsername());
             userInfo.put("email", user.getEmail());
             userInfo.put("phone", user.getPhoneNumber());
-            userInfo.put("balance", user.getBalance() != null ? user.getBalance() : 0.0);
+            userInfo.put("points", user.getPoints() != null ? user.getPoints() : 0L);
             userInfo.put("status", user.getStatus());
             userInfo.put("createdAt", user.getCreatedAt());
             

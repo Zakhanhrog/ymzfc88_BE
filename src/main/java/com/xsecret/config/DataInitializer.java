@@ -49,7 +49,6 @@ public class DataInitializer implements CommandLineRunner {
                     .fullName("Administrator")
                     .role(User.Role.ADMIN)
                     .status(User.UserStatus.ACTIVE)
-                    .balance(0.0)
                     .build();
 
             userRepository.save(admin);

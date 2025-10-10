@@ -62,13 +62,6 @@ public class UserService {
         return userRepository.save(user);
     }
 
-    @Transactional
-    public User updateUserBalance(Long userId, Double balance) {
-        User user = getUserById(userId);
-        user.setBalance(balance);
-        return userRepository.save(user);
-    }
-
     public Map<String, Object> getDashboardStats() {
         Map<String, Object> stats = new HashMap<>();
         
@@ -79,14 +72,14 @@ public class UserService {
         stats.put("totalUsers", totalUsers);
         stats.put("totalAdmins", totalAdmins);
         stats.put("activeUsers", activeUsers);
-        stats.put("totalBalance", calculateTotalBalance());
+        stats.put("totalPoints", calculateTotalPoints());
         
         return stats;
     }
 
-    private Double calculateTotalBalance() {
+    private Long calculateTotalPoints() {
         return userRepository.findAll().stream()
-                .mapToDouble(user -> user.getBalance() != null ? user.getBalance() : 0.0)
+                .mapToLong(user -> user.getPoints() != null ? user.getPoints() : 0L)
                 .sum();
     }
 
@@ -117,7 +110,6 @@ public class UserService {
                 .phoneNumber(request.getPhoneNumber())
                 .role(User.Role.valueOf(request.getRole()))
                 .status(User.UserStatus.ACTIVE)
-                .balance(0.0)
                 .build();
 
         return userRepository.save(user);
@@ -150,9 +142,6 @@ public class UserService {
         }
         if (request.getStatus() != null) {
             user.setStatus(request.getStatus());
-        }
-        if (request.getBalance() != null) {
-            user.setBalance(request.getBalance());
         }
 
         return userRepository.save(user);
@@ -249,9 +238,9 @@ public class UserService {
         long newUsersLast30Days = userRepository.countByCreatedAtAfter(thirtyDaysAgo);
         stats.put("newUsersLast30Days", newUsersLast30Days);
 
-        // Top users theo balance
-        List<User> topUsersByBalance = userRepository.findTop10ByOrderByBalanceDesc();
-        stats.put("topUsersByBalance", topUsersByBalance);
+        // Top users theo points
+        List<User> topUsersByPoints = userRepository.findTop10ByOrderByPointsDesc();
+        stats.put("topUsersByPoints", topUsersByPoints);
 
         return stats;
     }

@@ -136,12 +136,15 @@ public class TransactionService {
             throw new RuntimeException("Access denied: This payment method does not belong to you");
         }
         
-        // Kiểm tra số dư
-        if (user.getBalance() < request.getAmount().doubleValue()) {
-            throw new RuntimeException("Insufficient balance");
+        // Quy đổi số tiền sang điểm (1000 VND = 1 điểm)
+        BigDecimal pointsRequired = request.getAmount().divide(BigDecimal.valueOf(1000), 0, java.math.RoundingMode.UP);
+        
+        // Kiểm tra số điểm có đủ không
+        if (user.getPoints() < pointsRequired.longValue()) {
+            throw new RuntimeException("Insufficient points. Need " + pointsRequired + " points (" + request.getAmount() + " VND), have " + user.getPoints() + " points");
         }
         
-        // Kiểm tra số điểm
+        // Kiểm tra số điểm (backward compatibility)
         if (request.getPoints() != null) {
             // Validate tính nhất quán giữa điểm và tiền (1000đ = 1 điểm)
             BigDecimal expectedAmount = BigDecimal.valueOf(request.getPoints() * 1000);
@@ -149,8 +152,8 @@ public class TransactionService {
                 throw new RuntimeException("Amount and points mismatch. Expected: " + expectedAmount + " VND for " + request.getPoints() + " points");
             }
             
-            // Kiểm tra user có đủ điểm không
-            Integer userPoints = pointService.getUserPointsBalance(user.getId());
+            // Kiểm tra user có đủ điểm không (lấy từ user.points trực tiếp)
+            long userPoints = user.getPoints() != null ? user.getPoints() : 0L;
             if (userPoints < request.getPoints()) {
                 throw new RuntimeException("Insufficient points. You have " + userPoints + " points but trying to withdraw " + request.getPoints() + " points");
             }
@@ -196,9 +199,21 @@ public class TransactionService {
         // Trừ điểm ngay lập tức khi tạo withdraw request (để tránh abuse)
         if (request.getPoints() != null) {
             try {
-                pointService.deductPointsFromWithdraw(user, request.getPoints(), savedTransaction.getId());
-                log.info("Deducted {} points from user {} for withdraw request {}", 
-                        request.getPoints(), username, transactionCode);
+                // Trừ điểm trực tiếp từ user
+                long currentPoints = user.getPoints() != null ? user.getPoints() : 0L;
+                long pointsToDeduct = request.getPoints() != null ? request.getPoints() : pointsRequired.longValue();
+                
+                if (currentPoints < pointsToDeduct) {
+                    transactionRepository.delete(savedTransaction);
+                    throw new RuntimeException("Insufficient points. Available: " + currentPoints + ", Required: " + pointsToDeduct);
+                }
+                
+                long newPoints = currentPoints - pointsToDeduct;
+                user.setPoints(newPoints);
+                userRepository.save(user);
+                
+                log.info("Deducted {} points from user {} for withdraw request {}. Points: {} -> {}", 
+                        request.getPoints(), username, transactionCode, currentPoints, newPoints);
             } catch (Exception e) {
                 // Rollback transaction nếu trừ điểm thất bại
                 transactionRepository.delete(savedTransaction);
@@ -243,9 +258,12 @@ public class TransactionService {
             throw new RuntimeException("Amount exceeds maximum limit: " + paymentMethod.getMaxAmount());
         }
         
-        // Kiểm tra số dư
-        if (user.getBalance() < request.getAmount().doubleValue()) {
-            throw new RuntimeException("Insufficient balance");
+        // Quy đổi số tiền sang điểm (1000 VND = 1 điểm)
+        BigDecimal pointsRequired = request.getAmount().divide(BigDecimal.valueOf(1000), 0, java.math.RoundingMode.UP);
+        
+        // Kiểm tra số điểm có đủ không
+        if (user.getPoints() < pointsRequired.longValue()) {
+            throw new RuntimeException("Insufficient points. Need " + pointsRequired + " points (" + request.getAmount() + " VND), have " + user.getPoints() + " points");
         }
         
         // Tính fee
@@ -298,30 +316,31 @@ public class TransactionService {
         if (request.getAction() == ProcessTransactionRequestDto.Action.APPROVE) {
             transaction.setStatus(Transaction.TransactionStatus.APPROVED);
             
-            // Xử lý số dư user
+            // Xử lý điểm user
             User user = transaction.getUser();
             if (transaction.getType() == Transaction.TransactionType.DEPOSIT) {
-                // Nạp tiền: cộng vào số dư
+                // Nạp tiền: quy đổi thành điểm và cộng vào (1000 VND = 1 điểm)
                 BigDecimal amountToAdd = request.getActualAmount() != null ? 
                     request.getActualAmount() : transaction.getNetAmount();
-                user.setBalance(user.getBalance() + amountToAdd.doubleValue());
-                log.info("Added {} to user {} balance. New balance: {}", 
-                        amountToAdd, user.getUsername(), user.getBalance());
                 
-                // Cộng điểm khi nạp tiền thành công (1000đ = 1 điểm)
-                try {
-                    pointService.addPointsFromDeposit(user, amountToAdd, transaction.getId());
-                } catch (Exception e) {
-                    log.error("Failed to add points for deposit transaction {}: {}", 
-                             transaction.getTransactionCode(), e.getMessage());
+                // Quy đổi VND thành điểm: 1000 VND = 1 điểm
+                BigDecimal pointsToAdd = amountToAdd.divide(BigDecimal.valueOf(1000), 0, java.math.RoundingMode.DOWN);
+                
+                if (pointsToAdd.compareTo(BigDecimal.ZERO) > 0) {
+                    // Cộng điểm trực tiếp vào user
+                    long currentPoints = user.getPoints() != null ? user.getPoints() : 0L;
+                    long newPoints = currentPoints + pointsToAdd.longValue();
+                    user.setPoints(newPoints);
+                    userRepository.save(user);
+                    
+                    log.info("Added {} VND as {} points to user {}. Points: {} -> {}. Transaction: {}", 
+                            amountToAdd, pointsToAdd, user.getUsername(), currentPoints, newPoints, transaction.getTransactionCode());
                 }
             } else if (transaction.getType() == Transaction.TransactionType.WITHDRAW) {
-                // Rút tiền: trừ từ số dư
-                user.setBalance(user.getBalance() - transaction.getAmount().doubleValue());
-                log.info("Deducted {} from user {} balance. New balance: {}", 
-                        transaction.getAmount(), user.getUsername(), user.getBalance());
+                // Rút tiền: Điểm đã được trừ khi tạo request, không cần làm gì thêm
+                log.info("Approved withdraw transaction {} for user {}. Points were already deducted.", 
+                        transaction.getTransactionCode(), user.getUsername());
             }
-            userRepository.save(user);
             
         } else {
             transaction.setStatus(Transaction.TransactionStatus.REJECTED);
@@ -340,12 +359,15 @@ public class TransactionService {
                         try {
                             Integer pointsToRefund = Integer.parseInt(pointsStr.substring(0, endIndex).trim());
                             
-                            // Hoàn lại điểm
-                            pointService.refundPointsFromRejectedWithdraw(
-                                transaction.getUser(), pointsToRefund, transaction.getId());
+                            // Hoàn lại điểm trực tiếp vào user
+                            User user = transaction.getUser();
+                            long currentPoints = user.getPoints() != null ? user.getPoints() : 0L;
+                            long newPoints = currentPoints + pointsToRefund;
+                            user.setPoints(newPoints);
+                            userRepository.save(user);
                             
-                            log.info("Refunded {} points to user {} for rejected withdraw transaction {}", 
-                                    pointsToRefund, transaction.getUser().getUsername(), transaction.getTransactionCode());
+                            log.info("Refunded {} points to user {} for rejected withdraw transaction {}. Points: {} -> {}", 
+                                    pointsToRefund, user.getUsername(), transaction.getTransactionCode(), currentPoints, newPoints);
                         } catch (NumberFormatException e) {
                             log.warn("Could not parse points from transaction note: {}", note);
                         }

@@ -68,7 +68,10 @@ public class PointTransaction {
         ADMIN_SUBTRACT("Admin trừ điểm"),
         DEPOSIT_BONUS("Điểm từ nạp tiền"),
         WITHDRAW_DEDUCTION("Trừ điểm khi rút tiền"),
-        REFUND("Hoàn điểm");
+        REFUND("Hoàn điểm"),
+        BET_PLACED("Đặt cược"),
+        BET_WIN("Thắng cược"),
+        BET_REFUND("Hoàn cược");
 
         private final String displayName;
 

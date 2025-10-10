@@ -49,10 +49,6 @@ public class User {
     @Builder.Default
     private UserStatus status = UserStatus.ACTIVE;
 
-    @Column(name = "balance")
-    @Builder.Default
-    private Double balance = 0.0;
-
     @Column(name = "points")
     @Builder.Default
     private Long points = 0L;

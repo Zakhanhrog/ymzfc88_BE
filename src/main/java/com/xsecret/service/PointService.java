@@ -109,30 +109,49 @@ public class PointService {
         User user = userRepository.findById(request.getUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        BigDecimal pointsAmount = BigDecimal.valueOf(request.getPoints());
-        PointTransaction.PointTransactionType type;
+        long currentPoints = user.getPoints() != null ? user.getPoints() : 0L;
+        long pointsToAdjust = request.getPoints();
+        long newPoints;
         
         if ("ADD".equals(request.getType())) {
-            type = PointTransaction.PointTransactionType.ADMIN_ADD;
-            addPoints(user, pointsAmount, type, request.getDescription(), 
-                     "ADMIN_ADJUSTMENT", null, adminUser);
-        } else if ("SUBTRACT".equals(request.getType())) {
-            type = PointTransaction.PointTransactionType.ADMIN_SUBTRACT;
-            subtractPoints(user, pointsAmount, type, request.getDescription(), 
-                          "ADMIN_ADJUSTMENT", null, adminUser);
+            newPoints = currentPoints + pointsToAdjust;
         } else {
-            throw new RuntimeException("Invalid adjustment type");
+            if (currentPoints < pointsToAdjust) {
+                throw new RuntimeException("Insufficient points. Available: " + currentPoints + ", Required: " + pointsToAdjust);
+            }
+            newPoints = currentPoints - pointsToAdjust;
         }
+        
+        // Cập nhật điểm trực tiếp vào user
+        user.setPoints(newPoints);
+        userRepository.save(user);
+        
+        // Tạo PointTransaction để lưu lịch sử
+        PointTransaction.PointTransactionType type = "ADD".equals(request.getType()) ? 
+            PointTransaction.PointTransactionType.ADMIN_ADD : 
+            PointTransaction.PointTransactionType.ADMIN_SUBTRACT;
+            
+        PointTransaction transaction = PointTransaction.builder()
+                .user(user)
+                .transactionCode(generateTransactionCode())
+                .type(type)
+                .points(BigDecimal.valueOf("ADD".equals(request.getType()) ? pointsToAdjust : -pointsToAdjust))
+                .balanceBefore(BigDecimal.valueOf(currentPoints))
+                .balanceAfter(BigDecimal.valueOf(newPoints))
+                .description(request.getDescription())
+                .referenceType("ADMIN_ADJUSTMENT")
+                .referenceId(null)
+                .createdBy(adminUser)
+                .build();
+        
+        pointTransactionRepository.save(transaction);
+        
+        log.info("Admin {} adjusted {} points for user {}. Points: {} -> {}", 
+                adminUser.getUsername(), 
+                "ADD".equals(request.getType()) ? "+" + pointsToAdjust : "-" + pointsToAdjust,
+                user.getUsername(), currentPoints, newPoints);
 
-        // Get the latest transaction for this user
-        Page<PointTransaction> transactions = pointTransactionRepository
-                .findByUserIdOrderByCreatedAtDesc(user.getId(), PageRequest.of(0, 1));
-        
-        if (!transactions.isEmpty()) {
-            return mapToResponse(transactions.getContent().get(0));
-        }
-        
-        throw new RuntimeException("Failed to create point transaction");
+        return mapToResponse(transaction);
     }
 
     @Transactional
@@ -224,26 +243,17 @@ public class PointService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        UserPoint userPoint = userPointRepository.findByUser(user)
-                .orElseGet(() -> {
-                    // Create and save if doesn't exist
-                    UserPoint newUserPoint = UserPoint.builder()
-                            .user(user)
-                            .totalPoints(BigDecimal.ZERO)
-                            .lifetimeEarned(BigDecimal.ZERO)
-                            .lifetimeSpent(BigDecimal.ZERO)
-                            .build();
-                    return userPointRepository.save(newUserPoint);
-                });
+        // Lấy điểm trực tiếp từ user.points (đã đồng bộ)
+        long userPoints = user.getPoints() != null ? user.getPoints() : 0L;
 
         return UserPointResponse.builder()
                 .userId(user.getId())
                 .username(user.getUsername())
                 .fullName(user.getFullName())
-                .totalPoints(userPoint.getTotalPoints())
-                .lifetimeEarned(userPoint.getLifetimeEarned())
-                .lifetimeSpent(userPoint.getLifetimeSpent())
-                .lastUpdated(userPoint.getUpdatedAt())
+                .totalPoints(BigDecimal.valueOf(userPoints))
+                .lifetimeEarned(BigDecimal.ZERO) // Có thể tính từ transaction history sau
+                .lifetimeSpent(BigDecimal.ZERO)  // Có thể tính từ transaction history sau
+                .lastUpdated(LocalDateTime.now())
                 .build();
     }
 
@@ -305,6 +315,9 @@ public class PointService {
     }
 
     private String generateTransactionCode() {
-        return "PT" + System.currentTimeMillis() + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+        // Tạo mã ngắn hơn: PT + timestamp (8 ký tự cuối) + random (4 ký tự)
+        String timestamp = String.valueOf(System.currentTimeMillis()).substring(5); // 8 ký tự cuối
+        String random = UUID.randomUUID().toString().substring(0, 4).toUpperCase();
+        return "PT" + timestamp + random; // Tổng: 2 + 8 + 4 = 14 ký tự
     }
 }

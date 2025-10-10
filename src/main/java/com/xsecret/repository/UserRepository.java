@@ -67,9 +67,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     long countByCreatedAtAfter(LocalDateTime dateTime);
 
-    // Top users by balance
-    @Query("SELECT u FROM User u WHERE u.balance > 0 ORDER BY u.balance DESC")
-    List<User> findTop10ByOrderByBalanceDesc();
+    // Top users by points
+    @Query("SELECT u FROM User u WHERE u.points > 0 ORDER BY u.points DESC")
+    List<User> findTop10ByOrderByPointsDesc();
 
     // Recent active users
     @Query("SELECT u FROM User u WHERE u.lastLogin IS NOT NULL ORDER BY u.lastLogin DESC")
@@ -82,7 +82,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findUsersWithTransactionsBetween(@Param("startDate") LocalDateTime startDate,
                                                @Param("endDate") LocalDateTime endDate);
 
-    // Users by balance range
-    @Query("SELECT u FROM User u WHERE u.balance BETWEEN :minBalance AND :maxBalance")
-    List<User> findByBalanceBetween(@Param("minBalance") Double minBalance, @Param("maxBalance") Double maxBalance);
+    // Users by points range
+    @Query("SELECT u FROM User u WHERE u.points BETWEEN :minPoints AND :maxPoints")
+    List<User> findByPointsBetween(@Param("minPoints") Long minPoints, @Param("maxPoints") Long maxPoints);
 }

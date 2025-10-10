@@ -21,7 +21,7 @@ public class UserResponse {
     private String phoneNumber;
     private User.Role role;
     private User.UserStatus status;
-    private Double balance;
+    private Long points;
     private Boolean kycVerified;
     private Boolean withdrawalLocked;
     private String withdrawalLockReason;
