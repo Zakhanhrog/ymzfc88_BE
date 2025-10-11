@@ -25,5 +25,17 @@ public interface LotteryResultProvider {
      * @return Số giải nhất (ví dụ: "54778")
      */
     String getGiaiNhatNumber();
+    
+    /**
+     * Lấy số giải 8 (chỉ Miền Trung Nam)
+     * @return Số giải 8 (ví dụ: "13", "01", "45")
+     */
+    String getGiai8Number();
+    
+    /**
+     * Lấy số giải 7 (chỉ Miền Trung Nam)
+     * @return Số giải 7 (ví dụ: "138", "001", "999")
+     */
+    String getGiai7Number();
 }
 

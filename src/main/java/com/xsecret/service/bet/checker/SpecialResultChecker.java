@@ -269,6 +269,94 @@ public class SpecialResultChecker {
         }
     }
     
+    /**
+     * Đề giải 8: CHỈ check 2 số cuối của giải 8 (chỉ Miền Trung Nam)
+     * Chọn số như loto2s (00-99) nhưng chỉ so với giải 8
+     * Giải 8 chỉ có 1 số 2 chữ số (ví dụ: "13")
+     */
+    public boolean checkDeGiai8Result(Bet bet) {
+        try {
+            List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
+            String giai8Number = resultProvider.getGiai8Number();
+            
+            if (giai8Number == null || giai8Number.length() < 2) {
+                log.error("Không tìm thấy giải 8 hoặc giải 8 không hợp lệ");
+                return false;
+            }
+            
+            // Lấy 2 số cuối của giải 8 (giải 8 thường chỉ có 2 số)
+            String lastTwoDigits = giai8Number.length() >= 2 
+                ? giai8Number.substring(giai8Number.length() - 2) 
+                : giai8Number;
+            
+            List<String> winningNumbers = new ArrayList<>();
+            for (String selectedNumber : selectedNumbers) {
+                if (selectedNumber.equals(lastTwoDigits)) {
+                    winningNumbers.add(selectedNumber);
+                    log.info("De-giai-8 WIN: Selected {} matches Giai 8 {}", selectedNumber, giai8Number);
+                }
+            }
+            
+            if (winningNumbers.isEmpty()) {
+                log.info("De-giai-8 LOSE: No matches found. Selected: {}, Giai 8: {}", 
+                        selectedNumbers, lastTwoDigits);
+                return false;
+            }
+            
+            bet.setWinningNumbers(convertToJsonString(winningNumbers));
+            log.info("De-giai-8 WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Error checking de-giai-8 result: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 3s giải 7: CHỈ check 3 số cuối của giải 7 (chỉ Miền Trung Nam)
+     * Chọn số từ 000-999 nhưng chỉ so với giải 7
+     * Giải 7 chỉ có 1 số 3 chữ số (ví dụ: "138")
+     */
+    public boolean check3sGiai7Result(Bet bet) {
+        try {
+            List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
+            String giai7Number = resultProvider.getGiai7Number();
+            
+            if (giai7Number == null || giai7Number.length() < 3) {
+                log.error("Không tìm thấy giải 7 hoặc giải 7 không hợp lệ (cần ít nhất 3 chữ số)");
+                return false;
+            }
+            
+            // Lấy 3 số cuối của giải 7 (giải 7 thường chỉ có 3 số)
+            String lastThreeDigits = giai7Number.length() >= 3 
+                ? giai7Number.substring(giai7Number.length() - 3) 
+                : giai7Number;
+            
+            List<String> winningNumbers = new ArrayList<>();
+            for (String selectedNumber : selectedNumbers) {
+                if (selectedNumber.equals(lastThreeDigits)) {
+                    winningNumbers.add(selectedNumber);
+                    log.info("3s-giai-7 WIN: Selected {} matches Giai 7 {}", selectedNumber, giai7Number);
+                }
+            }
+            
+            if (winningNumbers.isEmpty()) {
+                log.info("3s-giai-7 LOSE: No matches found. Selected: {}, Giai 7: {}", 
+                        selectedNumbers, lastThreeDigits);
+                return false;
+            }
+            
+            bet.setWinningNumbers(convertToJsonString(winningNumbers));
+            log.info("3s-giai-7 WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Error checking 3s-giai-7 result: {}", e.getMessage());
+            return false;
+        }
+    }
+    
     private List<String> parseSelectedNumbers(String selectedNumbersJson) {
         try {
             return objectMapper.readValue(selectedNumbersJson, 

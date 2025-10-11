@@ -62,5 +62,21 @@ public class MockLotteryResultProvider implements LotteryResultProvider {
         }
         return null;
     }
+    
+    @Override
+    public String getGiai8Number() {
+        // Mock giải 8 cho Miền Trung Nam
+        // Giải 8 chỉ có 1 số 2 chữ số
+        // Ví dụ: "13" → 2 số cuối: 13
+        return "13";
+    }
+    
+    @Override
+    public String getGiai7Number() {
+        // Mock giải 7 cho Miền Trung Nam
+        // Giải 7 chỉ có 1 số 3 chữ số
+        // Ví dụ: "138" → 3 số cuối: 138
+        return "138";
+    }
 }
 
