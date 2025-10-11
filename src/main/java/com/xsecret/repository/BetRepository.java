@@ -89,4 +89,54 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
            "FROM Bet b WHERE b.user.id = :userId AND b.createdAt >= :startDate " +
            "GROUP BY DATE(b.createdAt) ORDER BY betDate DESC")
     List<Object[]> getBetStatisticsByDate(@Param("userId") Long userId, @Param("startDate") LocalDateTime startDate);
+    
+    // ======================== ADMIN QUERIES ========================
+    
+    /**
+     * Lấy tất cả bet với filter (for admin)
+     */
+    @Query("SELECT b FROM Bet b WHERE " +
+           "(:status IS NULL OR b.status = :status) AND " +
+           "(:betType IS NULL OR b.betType = :betType) AND " +
+           "(:region IS NULL OR b.region = :region) AND " +
+           "(:userId IS NULL OR b.user.id = :userId) " +
+           "ORDER BY b.createdAt DESC")
+    Page<Bet> findAllBetsWithFilters(
+        @Param("status") Bet.BetStatus status,
+        @Param("betType") String betType,
+        @Param("region") String region,
+        @Param("userId") Long userId,
+        Pageable pageable);
+    
+    /**
+     * Tìm kiếm bet theo username hoặc betId
+     */
+    @Query("SELECT b FROM Bet b WHERE " +
+           "LOWER(b.user.username) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+           "CAST(b.id AS string) LIKE CONCAT('%', :searchTerm, '%') " +
+           "ORDER BY b.createdAt DESC")
+    Page<Bet> searchBets(@Param("searchTerm") String searchTerm, Pageable pageable);
+    
+    /**
+     * Đếm tổng số bet trong hệ thống
+     */
+    @Query("SELECT COUNT(b) FROM Bet b")
+    long countAllBets();
+    
+    /**
+     * Đếm bet theo status
+     */
+    long countByStatus(Bet.BetStatus status);
+    
+    /**
+     * Tính tổng tiền cược trong hệ thống
+     */
+    @Query("SELECT COALESCE(SUM(b.totalAmount), 0) FROM Bet b")
+    double getTotalBetAmount();
+    
+    /**
+     * Tính tổng tiền thắng trong hệ thống
+     */
+    @Query("SELECT COALESCE(SUM(b.winAmount), 0) FROM Bet b WHERE b.isWin = true")
+    double getTotalWinAmount();
 }

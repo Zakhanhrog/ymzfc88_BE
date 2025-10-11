@@ -52,6 +52,7 @@ public class AdminController {
     private final TransactionService transactionService;
     private final PaymentMethodService paymentMethodService;
     private final SystemSettingsService systemSettingsService;
+    private final com.xsecret.service.BetService betService;
 
     @PostMapping("/login")
     @PreAuthorize("permitAll()")
@@ -628,6 +629,113 @@ public class AdminController {
             return ResponseEntity.ok(ApiResponse.success(status));
         } catch (Exception e) {
             log.error("Error getting withdrawal lock status for user {}", userId, e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+    
+    // ======================== BET MANAGEMENT ========================
+    
+    /**
+     * Lấy tất cả bet với filter
+     */
+    @GetMapping("/bets")
+    public ResponseEntity<ApiResponse<Page<com.xsecret.dto.response.BetResponse>>> getAllBets(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String betType,
+            @RequestParam(required = false) String region,
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) String searchTerm,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        try {
+            log.info("Admin getting bets - status: {}, betType: {}, region: {}, userId: {}, search: {}", 
+                    status, betType, region, userId, searchTerm);
+            
+            Pageable pageable = PageRequest.of(page, size);
+            Page<com.xsecret.dto.response.BetResponse> bets = betService.getAllBetsForAdmin(
+                    status, betType, region, userId, searchTerm, pageable);
+            
+            return ResponseEntity.ok(ApiResponse.success(bets));
+        } catch (Exception e) {
+            log.error("Error getting bets for admin", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+    
+    /**
+     * Lấy chi tiết bet
+     */
+    @GetMapping("/bets/{id}")
+    public ResponseEntity<ApiResponse<com.xsecret.dto.response.BetResponse>> getBetById(
+            @PathVariable Long id) {
+        try {
+            com.xsecret.dto.response.BetResponse bet = betService.getBetByIdForAdmin(id);
+            return ResponseEntity.ok(ApiResponse.success(bet));
+        } catch (Exception e) {
+            log.error("Error getting bet {}", id, e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+    
+    /**
+     * Nhập kết quả xổ số cho bet
+     * CHỈ cho phép nhập khi bet có status = PENDING
+     * Hệ thống sẽ tự động check thắng/thua khi đến thời gian
+     */
+    @PostMapping("/bets/{id}/update-result")
+    public ResponseEntity<ApiResponse<com.xsecret.dto.response.BetResponse>> updateBetResult(
+            @PathVariable Long id,
+            @RequestBody java.util.Map<String, Object> request,
+            @AuthenticationPrincipal UserPrincipal adminPrincipal) {
+        try {
+            @SuppressWarnings("unchecked")
+            java.util.List<String> winningNumbers = (java.util.List<String>) request.get("winningNumbers");
+            
+            log.info("Admin {} setting lottery result for bet {} with winning numbers: {}", 
+                adminPrincipal.getId(), id, winningNumbers);
+            
+            com.xsecret.dto.response.BetResponse bet = betService.updateBetResult(id, winningNumbers);
+            return ResponseEntity.ok(ApiResponse.success("Đã nhập kết quả xổ số thành công", bet));
+        } catch (Exception e) {
+            log.error("Error setting lottery result for bet", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+    
+    /**
+     * Xóa bet
+     * CHỈ cho phép xóa khi bet có status = PENDING
+     */
+    @DeleteMapping("/bets/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteBet(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal adminPrincipal) {
+        try {
+            log.info("Admin {} deleting bet {}", adminPrincipal.getId(), id);
+            
+            betService.deleteBet(id);
+            return ResponseEntity.ok(ApiResponse.<Void>success("Xóa bet và hoàn tiền thành công", null));
+        } catch (Exception e) {
+            log.error("Error deleting bet {}", id, e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+    
+    /**
+     * Lấy thống kê bet
+     */
+    @GetMapping("/bets/statistics")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getBetStatistics() {
+        try {
+            java.util.Map<String, Object> stats = betService.getBetStatisticsForAdmin();
+            return ResponseEntity.ok(ApiResponse.success(stats));
+        } catch (Exception e) {
+            log.error("Error getting bet statistics", e);
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error(e.getMessage()));
         }

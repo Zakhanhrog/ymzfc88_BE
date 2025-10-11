@@ -601,4 +601,146 @@ public class BetService {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User không tồn tại"));
     }
+    
+    // ======================== ADMIN METHODS ========================
+    
+    /**
+     * Admin: Lấy tất cả bet với filter
+     */
+    @Transactional(readOnly = true)
+    public Page<BetResponse> getAllBetsForAdmin(
+            String status, String betType, String region, Long userId, 
+            String searchTerm, Pageable pageable) {
+        
+        if (searchTerm != null && !searchTerm.trim().isEmpty()) {
+            // Tìm kiếm theo username hoặc betId
+            return betRepository.searchBets(searchTerm.trim(), pageable)
+                    .map(BetResponse::fromEntity);
+        }
+        
+        Bet.BetStatus betStatus = null;
+        if (status != null && !status.trim().isEmpty()) {
+            try {
+                betStatus = Bet.BetStatus.valueOf(status.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                log.warn("Invalid status: {}", status);
+            }
+        }
+        
+        return betRepository.findAllBetsWithFilters(
+                betStatus, 
+                betType, 
+                region, 
+                userId, 
+                pageable)
+                .map(BetResponse::fromEntity);
+    }
+    
+    /**
+     * Admin: Lấy thống kê bet
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Object> getBetStatisticsForAdmin() {
+        long totalBets = betRepository.countAllBets();
+        long pendingBets = betRepository.countByStatus(Bet.BetStatus.PENDING);
+        long wonBets = betRepository.countByStatus(Bet.BetStatus.WON);
+        long lostBets = betRepository.countByStatus(Bet.BetStatus.LOST);
+        double totalBetAmount = betRepository.getTotalBetAmount();
+        double totalWinAmount = betRepository.getTotalWinAmount();
+        
+        java.util.Map<String, Object> stats = new java.util.HashMap<>();
+        stats.put("totalBets", totalBets);
+        stats.put("pendingBets", pendingBets);
+        stats.put("wonBets", wonBets);
+        stats.put("lostBets", lostBets);
+        stats.put("totalBetAmount", totalBetAmount);
+        stats.put("totalWinAmount", totalWinAmount);
+        stats.put("netProfit", totalBetAmount - totalWinAmount); // Lợi nhuận của hệ thống
+        
+        return stats;
+    }
+    
+    /**
+     * Admin: Set kết quả xổ số cho bet
+     * CHỈ cho phép set khi bet chưa có kết quả (PENDING)
+     * Hệ thống sẽ tự động check thắng/thua khi đến thời gian
+     */
+    @Transactional
+    public BetResponse updateBetResult(Long betId, List<String> winningNumbers) {
+        Bet bet = betRepository.findById(betId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy bet với ID: " + betId));
+        
+        // QUAN TRỌNG: Chỉ cho phép set khi bet chưa có kết quả
+        if (bet.getStatus() != Bet.BetStatus.PENDING) {
+            throw new RuntimeException("Không thể thay đổi kết quả của bet đã có kết quả. Chỉ có thể thay đổi bet có status = PENDING");
+        }
+        
+        // Admin chỉ set kết quả xổ số, không tự động tính thắng/thua
+        if (winningNumbers == null || winningNumbers.isEmpty()) {
+            bet.setWinningNumbers("[]");
+            log.info("Admin set bet {} with no winning numbers", betId);
+        } else {
+            bet.setWinningNumbers(convertToJsonString(winningNumbers));
+            log.info("Admin set bet {} with winning numbers: {}", betId, winningNumbers);
+        }
+        
+        betRepository.save(bet);
+        return BetResponse.fromEntity(bet);
+    }
+    
+    /**
+     * Tính tiền thắng cho bet
+     */
+    private BigDecimal calculateWinAmount(Bet bet, List<String> winningNumbers) {
+        List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
+        BigDecimal totalBetPoints = bet.getBetAmount();
+        
+        if (winningNumbers == null || winningNumbers.isEmpty()) {
+            // Nếu không có winning numbers, tính toàn bộ
+            return totalBetPoints.multiply(bet.getOdds());
+        }
+        
+        // Tính theo số lượng số trúng
+        int winningCount = winningNumbers.size();
+        return totalBetPoints.multiply(bet.getOdds()).multiply(BigDecimal.valueOf(winningCount));
+    }
+    
+    /**
+     * Admin: Xóa/Hủy bet
+     * CHỈ cho phép xóa/hủy khi bet chưa có kết quả (PENDING)
+     */
+    @Transactional
+    public void deleteBet(Long betId) {
+        Bet bet = betRepository.findById(betId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy bet với ID: " + betId));
+        
+        // QUAN TRỌNG: Chỉ cho phép xóa khi bet chưa có kết quả
+        if (bet.getStatus() != Bet.BetStatus.PENDING) {
+            throw new RuntimeException("Không thể xóa bet đã có kết quả. Chỉ có thể xóa bet có status = PENDING");
+        }
+        
+        log.info("Admin deleting bet {}", betId);
+        
+        // Hoàn tiền cho user
+        User user = bet.getUser();
+        BigDecimal refundAmount = bet.getTotalAmount();
+        
+        pointService.addPoints(user, refundAmount, 
+            com.xsecret.entity.PointTransaction.PointTransactionType.BET_REFUND,
+            "Hoàn tiền cược (Admin xóa): " + refundAmount + " điểm", "BET", bet.getId(), null);
+        
+        // Xóa bet
+        betRepository.delete(bet);
+        log.info("Bet {} deleted and refunded {} points to user {}", betId, refundAmount, user.getId());
+    }
+    
+    /**
+     * Admin: Lấy chi tiết bet
+     */
+    @Transactional(readOnly = true)
+    public BetResponse getBetByIdForAdmin(Long betId) {
+        Bet bet = betRepository.findById(betId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy bet với ID: " + betId));
+        return BetResponse.fromEntity(bet);
+    }
 }
