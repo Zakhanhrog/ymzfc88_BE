@@ -125,10 +125,13 @@ public class BettingOddsService {
         log.info("Batch updating {} betting odds", requests.size());
         
         List<BettingOdds> updatedOdds = requests.stream().map(request -> {
+            // Map betType từ admin panel sang database
+            String mappedBetType = mapBetTypeFromAdminToDatabase(request.getRegion(), request.getBetType());
+            
             BettingOdds bettingOdds = bettingOddsRepository
-                    .findByRegionAndBetType(request.getRegion(), request.getBetType())
+                    .findByRegionAndBetType(request.getRegion(), mappedBetType)
                     .orElseThrow(() -> new RuntimeException(
-                            "Không tìm thấy tỷ lệ cược cho region " + request.getRegion() + " và betType " + request.getBetType()));
+                            "Không tìm thấy tỷ lệ cược cho region " + request.getRegion() + " và betType " + mappedBetType));
 
             bettingOdds.setBetName(request.getBetName());
             bettingOdds.setDescription(request.getDescription());
@@ -162,6 +165,33 @@ public class BettingOddsService {
         
         bettingOddsRepository.delete(bettingOdds);
         log.info("Successfully deleted betting odds with ID: {}", id);
+    }
+
+    /**
+     * Map betType từ admin panel sang database
+     * Xử lý các trường hợp admin panel gửi betType cũ nhưng database đã cập nhật
+     */
+    private String mapBetTypeFromAdminToDatabase(String region, String betType) {
+        // Map cho Miền Trung Nam
+        if ("MIEN_TRUNG_NAM".equals(region)) {
+            switch (betType) {
+                case "dau-duoi":
+                    return "dau-duoi-mien-trung-nam";
+                case "3s-dau-duoi":
+                    return "3s-dau-duoi-mien-trung-nam";
+                // Có thể thêm các mapping khác ở đây nếu cần
+                default:
+                    return betType;
+            }
+        }
+        
+        // Map cho Miền Bắc (nếu cần)
+        if ("MIEN_BAC".equals(region)) {
+            // Có thể thêm mapping cho Miền Bắc ở đây nếu cần
+            return betType;
+        }
+        
+        return betType;
     }
 }
 

@@ -88,13 +88,13 @@
         },
         {
           "region": "MIEN_TRUNG_NAM",
-          "betType": "dau-duoi",
+          "betType": "dau-duoi-mien-trung-nam",
           "betName": "Đầu / đuôi",
           "description": "Đầu đuôi",
           "odds": 4,
           "pricePerPoint": 1000,
           "isActive": true,
-          "note": "Đánh đầu hoặc đuôi"
+          "note": "Đánh đầu hoặc đuôi - so với giải đặc biệt + giải 8"
         },
         {
           "region": "MIEN_TRUNG_NAM",
@@ -134,13 +134,13 @@
         },
         {
           "region": "MIEN_TRUNG_NAM",
-          "betType": "3s-dau-duoi",
+          "betType": "3s-dau-duoi-mien-trung-nam",
           "betName": "3s đầu đuôi",
           "description": "3 số đầu đuôi",
           "odds": 600,
           "pricePerPoint": 1000,
           "isActive": true,
-          "note": "Đánh 3 số đầu đuôi"
+          "note": "Đánh 3 số đầu đuôi - so với giải đặc biệt + giải 7"
         },
         {
           "region": "MIEN_TRUNG_NAM",

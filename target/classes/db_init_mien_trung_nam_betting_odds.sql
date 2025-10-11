@@ -22,13 +22,13 @@ INSERT INTO betting_odds (region, bet_type, bet_name, description, odds, price_p
 
 -- ========== NHÓM 2: ĐỀ CÁC GIẢI ==========
 ('MIEN_TRUNG_NAM', 'dac-biet', 'Đặc biệt', 'Đề đặc biệt', 95, 1000, true, NOW(), NOW()),
-('MIEN_TRUNG_NAM', 'dau-duoi', 'Đầu / đuôi', 'Đầu đuôi', 4, 1000, true, NOW(), NOW()),
+('MIEN_TRUNG_NAM', 'dau-duoi-mien-trung-nam', 'Đầu / đuôi', 'Đầu đuôi', 4, 1000, true, NOW(), NOW()),
 ('MIEN_TRUNG_NAM', 'dau-dac-biet', 'Đầu đặc biệt', 'Đề đầu đặc biệt', 9, 1000, true, NOW(), NOW()),
 ('MIEN_TRUNG_NAM', 'de-giai-8', 'Đề giải 8', 'Đề giải 8', 23, 1000, true, NOW(), NOW()),
 
 -- ========== NHÓM 3: 3 SỐ VÀ 4 SỐ ĐẶC BIỆT ==========
 ('MIEN_TRUNG_NAM', '3s-giai-7', '3s giải 7', '3 số giải 7', 600, 1000, true, NOW(), NOW()),
-('MIEN_TRUNG_NAM', '3s-dau-duoi', '3s đầu đuôi', '3 số đầu đuôi', 600, 1000, true, NOW(), NOW()),
+('MIEN_TRUNG_NAM', '3s-dau-duoi-mien-trung-nam', '3s đầu đuôi', '3 số đầu đuôi', 600, 1000, true, NOW(), NOW()),
 ('MIEN_TRUNG_NAM', '3s-dac-biet', '3s đặc biệt', '3 số đặc biệt', 650, 1000, true, NOW(), NOW()),
 ('MIEN_TRUNG_NAM', '4s-dac-biet', '4s đặc biệt', '4 số đặc biệt', 6500, 1000, true, NOW(), NOW()),
 

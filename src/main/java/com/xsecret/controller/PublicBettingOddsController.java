@@ -14,7 +14,7 @@ import java.util.List;
  * Controller public cho user lấy tỷ lệ cược
  */
 @RestController
-@RequestMapping("/api/betting-odds")
+@RequestMapping("/betting-odds")
 @RequiredArgsConstructor
 @Slf4j
 @CrossOrigin(origins = "*", maxAge = 3600)

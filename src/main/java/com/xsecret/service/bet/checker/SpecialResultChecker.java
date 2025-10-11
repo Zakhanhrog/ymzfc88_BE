@@ -333,6 +333,69 @@ public class SpecialResultChecker {
     }
     
     /**
+     * Đầu/đuôi Miền Trung Nam: CHỈ check 2 số cuối của giải đặc biệt và giải 8 (chỉ Miền Trung Nam)
+     * Chọn số như loto2s (00-99) nhưng so với giải đặc biệt + giải 8
+     * Giải đặc biệt: 1 số (ví dụ: "12345" → 2 số cuối: "45")
+     * Giải 8: 1 số 2 chữ số (ví dụ: "34")
+     * Điểm đặt cược × 2 (vì có 2 số), nhưng tiền thắng không × 2
+     */
+    public boolean checkDauDuoiMienTrungNamResult(Bet bet) {
+        try {
+            List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
+            
+            // Lấy 2 số cuối của giải đặc biệt
+            String dacBietNumber = resultProvider.getDacBietNumber();
+            String dacBietLastTwo = null;
+            if (dacBietNumber != null && dacBietNumber.length() >= 2) {
+                dacBietLastTwo = dacBietNumber.substring(dacBietNumber.length() - 2);
+            }
+            
+            // Lấy giải 8
+            List<String> giai8Numbers = resultProvider.getGiai8Numbers();
+            
+            if (dacBietLastTwo == null || giai8Numbers == null || giai8Numbers.isEmpty()) {
+                log.error("Không tìm thấy giải đặc biệt hoặc giải 8");
+                return false;
+            }
+            
+            // Tạo danh sách tất cả số cần so sánh: 2 số cuối giải đặc biệt + giải 8
+            List<String> allTargetNumbers = new ArrayList<>();
+            allTargetNumbers.add(dacBietLastTwo);
+            allTargetNumbers.addAll(giai8Numbers);
+            
+            log.info("dau-duoi-mien-trung-nam: Dac biet last 2 = {}, Giai 8 = {}, All targets = {}", 
+                    dacBietLastTwo, giai8Numbers, allTargetNumbers);
+            
+            List<String> winningNumbers = new ArrayList<>();
+            for (String selectedNumber : selectedNumbers) {
+                // Check xem số này có trùng với BẤT KỲ 1 trong 2 số không
+                if (allTargetNumbers.contains(selectedNumber)) {
+                    winningNumbers.add(selectedNumber);
+                    log.info("dau-duoi-mien-trung-nam WIN: Selected {} matches one of target numbers {}", 
+                            selectedNumber, allTargetNumbers);
+                } else {
+                    log.info("dau-duoi-mien-trung-nam LOSE: Selected {} does not match any of target numbers {}", 
+                            selectedNumber, allTargetNumbers);
+                }
+            }
+            
+            if (winningNumbers.isEmpty()) {
+                log.info("dau-duoi-mien-trung-nam LOSE: No matches found. Selected: {}, All targets: {}", 
+                        selectedNumbers, allTargetNumbers);
+                return false;
+            }
+            
+            bet.setWinningNumbers(convertToJsonString(winningNumbers));
+            log.info("dau-duoi-mien-trung-nam WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Error checking dau-duoi-mien-trung-nam result: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
      * 3s đầu đuôi: CHỈ check 3 số cuối của giải đặc biệt và TẤT CẢ 3 số giải 6 (chỉ Miền Bắc)
      * Chọn số như loto3s (000-999) nhưng so với giải đặc biệt + 3 số giải 6
      * Giải đặc biệt: 1 số (ví dụ: "12345" → 3 số cuối: "345")
@@ -547,6 +610,69 @@ public class SpecialResultChecker {
             
         } catch (Exception e) {
             log.error("Error checking de-giai-7 result: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 3s đầu đuôi Miền Trung Nam: CHỈ check 3 số cuối giải đặc biệt + 1 số giải 7 (chỉ Miền Trung Nam)
+     * Chọn số như loto3s (000-999) nhưng so với giải đặc biệt + giải 7
+     * Giải đặc biệt: 1 số (ví dụ: "01640" → 3 số cuối: "640")
+     * Giải 7: 1 số 3 chữ số (ví dụ: "138")
+     * Điểm đặt cược × 2 (vì có 2 số), nhưng tiền thắng không × 2
+     */
+    public boolean check3sDauDuoiMienTrungNamResult(Bet bet) {
+        try {
+            List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
+            
+            // Lấy 3 số cuối của giải đặc biệt
+            String dacBietNumber = resultProvider.getDacBietNumber();
+            String dacBietLastThree = null;
+            if (dacBietNumber != null && dacBietNumber.length() >= 3) {
+                dacBietLastThree = dacBietNumber.substring(dacBietNumber.length() - 3);
+            }
+            
+            // Lấy 1 số giải 7 (Miền Trung Nam)
+            String giai7Number = resultProvider.getGiai7Number();
+            
+            if (dacBietLastThree == null || giai7Number == null) {
+                log.error("Không tìm thấy giải đặc biệt hoặc giải 7");
+                return false;
+            }
+            
+            // Tạo danh sách tất cả số cần so sánh: 3 số cuối giải đặc biệt + 1 số giải 7
+            List<String> allTargetNumbers = new ArrayList<>();
+            allTargetNumbers.add(dacBietLastThree);
+            allTargetNumbers.add(giai7Number);
+            
+            log.info("3s-dau-duoi-mien-trung-nam: Dac biet last 3 = {}, Giai 7 = {}, All targets = {}", 
+                    dacBietLastThree, giai7Number, allTargetNumbers);
+            
+            List<String> winningNumbers = new ArrayList<>();
+            for (String selectedNumber : selectedNumbers) {
+                // Check xem số này có trùng với BẤT KỲ 1 trong 2 số không
+                if (allTargetNumbers.contains(selectedNumber)) {
+                    winningNumbers.add(selectedNumber);
+                    log.info("3s-dau-duoi-mien-trung-nam WIN: Selected {} matches one of target numbers {}", 
+                            selectedNumber, allTargetNumbers);
+                } else {
+                    log.info("3s-dau-duoi-mien-trung-nam LOSE: Selected {} does not match any of target numbers {}", 
+                            selectedNumber, allTargetNumbers);
+                }
+            }
+            
+            if (winningNumbers.isEmpty()) {
+                log.info("3s-dau-duoi-mien-trung-nam LOSE: No matches found. Selected: {}, All targets: {}", 
+                        selectedNumbers, allTargetNumbers);
+                return false;
+            }
+            
+            bet.setWinningNumbers(convertToJsonString(winningNumbers));
+            log.info("3s-dau-duoi-mien-trung-nam WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Error checking 3s-dau-duoi-mien-trung-nam result: {}", e.getMessage());
             return false;
         }
     }

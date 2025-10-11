@@ -49,5 +49,11 @@ public interface LotteryResultProvider {
      * @return List 3 số giải 6 (ví dụ: ["034", "005", "095"])
      */
     List<String> getGiai6Numbers();
+    
+    /**
+     * Lấy TẤT CẢ số giải 8 (chỉ Miền Trung Nam)
+     * @return List số giải 8 (ví dụ: ["13"]) - chỉ có 1 số
+     */
+    List<String> getGiai8Numbers();
 }
 

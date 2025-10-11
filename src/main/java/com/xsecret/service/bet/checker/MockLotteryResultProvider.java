@@ -104,5 +104,16 @@ public class MockLotteryResultProvider implements LotteryResultProvider {
         }
         return List.of("034", "005", "095"); // Fallback
     }
+    
+    @Override
+    public List<String> getGiai8Numbers() {
+        // Mock: Lấy 1 số từ danh sách kết quả (giả sử là giải 8)
+        List<String> results = getLotteryResults();
+        if (results.size() >= 27) {
+            // 1 số giải 8: "13"
+            return results.subList(results.size() - 8, results.size() - 7);
+        }
+        return List.of("13"); // Fallback
+    }
 }
 

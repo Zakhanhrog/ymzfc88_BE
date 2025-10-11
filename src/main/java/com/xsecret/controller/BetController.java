@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping({"/api/bets", "/bets"})
+@RequestMapping("/bets")
 @RequiredArgsConstructor
 @Slf4j
 public class BetController {

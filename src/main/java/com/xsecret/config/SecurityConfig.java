@@ -62,10 +62,8 @@ public class SecurityConfig {
                     .requestMatchers("/h2-console/**").permitAll()
                     .requestMatchers("/uploads/**").permitAll()
                     .requestMatchers("/files/**").permitAll()
-                    .requestMatchers("/api/betting-odds/**").permitAll() // Public betting odds for users
-                    .requestMatchers("/betting-odds/**").permitAll() // Public betting odds for users (without /api)
-                    .requestMatchers("/api/bets/**").hasAnyRole("USER", "ADMIN") // Betting endpoints for authenticated users
-                    .requestMatchers("/bets/**").hasAnyRole("USER", "ADMIN") // Betting endpoints for authenticated users (without /api)
+                    .requestMatchers("/betting-odds/**").permitAll() // Public betting odds for users
+                    .requestMatchers("/bets/**").hasAnyRole("USER", "ADMIN") // Betting endpoints for authenticated users
                     .requestMatchers("/test/**").permitAll() // Test endpoints
                     // Admin endpoints
                     .requestMatchers("/admin/**").hasRole("ADMIN")
