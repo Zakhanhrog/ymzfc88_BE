@@ -38,6 +38,7 @@ com/xsecret/dto/response/NotificationResponse.class
 com/xsecret/dto/response/PaymentMethodResponseDto$PaymentMethodResponseDtoBuilder.class
 com/xsecret/entity/Transaction$TransactionType.class
 com/xsecret/entity/RefreshToken$RefreshTokenBuilder.class
+com/xsecret/service/bet/checker/LotteryResultProviderFactory.class
 com/xsecret/dto/request/BetRequest$BetRequestBuilder.class
 com/xsecret/service/KycService.class
 com/xsecret/entity/UserWallet$UserWalletBuilder.class
@@ -93,6 +94,7 @@ com/xsecret/service/AuthService.class
 com/xsecret/dto/response/TransactionResponseDto$TransactionResponseDtoBuilder.class
 com/xsecret/dto/response/SystemSettingsResponse.class
 com/xsecret/entity/PaymentMethod.class
+com/xsecret/service/bet/checker/MockLotteryResultProviderMienTrungNam.class
 com/xsecret/dto/request/PaymentMethodRequestDto.class
 com/xsecret/repository/UserWalletRepository.class
 com/xsecret/entity/UserPoint$UserPointBuilder.class
