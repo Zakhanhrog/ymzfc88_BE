@@ -18,7 +18,7 @@ import java.util.List;
 @Slf4j
 public class XienResultChecker {
     
-    private final LotteryResultProvider resultProvider;
+    private final LotteryResultProviderFactory providerFactory;
     private final ObjectMapper objectMapper;
     
     /**
@@ -31,7 +31,8 @@ public class XienResultChecker {
             // Parse selected pairs từ JSON
             List<String> selectedPairs = parseSelectedNumbers(bet.getSelectedNumbers());
             
-            // Lấy kết quả xổ số
+            // Lấy kết quả xổ số theo region
+            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
             List<String> lotteryResults = resultProvider.getLotteryResults();
             
             // Tìm TẤT CẢ cặp trúng
@@ -99,7 +100,8 @@ public class XienResultChecker {
             // Parse selected groups từ JSON
             List<String> selectedGroups = parseSelectedNumbers(bet.getSelectedNumbers());
             
-            // Lấy kết quả xổ số
+            // Lấy kết quả xổ số theo region
+            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
             List<String> lotteryResults = resultProvider.getLotteryResults();
             
             // Tìm TẤT CẢ cụm trúng
@@ -172,7 +174,8 @@ public class XienResultChecker {
             // Parse selected groups từ JSON
             List<String> selectedGroups = parseSelectedNumbers(bet.getSelectedNumbers());
             
-            // Lấy kết quả xổ số
+            // Lấy kết quả xổ số theo region
+            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
             List<String> lotteryResults = resultProvider.getLotteryResults();
             
             // Tìm TẤT CẢ cụm trúng

@@ -19,7 +19,7 @@ import java.util.List;
 @Slf4j
 public class TruotResultChecker {
     
-    private final LotteryResultProvider resultProvider;
+    private final LotteryResultProviderFactory providerFactory;
     private final ObjectMapper objectMapper;
     
     /**
@@ -30,6 +30,7 @@ public class TruotResultChecker {
     public boolean checkTruot4Result(Bet bet) {
         try {
             List<String> selectedGroups = parseSelectedNumbers(bet.getSelectedNumbers());
+            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
             List<String> lotteryResults = resultProvider.getLotteryResults();
             
             // Tìm TẤT CẢ cụm THẮNG (cụm mà cả 4 số đều trượt)
@@ -143,6 +144,7 @@ public class TruotResultChecker {
     private boolean checkTruotNResult(Bet bet, int expectedCount) {
         try {
             List<String> selectedGroups = parseSelectedNumbers(bet.getSelectedNumbers());
+            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
             List<String> lotteryResults = resultProvider.getLotteryResults();
             
             List<String> winningGroups = new ArrayList<>();

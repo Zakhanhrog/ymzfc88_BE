@@ -18,7 +18,7 @@ import java.util.List;
 @Slf4j
 public class Loto4sResultChecker {
     
-    private final LotteryResultProvider resultProvider;
+    private final LotteryResultProviderFactory providerFactory;
     private final ObjectMapper objectMapper;
     
     /**
@@ -31,7 +31,8 @@ public class Loto4sResultChecker {
             // Parse selected numbers từ JSON
             List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
             
-            // Lấy kết quả xổ số
+            // Lấy kết quả xổ số theo region
+            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
             List<String> lotteryResults = resultProvider.getLotteryResults();
             
             // Tìm TẤT CẢ số trúng (không break để đếm được nhiều lần)
