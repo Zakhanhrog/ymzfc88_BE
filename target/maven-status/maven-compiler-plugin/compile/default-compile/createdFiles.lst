@@ -125,6 +125,7 @@ com/xsecret/dto/response/UserResponse.class
 com/xsecret/dto/response/UserPointResponse$UserPointResponseBuilder.class
 com/xsecret/dto/request/UserFilterRequestDto.class
 com/xsecret/config/DataInitializer.class
+com/xsecret/service/bet/checker/TruotResultChecker.class
 com/xsecret/dto/UserPaymentMethodRequestDto.class
 com/xsecret/config/FileUploadConfig.class
 com/xsecret/entity/RefreshToken.class

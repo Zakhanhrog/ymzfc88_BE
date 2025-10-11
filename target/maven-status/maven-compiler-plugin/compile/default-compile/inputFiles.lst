@@ -59,6 +59,7 @@
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/controller/AuthController.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/dto/request/DepositRequestDto.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/entity/Bet.java
+/Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/service/bet/checker/TruotResultChecker.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/repository/UserPaymentMethodRepository.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/service/SystemSettingsService.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/entity/PointTransaction.java
