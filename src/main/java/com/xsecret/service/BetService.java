@@ -44,7 +44,7 @@ public class BetService {
         // Kiểm tra loại cược được hỗ trợ
         if (!isSupportedBetType(request.getBetType())) {
             throw new RuntimeException("Loại cược '" + request.getBetType() + "' chưa được hỗ trợ. " +
-                "Hiện tại hỗ trợ: loto2s/loto-2-so, loto3s/loto-3s, loto4s/loto-4s, loto-xien-2 (cả 2 miền), loto-xien-3 (cả 2 miền), " +
+                "Hiện tại hỗ trợ: loto2s/loto-2-so, loto3s/loto-3s, loto4s/loto-4s, loto-xien-2 (cả 2 miền), loto-xien-3 (cả 2 miền), loto-xien-4 (cả 2 miền), 3s-dac-biet (cả 2 miền), 4s-dac-biet (cả 2 miền), " +
                 "giai-nhat (chỉ Miền Bắc), 3s-giai-nhat (chỉ Miền Bắc), dac-biet (cả 2 miền), dau-dac-biet (cả 2 miền)");
         }
 
@@ -191,6 +191,9 @@ public class BetService {
                 || "loto4s".equals(bet.getBetType()) || "loto-4s".equals(bet.getBetType())
                 || "loto-xien-2".equals(bet.getBetType())
                 || "loto-xien-3".equals(bet.getBetType())
+                || "loto-xien-4".equals(bet.getBetType())
+                || "3s-dac-biet".equals(bet.getBetType())
+                || "4s-dac-biet".equals(bet.getBetType())
                 || "giai-nhat".equals(bet.getBetType())
                 || "3s-giai-nhat".equals(bet.getBetType())
                 || "dac-biet".equals(bet.getBetType())
@@ -229,7 +232,7 @@ public class BetService {
                 
                 winAmount = totalWinAmount;
                 
-                log.info("Loto (2s/3s/4s/xien-2/xien-3/giai-nhat/3s-giai-nhat/dac-biet/dau-dac-biet) win calculation with bonus: betType={}, total selected numbers: {}, total win amount: {} points", 
+                log.info("Loto (2s/3s/4s/xien-2/xien-3/xien-4/3s-dac-biet/4s-dac-biet/giai-nhat/3s-giai-nhat/dac-biet/dau-dac-biet) win calculation with bonus: betType={}, total selected numbers: {}, total win amount: {} points", 
                         bet.getBetType(), selectedNumbers.size(), totalWinAmount);
             } else {
                 // Các loại khác: chỉ cộng tiền lãi (trừ vốn vì đã bị trừ khi đặt cược)
@@ -291,6 +294,21 @@ public class BetService {
         // Loto xiên 3: check cụm 3 số, cả 3 phải trúng
         if ("loto-xien-3".equals(bet.getBetType())) {
             return checkLotoXien3Result(bet);
+        }
+        
+        // Loto xiên 4: check cụm 4 số, cả 4 phải trúng
+        if ("loto-xien-4".equals(bet.getBetType())) {
+            return checkLotoXien4Result(bet);
+        }
+        
+        // 3s đặc biệt: CHỈ check 3 số cuối của giải đặc biệt
+        if ("3s-dac-biet".equals(bet.getBetType())) {
+            return check3sDacBietResult(bet);
+        }
+        
+        // 4s đặc biệt: CHỈ check 4 số cuối của giải đặc biệt
+        if ("4s-dac-biet".equals(bet.getBetType())) {
+            return check4sDacBietResult(bet);
         }
         
         // Giải nhất: CHỈ check 2 số cuối giải nhất
@@ -677,6 +695,179 @@ public class BetService {
     }
     
     /**
+     * Kiểm tra kết quả Loto xiên 4: check cụm 4 số, cả 4 số trong cụm phải trúng
+     * Format selectedNumbers: ["12,23,34,45", "56,67,78,89"] (mỗi cụm là 1 string)
+     */
+    private boolean checkLotoXien4Result(Bet bet) {
+        try {
+            // Parse selected groups từ JSON
+            List<String> selectedGroups = parseSelectedNumbers(bet.getSelectedNumbers());
+            
+            // Lấy kết quả xổ số
+            List<String> lotteryResults = getMockLotteryResults();
+            
+            // Tìm TẤT CẢ cụm trúng
+            List<String> winningGroups = new ArrayList<>();
+            
+            for (String group : selectedGroups) {
+                // Parse cụm số: "12,23,34,45" -> ["12", "23", "34", "45"]
+                String[] numbers = group.split(",");
+                if (numbers.length != 4) {
+                    log.warn("Invalid group format: {}", group);
+                    continue;
+                }
+                
+                String firstNumber = numbers[0].trim();
+                String secondNumber = numbers[1].trim();
+                String thirdNumber = numbers[2].trim();
+                String fourthNumber = numbers[3].trim();
+                
+                // Check cả 4 số trong cụm có trúng không
+                boolean firstWins = false;
+                boolean secondWins = false;
+                boolean thirdWins = false;
+                boolean fourthWins = false;
+                
+                for (String result : lotteryResults) {
+                    if (result.length() >= 2) {
+                        String lastTwoDigits = result.substring(result.length() - 2);
+                        if (firstNumber.equals(lastTwoDigits)) {
+                            firstWins = true;
+                        }
+                        if (secondNumber.equals(lastTwoDigits)) {
+                            secondWins = true;
+                        }
+                        if (thirdNumber.equals(lastTwoDigits)) {
+                            thirdWins = true;
+                        }
+                        if (fourthNumber.equals(lastTwoDigits)) {
+                            fourthWins = true;
+                        }
+                    }
+                }
+                
+                // Cả 4 số trong cụm phải trúng mới thắng cụm
+                if (firstWins && secondWins && thirdWins && fourthWins) {
+                    winningGroups.add(group);
+                    log.info("Loto xiên 4 WIN group: {} (all four {} {} {} {} won)", group, firstNumber, secondNumber, thirdNumber, fourthNumber);
+                } else {
+                    log.info("Loto xiên 4 LOSE group: {} (first: {}, second: {}, third: {}, fourth: {})", group, firstWins, secondWins, thirdWins, fourthWins);
+                }
+            }
+            
+            if (winningGroups.isEmpty()) {
+                log.info("Loto xiên 4 LOSE: No winning groups found. Selected groups: {}", selectedGroups);
+                return false;
+            }
+            
+            // Lưu danh sách cụm trúng vào bet
+            bet.setWinningNumbers(convertToJsonString(winningGroups));
+            log.info("Loto xiên 4 WIN: {} winning groups: {}", winningGroups.size(), winningGroups);
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Error checking loto xiên 4 result: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Kiểm tra kết quả 3s đặc biệt: CHỈ check 3 số cuối của giải đặc biệt (không phải tất cả giải)
+     * Chọn số từ 000-999 nhưng chỉ so với 3 số cuối giải đặc biệt
+     */
+    private boolean check3sDacBietResult(Bet bet) {
+        try {
+            // Parse selected numbers từ JSON
+            List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
+            
+            // Lấy giải đặc biệt từ mock kết quả xổ số
+            String dacBietNumber = getDacBietNumber();
+            if (dacBietNumber == null || dacBietNumber.length() < 3) {
+                log.warn("3s đặc biệt: Không tìm thấy giải đặc biệt hoặc giải đặc biệt quá ngắn: {}", dacBietNumber);
+                return false;
+            }
+            
+            // Lấy 3 số cuối của giải đặc biệt
+            String lastThreeDigits = dacBietNumber.substring(dacBietNumber.length() - 3);
+            log.info("3s đặc biệt: Giải đặc biệt = {}, 3 số cuối = {}", dacBietNumber, lastThreeDigits);
+            
+            // Tìm TẤT CẢ số trúng
+            List<String> winningNumbers = new ArrayList<>();
+            
+            for (String selectedNumber : selectedNumbers) {
+                if (selectedNumber.equals(lastThreeDigits)) {
+                    winningNumbers.add(selectedNumber);
+                    log.info("3s đặc biệt WIN: {} trùng với 3 số cuối giải đặc biệt {}", selectedNumber, lastThreeDigits);
+                } else {
+                    log.info("3s đặc biệt LOSE: {} không trùng với 3 số cuối giải đặc biệt {}", selectedNumber, lastThreeDigits);
+                }
+            }
+            
+            if (winningNumbers.isEmpty()) {
+                log.info("3s đặc biệt LOSE: Không có số nào trúng. Selected numbers: {}, 3 số cuối giải đặc biệt: {}", selectedNumbers, lastThreeDigits);
+                return false;
+            }
+            
+            // Lưu danh sách số trúng vào bet
+            bet.setWinningNumbers(convertToJsonString(winningNumbers));
+            log.info("3s đặc biệt WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Error checking 3s đặc biệt result: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Kiểm tra kết quả 4s đặc biệt: CHỈ check 4 số cuối của giải đặc biệt (không phải tất cả giải)
+     * Chọn số từ 0000-9999 nhưng chỉ so với 4 số cuối giải đặc biệt
+     */
+    private boolean check4sDacBietResult(Bet bet) {
+        try {
+            // Parse selected numbers từ JSON
+            List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
+            
+            // Lấy giải đặc biệt từ mock kết quả xổ số
+            String dacBietNumber = getDacBietNumber();
+            if (dacBietNumber == null || dacBietNumber.length() < 4) {
+                log.warn("4s đặc biệt: Không tìm thấy giải đặc biệt hoặc giải đặc biệt quá ngắn: {}", dacBietNumber);
+                return false;
+            }
+            
+            // Lấy 4 số cuối của giải đặc biệt
+            String lastFourDigits = dacBietNumber.substring(dacBietNumber.length() - 4);
+            log.info("4s đặc biệt: Giải đặc biệt = {}, 4 số cuối = {}", dacBietNumber, lastFourDigits);
+            
+            // Tìm TẤT CẢ số trúng
+            List<String> winningNumbers = new ArrayList<>();
+            
+            for (String selectedNumber : selectedNumbers) {
+                if (selectedNumber.equals(lastFourDigits)) {
+                    winningNumbers.add(selectedNumber);
+                    log.info("4s đặc biệt WIN: {} trùng với 4 số cuối giải đặc biệt {}", selectedNumber, lastFourDigits);
+                } else {
+                    log.info("4s đặc biệt LOSE: {} không trùng với 4 số cuối giải đặc biệt {}", selectedNumber, lastFourDigits);
+                }
+            }
+            
+            if (winningNumbers.isEmpty()) {
+                log.info("4s đặc biệt LOSE: Không có số nào trúng. Selected numbers: {}, 4 số cuối giải đặc biệt: {}", selectedNumbers, lastFourDigits);
+                return false;
+            }
+            
+            // Lưu danh sách số trúng vào bet
+            bet.setWinningNumbers(convertToJsonString(winningNumbers));
+            log.info("4s đặc biệt WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Error checking 4s đặc biệt result: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
      * Kiểm tra kết quả 3D Giải nhất: CHỈ check 3 số cuối của giải nhất (không phải tất cả giải)
      * Chọn số từ 000-999 nhưng chỉ so với 3 số cuối giải nhất
      */
@@ -986,6 +1177,9 @@ public class BetService {
      * - Loto 4 số: loto4s (Miền Bắc), loto-4s (Miền Trung Nam)
      * - Loto xiên 2: loto-xien-2 (CẢ 2 miền) - chọn cặp số, cả 2 phải trúng
      * - Loto xiên 3: loto-xien-3 (CẢ 2 miền) - chọn cụm 3 số, cả 3 phải trúng
+     * - Loto xiên 4: loto-xien-4 (CẢ 2 miền) - chọn cụm 4 số, cả 4 phải trúng
+     * - 3s đặc biệt: 3s-dac-biet (CẢ 2 miền) - chọn 3 số, chỉ so với 3 số cuối giải đặc biệt
+     * - 4s đặc biệt: 4s-dac-biet (CẢ 2 miền) - chọn 4 số, chỉ so với 4 số cuối giải đặc biệt
      * - Giải nhất: giai-nhat (CHỈ Miền Bắc) - 2 số cuối giải nhất
      * - 3D Giải nhất: 3s-giai-nhat (CHỈ Miền Bắc) - 3 số cuối giải nhất
      * - Đặc biệt: dac-biet (CẢ 2 miền)
@@ -997,6 +1191,9 @@ public class BetService {
             || "loto4s".equals(betType) || "loto-4s".equals(betType)
             || "loto-xien-2".equals(betType)
             || "loto-xien-3".equals(betType)
+            || "loto-xien-4".equals(betType)
+            || "3s-dac-biet".equals(betType)
+            || "4s-dac-biet".equals(betType)
             || "giai-nhat".equals(betType)
             || "3s-giai-nhat".equals(betType)
             || "dac-biet".equals(betType)
