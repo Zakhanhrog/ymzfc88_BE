@@ -121,10 +121,10 @@
           "betType": "dau-duoi",
           "betName": "Đầu / đuôi",
           "description": "Đầu đuôi",
-          "odds": 4,
+          "odds": 12,
           "pricePerPoint": 1000,
           "isActive": true,
-          "note": "Đánh đầu hoặc đuôi"
+          "note": "Đánh đầu hoặc đuôi - so với giải đặc biệt + giải 7"
         }
       ]
     },
@@ -157,10 +157,10 @@
           "betType": "3s-dau-duoi",
           "betName": "3s đầu đuôi",
           "description": "3 số đầu đuôi",
-          "odds": 600,
+          "odds": 150,
           "pricePerPoint": 1000,
           "isActive": true,
-          "note": "Đánh 3 số đầu đuôi"
+          "note": "Đánh 3 số đầu đuôi - so với giải đặc biệt + giải 6"
         },
         {
           "region": "MIEN_BAC",

@@ -53,7 +53,7 @@ public class BetService {
         if (!isSupportedBetType(request.getBetType())) {
             throw new RuntimeException("Loại cược '" + request.getBetType() + "' chưa được hỗ trợ. " +
                 "Hiện tại hỗ trợ: loto2s/loto-2-so, loto3s/loto-3s, loto4s/loto-4s, loto-xien-2 (cả 2 miền), loto-xien-3 (cả 2 miền), loto-xien-4 (cả 2 miền), 3s-dac-biet (cả 2 miền), 4s-dac-biet (cả 2 miền), " +
-                "giai-nhat (chỉ Miền Bắc), 3s-giai-nhat (chỉ Miền Bắc), dac-biet (cả 2 miền), dau-dac-biet (cả 2 miền), de-giai-8 (chỉ Miền Trung Nam), 3s-giai-7 (chỉ Miền Trung Nam), loto-truot-4 (cả 2 miền)");
+                "giai-nhat (chỉ Miền Bắc), 3s-giai-nhat (chỉ Miền Bắc), 3s-giai-6 (chỉ Miền Bắc), de-giai-7 (chỉ Miền Bắc), dau-duoi (chỉ Miền Bắc), 3s-dau-duoi (chỉ Miền Bắc), dac-biet (cả 2 miền), dau-dac-biet (cả 2 miền), de-giai-8 (chỉ Miền Trung Nam), 3s-giai-7 (chỉ Miền Trung Nam), loto-truot-4/8/10 (cả 2 miền)");
         }
 
         // Lấy thông tin user
@@ -65,12 +65,34 @@ public class BetService {
         List<String> selectedNumbers = parseSelectedNumbers(convertToJsonString(request.getSelectedNumbers()));
         int selectedCount = selectedNumbers.size();
         
-        // Tiền đặt cược = số điểm × đơn giá × số lượng số
-        // Ví dụ: 10 điểm × 27 × 3 số = 810
-        BigDecimal totalBetAmount = betPoints.multiply(request.getPricePerPoint()).multiply(BigDecimal.valueOf(selectedCount));
+        // ĐẶC BIỆT: multiplier cho các loại đặc biệt
+        int multiplier = 1;
+        if ("de-giai-7".equals(request.getBetType())) {
+            multiplier = 4; // Giải 7 có 4 số
+        } else if ("3s-giai-6".equals(request.getBetType())) {
+            multiplier = 3; // Giải 6 có 3 số
+        } else if ("dau-duoi".equals(request.getBetType())) {
+            multiplier = 5; // Giải đặc biệt (1) + Giải 7 (4) = 5 số
+        } else if ("3s-dau-duoi".equals(request.getBetType())) {
+            multiplier = 4; // Giải đặc biệt (1) + Giải 6 (3) = 4 số
+        }
         
-        // Tiền thắng nếu tất cả trúng = số điểm × tỷ lệ × số lượng số
-        // Ví dụ: 10 điểm × 99 × 3 số = 2,970
+        // Tiền đặt cược = số điểm × đơn giá × số lượng số × multiplier
+        // Ví dụ: 10 điểm × 27 × 3 số = 810 (thường)
+        // Ví dụ de-giai-7: 10 điểm × 1,000 × 1 số × 4 = 40,000
+        // Ví dụ 3s-giai-6: 10 điểm × 1,000 × 1 số × 3 = 30,000
+        // Ví dụ dau-duoi: 10 điểm × 1,000 × 1 số × 5 = 50,000
+        // Ví dụ 3s-dau-duoi: 10 điểm × 1,000 × 1 số × 4 = 40,000
+        BigDecimal totalBetAmount = betPoints.multiply(request.getPricePerPoint())
+                                            .multiply(BigDecimal.valueOf(selectedCount))
+                                            .multiply(BigDecimal.valueOf(multiplier));
+        
+        // Tiền thắng nếu tất cả trúng = số điểm × tỷ lệ × số lượng số (KHÔNG × multiplier)
+        // Ví dụ: 10 điểm × 99 × 3 số = 2,970 (thường)
+        // Ví dụ de-giai-7: 10 điểm × 23 × 1 số = 230 (KHÔNG × 4)
+        // Ví dụ 3s-giai-6: 10 điểm × 600 × 1 số = 6,000 (KHÔNG × 3)
+        // Ví dụ dau-duoi: 10 điểm × 12 × 1 số = 120 (KHÔNG × 5)
+        // Ví dụ 3s-dau-duoi: 10 điểm × 150 × 1 số = 1,500 (KHÔNG × 4)
         BigDecimal potentialWin = betPoints.multiply(request.getOdds()).multiply(BigDecimal.valueOf(selectedCount));
         BigDecimal potentialProfit = potentialWin.subtract(totalBetAmount); // Chỉ tính tiền lãi
 
@@ -206,9 +228,15 @@ public class BetService {
                 || "3s-giai-nhat".equals(bet.getBetType())
                 || "dac-biet".equals(bet.getBetType())
                 || "dau-dac-biet".equals(bet.getBetType())
+                || "3s-giai-6".equals(bet.getBetType())
+                || "de-giai-7".equals(bet.getBetType())
+                || "dau-duoi".equals(bet.getBetType())
+                || "3s-dau-duoi".equals(bet.getBetType())
                 || "de-giai-8".equals(bet.getBetType())
                 || "3s-giai-7".equals(bet.getBetType())
-                || "loto-truot-4".equals(bet.getBetType())) {
+                || "loto-truot-4".equals(bet.getBetType())
+                || "loto-truot-8".equals(bet.getBetType())
+                || "loto-truot-10".equals(bet.getBetType())) {
                 // Cho loto2s: tính tiền thắng dựa trên số lượng số trúng
                 List<String> winningNumbers = parseSelectedNumbers(bet.getWinningNumbers());
                 int winningCount = winningNumbers.size();
@@ -243,7 +271,7 @@ public class BetService {
                 
                 winAmount = totalWinAmount;
                 
-                log.info("Loto (2s/3s/4s/xien-2/xien-3/xien-4/3s-dac-biet/4s-dac-biet/giai-nhat/3s-giai-nhat/dac-biet/dau-dac-biet/de-giai-8/3s-giai-7/truot-4-10) win calculation with bonus: betType={}, total selected numbers: {}, total win amount: {} points", 
+                log.info("Loto (2s/3s/4s/xien-2/xien-3/xien-4/3s-dac-biet/4s-dac-biet/giai-nhat/3s-giai-nhat/3s-giai-6/dac-biet/dau-dac-biet/dau-duoi/3s-dau-duoi/de-giai-7/de-giai-8/3s-giai-7/truot-4/truot-8/truot-10) win calculation with bonus: betType={}, total selected numbers: {}, total win amount: {} points", 
                         bet.getBetType(), selectedNumbers.size(), totalWinAmount);
             } else {
                 // Các loại khác: chỉ cộng tiền lãi (trừ vốn vì đã bị trừ khi đặt cược)
@@ -333,6 +361,11 @@ public class BetService {
             return specialChecker.check3sGiaiNhatResult(bet);
         }
         
+        // 3s giải 6: CHỈ check 3 số cuối của TẤT CẢ 3 số giải 6 (chỉ Miền Bắc)
+        if ("3s-giai-6".equals(bet.getBetType())) {
+            return specialChecker.check3sGiai6Result(bet);
+        }
+        
         // Đặc biệt: CHỈ check 2 số cuối giải đặc biệt
         if ("dac-biet".equals(bet.getBetType())) {
             return specialChecker.checkDacBietResult(bet);
@@ -343,9 +376,24 @@ public class BetService {
             return specialChecker.checkDauDacBietResult(bet);
         }
         
+        // Đầu/đuôi: CHỈ check 2 số cuối giải đặc biệt + TẤT CẢ 4 số giải 7 (chỉ Miền Bắc)
+        if ("dau-duoi".equals(bet.getBetType())) {
+            return specialChecker.checkDauDuoiResult(bet);
+        }
+        
+        // 3s đầu đuôi: CHỈ check 3 số cuối giải đặc biệt + TẤT CẢ 3 số giải 6 (chỉ Miền Bắc)
+        if ("3s-dau-duoi".equals(bet.getBetType())) {
+            return specialChecker.check3sDauDuoiResult(bet);
+        }
+        
         // Đề giải 8: CHỈ check 2 số cuối giải 8 (chỉ Miền Trung Nam)
         if ("de-giai-8".equals(bet.getBetType())) {
             return specialChecker.checkDeGiai8Result(bet);
+        }
+        
+        // Đề giải 7: CHỈ check 2 số cuối của TẤT CẢ 4 số giải 7 (chỉ Miền Bắc)
+        if ("de-giai-7".equals(bet.getBetType())) {
+            return specialChecker.checkDeGiai7Result(bet);
         }
         
         // 3s giải 7: CHỈ check 3 số cuối giải 7 (chỉ Miền Trung Nam)
@@ -358,6 +406,15 @@ public class BetService {
             return truotChecker.checkTruot4Result(bet);
         }
         
+        // Loto trượt 8: CẢ 8 số đều KHÔNG trúng → THẮNG
+        if ("loto-truot-8".equals(bet.getBetType())) {
+            return truotChecker.checkTruot8Result(bet);
+        }
+        
+        // Loto trượt 10: CẢ 10 số đều KHÔNG trúng → THẮNG
+        if ("loto-truot-10".equals(bet.getBetType())) {
+            return truotChecker.checkTruot10Result(bet);
+        }
         
         // Mock: 10% cơ hội thắng cho các loại khác
         return Math.random() < 0.1;
@@ -454,11 +511,17 @@ public class BetService {
             || "4s-dac-biet".equals(betType)
             || "giai-nhat".equals(betType)
             || "3s-giai-nhat".equals(betType)
+            || "3s-giai-6".equals(betType)
+            || "de-giai-7".equals(betType)
+            || "dau-duoi".equals(betType)
+            || "3s-dau-duoi".equals(betType)
             || "dac-biet".equals(betType)
             || "dau-dac-biet".equals(betType)
             || "de-giai-8".equals(betType)
             || "3s-giai-7".equals(betType)
-            || "loto-truot-4".equals(betType);
+            || "loto-truot-4".equals(betType)
+            || "loto-truot-8".equals(betType)
+            || "loto-truot-10".equals(betType);
     }
 
     /**

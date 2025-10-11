@@ -78,5 +78,31 @@ public class MockLotteryResultProvider implements LotteryResultProvider {
         // Ví dụ: "138" → 3 số cuối: 138
         return "138";
     }
+    
+    @Override
+    public List<String> getGiai7Numbers() {
+        // Mock giải 7 cho Miền Bắc
+        // Giải 7 có 4 số 2 chữ số
+        // Lấy 4 số cuối cùng trong danh sách kết quả (indices 39-42 trong getLotteryResults())
+        List<String> results = getLotteryResults();
+        if (results.size() >= 27) {
+            // 4 số giải 7 là 4 số cuối: "41", "71", "90", "42"
+            return results.subList(results.size() - 4, results.size());
+        }
+        return List.of("41", "71", "90", "42"); // Fallback
+    }
+    
+    @Override
+    public List<String> getGiai6Numbers() {
+        // Mock giải 6 cho Miền Bắc
+        // Giải 6 có 3 số 3 chữ số
+        // Lấy 3 số trước 4 số giải 7 (indices 36-38 trong getLotteryResults())
+        List<String> results = getLotteryResults();
+        if (results.size() >= 27) {
+            // 3 số giải 6: "034", "005", "095"
+            return results.subList(results.size() - 7, results.size() - 4);
+        }
+        return List.of("034", "005", "095"); // Fallback
+    }
 }
 

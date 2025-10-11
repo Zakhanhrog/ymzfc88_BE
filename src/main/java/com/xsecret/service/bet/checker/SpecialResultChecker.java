@@ -270,6 +270,188 @@ public class SpecialResultChecker {
     }
     
     /**
+     * Đầu/đuôi: CHỈ check 2 số cuối của giải đặc biệt và TẤT CẢ 4 số giải 7 (chỉ Miền Bắc)
+     * Chọn số như loto2s (00-99) nhưng so với giải đặc biệt + 4 số giải 7
+     * Giải đặc biệt: 1 số (ví dụ: "12345" → 2 số cuối: "45")
+     * Giải 7: 4 số 2 chữ số (ví dụ: ["12", "34", "56", "78"])
+     * Điểm đặt cược × 5 (vì có 5 số), nhưng tiền thắng không × 5
+     */
+    public boolean checkDauDuoiResult(Bet bet) {
+        try {
+            List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
+            
+            // Lấy 2 số cuối của giải đặc biệt
+            String dacBietNumber = resultProvider.getDacBietNumber();
+            String dacBietLastTwo = null;
+            if (dacBietNumber != null && dacBietNumber.length() >= 2) {
+                dacBietLastTwo = dacBietNumber.substring(dacBietNumber.length() - 2);
+            }
+            
+            // Lấy TẤT CẢ 4 số giải 7
+            List<String> giai7Numbers = resultProvider.getGiai7Numbers();
+            
+            if (dacBietLastTwo == null || giai7Numbers == null || giai7Numbers.isEmpty()) {
+                log.error("Không tìm thấy giải đặc biệt hoặc giải 7");
+                return false;
+            }
+            
+            // Tạo danh sách tất cả số cần so sánh: 2 số cuối giải đặc biệt + 4 số giải 7
+            List<String> allTargetNumbers = new ArrayList<>();
+            allTargetNumbers.add(dacBietLastTwo);
+            allTargetNumbers.addAll(giai7Numbers);
+            
+            log.info("Dau-duoi: Dac biet last 2 = {}, Giai 7 = {}, All targets = {}", 
+                    dacBietLastTwo, giai7Numbers, allTargetNumbers);
+            
+            List<String> winningNumbers = new ArrayList<>();
+            for (String selectedNumber : selectedNumbers) {
+                // Check xem số này có trùng với BẤT KỲ 1 trong 5 số không
+                if (allTargetNumbers.contains(selectedNumber)) {
+                    winningNumbers.add(selectedNumber);
+                    log.info("Dau-duoi WIN: Selected {} matches one of target numbers {}", 
+                            selectedNumber, allTargetNumbers);
+                } else {
+                    log.info("Dau-duoi LOSE: Selected {} does not match any of target numbers {}", 
+                            selectedNumber, allTargetNumbers);
+                }
+            }
+            
+            if (winningNumbers.isEmpty()) {
+                log.info("Dau-duoi LOSE: No matches found. Selected: {}, All targets: {}", 
+                        selectedNumbers, allTargetNumbers);
+                return false;
+            }
+            
+            bet.setWinningNumbers(convertToJsonString(winningNumbers));
+            log.info("Dau-duoi WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Error checking dau-duoi result: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 3s đầu đuôi: CHỈ check 3 số cuối của giải đặc biệt và TẤT CẢ 3 số giải 6 (chỉ Miền Bắc)
+     * Chọn số như loto3s (000-999) nhưng so với giải đặc biệt + 3 số giải 6
+     * Giải đặc biệt: 1 số (ví dụ: "12345" → 3 số cuối: "345")
+     * Giải 6: 3 số 3 chữ số (ví dụ: ["034", "005", "095"])
+     * Điểm đặt cược × 4 (vì có 4 số), nhưng tiền thắng không × 4
+     */
+    public boolean check3sDauDuoiResult(Bet bet) {
+        try {
+            List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
+            
+            // Lấy 3 số cuối của giải đặc biệt
+            String dacBietNumber = resultProvider.getDacBietNumber();
+            String dacBietLastThree = null;
+            if (dacBietNumber != null && dacBietNumber.length() >= 3) {
+                dacBietLastThree = dacBietNumber.substring(dacBietNumber.length() - 3);
+            }
+            
+            // Lấy TẤT CẢ 3 số giải 6
+            List<String> giai6Numbers = resultProvider.getGiai6Numbers();
+            
+            if (dacBietLastThree == null || giai6Numbers == null || giai6Numbers.isEmpty()) {
+                log.error("Không tìm thấy giải đặc biệt hoặc giải 6");
+                return false;
+            }
+            
+            // Tạo danh sách tất cả số cần so sánh: 3 số cuối giải đặc biệt + 3 số giải 6
+            List<String> allTargetNumbers = new ArrayList<>();
+            allTargetNumbers.add(dacBietLastThree);
+            allTargetNumbers.addAll(giai6Numbers);
+            
+            log.info("3s-dau-duoi: Dac biet last 3 = {}, Giai 6 = {}, All targets = {}", 
+                    dacBietLastThree, giai6Numbers, allTargetNumbers);
+            
+            List<String> winningNumbers = new ArrayList<>();
+            for (String selectedNumber : selectedNumbers) {
+                // Check xem số này có trùng với BẤT KỲ 1 trong 4 số không
+                if (allTargetNumbers.contains(selectedNumber)) {
+                    winningNumbers.add(selectedNumber);
+                    log.info("3s-dau-duoi WIN: Selected {} matches one of target numbers {}", 
+                            selectedNumber, allTargetNumbers);
+                } else {
+                    log.info("3s-dau-duoi LOSE: Selected {} does not match any of target numbers {}", 
+                            selectedNumber, allTargetNumbers);
+                }
+            }
+            
+            if (winningNumbers.isEmpty()) {
+                log.info("3s-dau-duoi LOSE: No matches found. Selected: {}, All targets: {}", 
+                        selectedNumbers, allTargetNumbers);
+                return false;
+            }
+            
+            bet.setWinningNumbers(convertToJsonString(winningNumbers));
+            log.info("3s-dau-duoi WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Error checking 3s-dau-duoi result: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 3s giải 6: CHỈ check 3 số cuối của TẤT CẢ 3 số giải 6 (chỉ Miền Bắc)
+     * Chọn số như loto3s (000-999) nhưng chỉ so với giải 6
+     * Giải 6 Miền Bắc có 3 số 3 chữ số (ví dụ: "034", "005", "095")
+     * Điểm đặt cược × 3 (vì có 3 số), nhưng tiền thắng không × 3
+     */
+    public boolean check3sGiai6Result(Bet bet) {
+        try {
+            List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
+            List<String> giai6Numbers = resultProvider.getGiai6Numbers();
+            
+            if (giai6Numbers == null || giai6Numbers.isEmpty()) {
+                log.error("Không tìm thấy giải 6 hoặc giải 6 không hợp lệ");
+                return false;
+            }
+            
+            // Giải 6 Miền Bắc có 3 số, lấy 3 số cuối của mỗi số
+            List<String> giai6LastThreeDigits = new ArrayList<>();
+            for (String giai6Num : giai6Numbers) {
+                if (giai6Num != null && giai6Num.length() >= 3) {
+                    String lastThree = giai6Num.substring(giai6Num.length() - 3);
+                    giai6LastThreeDigits.add(lastThree);
+                }
+            }
+            
+            log.info("3s-giai-6: Giải 6 numbers = {}, last 3 digits = {}", giai6Numbers, giai6LastThreeDigits);
+            
+            List<String> winningNumbers = new ArrayList<>();
+            for (String selectedNumber : selectedNumbers) {
+                // Check xem số này có trùng với BẤT KỲ 1 trong 3 số giải 6 không
+                if (giai6LastThreeDigits.contains(selectedNumber)) {
+                    winningNumbers.add(selectedNumber);
+                    log.info("3s-giai-6 WIN: Selected {} matches one of Giai 6 last 3 digits {}", 
+                            selectedNumber, giai6LastThreeDigits);
+                } else {
+                    log.info("3s-giai-6 LOSE: Selected {} does not match any of Giai 6 last 3 digits {}", 
+                            selectedNumber, giai6LastThreeDigits);
+                }
+            }
+            
+            if (winningNumbers.isEmpty()) {
+                log.info("3s-giai-6 LOSE: No matches found. Selected: {}, Giai 6 last 3 digits: {}", 
+                        selectedNumbers, giai6LastThreeDigits);
+                return false;
+            }
+            
+            bet.setWinningNumbers(convertToJsonString(winningNumbers));
+            log.info("3s-giai-6 WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Error checking 3s-giai-6 result: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
      * Đề giải 8: CHỈ check 2 số cuối của giải 8 (chỉ Miền Trung Nam)
      * Chọn số như loto2s (00-99) nhưng chỉ so với giải 8
      * Giải 8 chỉ có 1 số 2 chữ số (ví dụ: "13")
@@ -309,6 +491,62 @@ public class SpecialResultChecker {
             
         } catch (Exception e) {
             log.error("Error checking de-giai-8 result: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Đề giải 7: CHỈ check 2 số cuối của TẤT CẢ 4 số giải 7 (chỉ Miền Bắc)
+     * Chọn số như loto2s (00-99) nhưng chỉ so với giải 7
+     * Giải 7 Miền Bắc có 4 số (ví dụ: "12", "34", "56", "78")
+     * Điểm đặt cược × 4 (vì có 4 số), nhưng tiền thắng không × 4
+     */
+    public boolean checkDeGiai7Result(Bet bet) {
+        try {
+            List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
+            List<String> giai7Numbers = resultProvider.getGiai7Numbers();
+            
+            if (giai7Numbers == null || giai7Numbers.isEmpty()) {
+                log.error("Không tìm thấy giải 7 hoặc giải 7 không hợp lệ");
+                return false;
+            }
+            
+            // Giải 7 Miền Bắc có 4 số, lấy 2 số cuối của mỗi số
+            List<String> giai7LastTwoDigits = new ArrayList<>();
+            for (String giai7Num : giai7Numbers) {
+                if (giai7Num != null && giai7Num.length() >= 2) {
+                    String lastTwo = giai7Num.substring(giai7Num.length() - 2);
+                    giai7LastTwoDigits.add(lastTwo);
+                }
+            }
+            
+            log.info("De-giai-7: Giải 7 numbers = {}, last 2 digits = {}", giai7Numbers, giai7LastTwoDigits);
+            
+            List<String> winningNumbers = new ArrayList<>();
+            for (String selectedNumber : selectedNumbers) {
+                // Check xem số này có trùng với BẤT KỲ 1 trong 4 số giải 7 không
+                if (giai7LastTwoDigits.contains(selectedNumber)) {
+                    winningNumbers.add(selectedNumber);
+                    log.info("De-giai-7 WIN: Selected {} matches one of Giai 7 last 2 digits {}", 
+                            selectedNumber, giai7LastTwoDigits);
+                } else {
+                    log.info("De-giai-7 LOSE: Selected {} does not match any of Giai 7 last 2 digits {}", 
+                            selectedNumber, giai7LastTwoDigits);
+                }
+            }
+            
+            if (winningNumbers.isEmpty()) {
+                log.info("De-giai-7 LOSE: No matches found. Selected: {}, Giai 7 last 2 digits: {}", 
+                        selectedNumbers, giai7LastTwoDigits);
+                return false;
+            }
+            
+            bet.setWinningNumbers(convertToJsonString(winningNumbers));
+            log.info("De-giai-7 WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Error checking de-giai-7 result: {}", e.getMessage());
             return false;
         }
     }

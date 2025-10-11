@@ -37,5 +37,17 @@ public interface LotteryResultProvider {
      * @return Số giải 7 (ví dụ: "138", "001", "999")
      */
     String getGiai7Number();
+    
+    /**
+     * Lấy TẤT CẢ 4 số giải 7 (chỉ Miền Bắc)
+     * @return List 4 số giải 7 (ví dụ: ["12", "34", "56", "78"])
+     */
+    List<String> getGiai7Numbers();
+    
+    /**
+     * Lấy TẤT CẢ 3 số giải 6 (chỉ Miền Bắc)
+     * @return List 3 số giải 6 (ví dụ: ["034", "005", "095"])
+     */
+    List<String> getGiai6Numbers();
 }
 
