@@ -18,6 +18,7 @@ com/xsecret/controller/FileController.class
 com/xsecret/repository/KycVerificationRepository.class
 com/xsecret/controller/NotificationController.class
 com/xsecret/controller/TestController.class
+com/xsecret/service/bet/checker/MockLotteryResultProvider.class
 com/xsecret/entity/Transaction$TransactionStatus.class
 com/xsecret/entity/Notification$NotificationBuilder.class
 com/xsecret/entity/PointTransaction$PointTransactionBuilder.class
@@ -41,6 +42,7 @@ com/xsecret/dto/request/BetRequest$BetRequestBuilder.class
 com/xsecret/service/KycService.class
 com/xsecret/entity/UserWallet$UserWalletBuilder.class
 com/xsecret/security/JwtAuthenticationFilter.class
+com/xsecret/service/bet/checker/Loto2sResultChecker.class
 com/xsecret/dto/request/UpdateUserRequestDto.class
 com/xsecret/entity/Transaction$TransactionBuilder.class
 com/xsecret/service/UserService.class
@@ -67,6 +69,7 @@ com/xsecret/dto/response/PointTransactionResponse.class
 com/xsecret/mapper/UserMapper.class
 com/xsecret/entity/UserWallet.class
 com/xsecret/dto/request/UpdateUserRequestDto$UpdateUserRequestDtoBuilder.class
+com/xsecret/service/bet/checker/Loto3sResultChecker.class
 com/xsecret/dto/request/SystemSettingsRequest.class
 com/xsecret/controller/BetController.class
 com/xsecret/service/PointService.class
@@ -93,6 +96,7 @@ com/xsecret/entity/PaymentMethod.class
 com/xsecret/dto/request/PaymentMethodRequestDto.class
 com/xsecret/repository/UserWalletRepository.class
 com/xsecret/entity/UserPoint$UserPointBuilder.class
+com/xsecret/service/bet/checker/Loto4sResultChecker.class
 com/xsecret/dto/request/UserWithdrawRequestDto.class
 com/xsecret/entity/UserPaymentMethod.class
 com/xsecret/dto/response/PointTransactionResponse$PointTransactionResponseBuilder.class
@@ -116,6 +120,7 @@ com/xsecret/entity/User.class
 com/xsecret/controller/BettingOddsController.class
 com/xsecret/dto/request/RefreshTokenRequest.class
 com/xsecret/security/JwtUtils.class
+com/xsecret/service/bet/checker/SpecialResultChecker.class
 com/xsecret/dto/response/UserResponse.class
 com/xsecret/dto/response/UserPointResponse$UserPointResponseBuilder.class
 com/xsecret/dto/request/UserFilterRequestDto.class
@@ -123,11 +128,13 @@ com/xsecret/config/DataInitializer.class
 com/xsecret/dto/UserPaymentMethodRequestDto.class
 com/xsecret/config/FileUploadConfig.class
 com/xsecret/entity/RefreshToken.class
+com/xsecret/service/bet/checker/LotteryResultProvider.class
 com/xsecret/dto/response/TransactionResponseDto.class
 com/xsecret/dto/response/NotificationResponse$NotificationResponseBuilder.class
 com/xsecret/exception/TokenRefreshException.class
 com/xsecret/dto/UserPaymentMethodResponseDto.class
 com/xsecret/dto/request/DepositRequestDto.class
+com/xsecret/service/bet/checker/XienResultChecker.class
 com/xsecret/dto/response/ApiResponse.class
 com/xsecret/controller/AdminController.class
 com/xsecret/dto/response/BetStatisticsResponse.class
