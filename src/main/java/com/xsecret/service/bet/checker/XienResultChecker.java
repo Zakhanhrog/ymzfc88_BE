@@ -18,7 +18,7 @@ import java.util.List;
 @Slf4j
 public class XienResultChecker {
     
-    private final LotteryResultProviderFactory providerFactory;
+    private final DatabaseLotteryResultProvider databaseProvider;
     private final ObjectMapper objectMapper;
     
     /**
@@ -31,9 +31,9 @@ public class XienResultChecker {
             // Parse selected pairs từ JSON
             List<String> selectedPairs = parseSelectedNumbers(bet.getSelectedNumbers());
             
-            // Lấy kết quả xổ số theo region
-            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
-            List<String> lotteryResults = resultProvider.getLotteryResults();
+            // Lấy kết quả xổ số từ database
+            databaseProvider.setContext(bet);
+            List<String> lotteryResults = databaseProvider.getLotteryResults();
             
             // Tìm TẤT CẢ cặp trúng
             List<String> winningPairs = new ArrayList<>();
@@ -100,9 +100,9 @@ public class XienResultChecker {
             // Parse selected groups từ JSON
             List<String> selectedGroups = parseSelectedNumbers(bet.getSelectedNumbers());
             
-            // Lấy kết quả xổ số theo region
-            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
-            List<String> lotteryResults = resultProvider.getLotteryResults();
+            // Lấy kết quả xổ số từ database
+            databaseProvider.setContext(bet);
+            List<String> lotteryResults = databaseProvider.getLotteryResults();
             
             // Tìm TẤT CẢ cụm trúng
             List<String> winningGroups = new ArrayList<>();
@@ -174,9 +174,9 @@ public class XienResultChecker {
             // Parse selected groups từ JSON
             List<String> selectedGroups = parseSelectedNumbers(bet.getSelectedNumbers());
             
-            // Lấy kết quả xổ số theo region
-            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
-            List<String> lotteryResults = resultProvider.getLotteryResults();
+            // Lấy kết quả xổ số từ database
+            databaseProvider.setContext(bet);
+            List<String> lotteryResults = databaseProvider.getLotteryResults();
             
             // Tìm TẤT CẢ cụm trúng
             List<String> winningGroups = new ArrayList<>();

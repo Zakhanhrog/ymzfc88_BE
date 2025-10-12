@@ -18,6 +18,7 @@ public class BetResponse {
     
     private Long id;
     private String region;
+    private String province;
     private String betType;
     private List<String> selectedNumbers;
     private BigDecimal betAmount;
@@ -42,6 +43,7 @@ public class BetResponse {
         return BetResponse.builder()
                 .id(bet.getId())
                 .region(bet.getRegion())
+                .province(bet.getProvince())
                 .betType(bet.getBetType())
                 .selectedNumbers(parseJsonArray(bet.getSelectedNumbers()))
                 .betAmount(bet.getBetAmount())

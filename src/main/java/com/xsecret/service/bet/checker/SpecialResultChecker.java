@@ -21,7 +21,7 @@ import java.util.List;
 @Slf4j
 public class SpecialResultChecker {
     
-    private final LotteryResultProviderFactory providerFactory;
+    private final DatabaseLotteryResultProvider databaseProvider;
     private final ObjectMapper objectMapper;
     
     /**
@@ -31,7 +31,8 @@ public class SpecialResultChecker {
     public boolean check3sDacBietResult(Bet bet) {
         try {
             List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
-            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
+            databaseProvider.setContext(bet);
+            LotteryResultProvider resultProvider = databaseProvider;
             String dacBietNumber = resultProvider.getDacBietNumber();
             
             if (dacBietNumber == null || dacBietNumber.length() < 3) {
@@ -74,7 +75,8 @@ public class SpecialResultChecker {
     public boolean check4sDacBietResult(Bet bet) {
         try {
             List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
-            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
+            databaseProvider.setContext(bet);
+            LotteryResultProvider resultProvider = databaseProvider;
             String dacBietNumber = resultProvider.getDacBietNumber();
             
             if (dacBietNumber == null || dacBietNumber.length() < 4) {
@@ -117,7 +119,8 @@ public class SpecialResultChecker {
     public boolean checkGiaiNhatResult(Bet bet) {
         try {
             List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
-            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
+            databaseProvider.setContext(bet);
+            LotteryResultProvider resultProvider = databaseProvider;
             String giaiNhatNumber = resultProvider.getGiaiNhatNumber();
             
             if (giaiNhatNumber == null || giaiNhatNumber.length() < 2) {
@@ -158,7 +161,8 @@ public class SpecialResultChecker {
     public boolean check3sGiaiNhatResult(Bet bet) {
         try {
             List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
-            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
+            databaseProvider.setContext(bet);
+            LotteryResultProvider resultProvider = databaseProvider;
             String giaiNhatNumber = resultProvider.getGiaiNhatNumber();
             
             if (giaiNhatNumber == null || giaiNhatNumber.length() < 3) {
@@ -199,7 +203,8 @@ public class SpecialResultChecker {
     public boolean checkDacBietResult(Bet bet) {
         try {
             List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
-            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
+            databaseProvider.setContext(bet);
+            LotteryResultProvider resultProvider = databaseProvider;
             String dacBietNumber = resultProvider.getDacBietNumber();
             
             if (dacBietNumber == null || dacBietNumber.length() < 2) {
@@ -240,7 +245,8 @@ public class SpecialResultChecker {
     public boolean checkDauDacBietResult(Bet bet) {
         try {
             List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
-            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
+            databaseProvider.setContext(bet);
+            LotteryResultProvider resultProvider = databaseProvider;
             String dacBietNumber = resultProvider.getDacBietNumber();
             
             if (dacBietNumber == null || dacBietNumber.length() < 2) {
@@ -287,7 +293,8 @@ public class SpecialResultChecker {
             List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
             
             // Lấy 2 số cuối của giải đặc biệt
-            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
+            databaseProvider.setContext(bet);
+            LotteryResultProvider resultProvider = databaseProvider;
             String dacBietNumber = resultProvider.getDacBietNumber();
             String dacBietLastTwo = null;
             if (dacBietNumber != null && dacBietNumber.length() >= 2) {
@@ -351,7 +358,8 @@ public class SpecialResultChecker {
             List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
             
             // Lấy 2 số cuối của giải đặc biệt
-            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
+            databaseProvider.setContext(bet);
+            LotteryResultProvider resultProvider = databaseProvider;
             String dacBietNumber = resultProvider.getDacBietNumber();
             String dacBietLastTwo = null;
             if (dacBietNumber != null && dacBietNumber.length() >= 2) {
@@ -415,7 +423,8 @@ public class SpecialResultChecker {
             List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
             
             // Lấy 3 số cuối của giải đặc biệt
-            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
+            databaseProvider.setContext(bet);
+            LotteryResultProvider resultProvider = databaseProvider;
             String dacBietNumber = resultProvider.getDacBietNumber();
             String dacBietLastThree = null;
             if (dacBietNumber != null && dacBietNumber.length() >= 3) {
@@ -476,7 +485,8 @@ public class SpecialResultChecker {
     public boolean check3sGiai6Result(Bet bet) {
         try {
             List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
-            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
+            databaseProvider.setContext(bet);
+            LotteryResultProvider resultProvider = databaseProvider;
             List<String> giai6Numbers = resultProvider.getGiai6Numbers();
             
             if (giai6Numbers == null || giai6Numbers.isEmpty()) {
@@ -532,7 +542,8 @@ public class SpecialResultChecker {
     public boolean checkDeGiai8Result(Bet bet) {
         try {
             List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
-            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
+            databaseProvider.setContext(bet);
+            LotteryResultProvider resultProvider = databaseProvider;
             String giai8Number = resultProvider.getGiai8Number();
             
             if (giai8Number == null || giai8Number.length() < 2) {
@@ -578,7 +589,8 @@ public class SpecialResultChecker {
     public boolean checkDeGiai7Result(Bet bet) {
         try {
             List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
-            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
+            databaseProvider.setContext(bet);
+            LotteryResultProvider resultProvider = databaseProvider;
             List<String> giai7Numbers = resultProvider.getGiai7Numbers();
             
             if (giai7Numbers == null || giai7Numbers.isEmpty()) {
@@ -638,7 +650,8 @@ public class SpecialResultChecker {
             List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
             
             // Lấy 3 số cuối của giải đặc biệt
-            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
+            databaseProvider.setContext(bet);
+            LotteryResultProvider resultProvider = databaseProvider;
             String dacBietNumber = resultProvider.getDacBietNumber();
             String dacBietLastThree = null;
             if (dacBietNumber != null && dacBietNumber.length() >= 3) {
@@ -698,7 +711,8 @@ public class SpecialResultChecker {
     public boolean check3sGiai7Result(Bet bet) {
         try {
             List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
-            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
+            databaseProvider.setContext(bet);
+            LotteryResultProvider resultProvider = databaseProvider;
             String giai7Number = resultProvider.getGiai7Number();
             
             if (giai7Number == null || giai7Number.length() < 3) {

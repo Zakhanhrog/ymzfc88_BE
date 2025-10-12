@@ -28,6 +28,9 @@ public class Bet {
     @Column(name = "region", nullable = false, length = 50)
     private String region; // mienBac, mienTrungNam
     
+    @Column(name = "province", length = 50)
+    private String province; // Tỉnh (chỉ cho Miền Trung Nam): gialai, binhduong, ninhthuan, travinh, vinhlong
+    
     @Column(name = "bet_type", nullable = false, length = 50)
     private String betType; // loto2s, loto-xien-2, etc.
     

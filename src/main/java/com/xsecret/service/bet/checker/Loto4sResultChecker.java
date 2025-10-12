@@ -18,7 +18,7 @@ import java.util.List;
 @Slf4j
 public class Loto4sResultChecker {
     
-    private final LotteryResultProviderFactory providerFactory;
+    private final DatabaseLotteryResultProvider databaseProvider;
     private final ObjectMapper objectMapper;
     
     /**
@@ -31,9 +31,9 @@ public class Loto4sResultChecker {
             // Parse selected numbers từ JSON
             List<String> selectedNumbers = parseSelectedNumbers(bet.getSelectedNumbers());
             
-            // Lấy kết quả xổ số theo region
-            LotteryResultProvider resultProvider = providerFactory.getProvider(bet.getRegion());
-            List<String> lotteryResults = resultProvider.getLotteryResults();
+            // Lấy kết quả xổ số từ database
+            databaseProvider.setContext(bet);
+            List<String> lotteryResults = databaseProvider.getLotteryResults();
             
             // Tìm TẤT CẢ số trúng (không break để đếm được nhiều lần)
             List<String> winningNumbers = new ArrayList<>();
@@ -43,25 +43,20 @@ public class Loto4sResultChecker {
                         String lastFourDigits = result.substring(result.length() - 4);
                         if (selectedNumber.equals(lastFourDigits)) {
                             winningNumbers.add(selectedNumber);
-                            log.info("Loto4s WIN: Selected {} matches last 4 digits of {}", selectedNumber, result);
-                            // KHÔNG BREAK để có thể tìm thấy số trúng nhiều lần
                         }
                     }
                 }
             }
             
             if (winningNumbers.isEmpty()) {
-                log.info("Loto4s LOSE: No matches found for selected numbers: {}", selectedNumbers);
                 return false;
             }
             
-            // Lưu danh sách số trúng vào bet
             bet.setWinningNumbers(convertToJsonString(winningNumbers));
-            log.info("Loto4s WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
             return true;
             
         } catch (Exception e) {
-            log.error("Error checking loto4s result: {}", e.getMessage());
+            log.error("Lỗi check loto4s bet_id={}: {}", bet.getId(), e.getMessage());
             return false;
         }
     }
@@ -71,7 +66,6 @@ public class Loto4sResultChecker {
             return objectMapper.readValue(selectedNumbersJson, 
                 objectMapper.getTypeFactory().constructCollectionType(List.class, String.class));
         } catch (Exception e) {
-            log.error("Error parsing selected numbers: {}", e.getMessage());
             return List.of();
         }
     }
@@ -80,7 +74,6 @@ public class Loto4sResultChecker {
         try {
             return objectMapper.writeValueAsString(list);
         } catch (Exception e) {
-            log.error("Error converting list to JSON: {}", e.getMessage());
             return "[]";
         }
     }

@@ -18,6 +18,8 @@ import com.xsecret.security.UserPrincipal;
 import com.xsecret.service.AuthService;
 import com.xsecret.service.PaymentMethodService;
 import com.xsecret.service.SystemSettingsService;
+import java.util.HashMap;
+import java.util.Map;
 import com.xsecret.service.TransactionService;
 import com.xsecret.service.UserService;
 import jakarta.validation.Valid;
@@ -680,27 +682,46 @@ public class AdminController {
         }
     }
     
+    
     /**
-     * Nhập kết quả xổ số cho bet
-     * CHỈ cho phép nhập khi bet có status = PENDING
-     * Hệ thống sẽ tự động check thắng/thua khi đến thời gian
+     * Cập nhật số đã chọn của bet
+     * CHỈ cho phép cập nhật khi bet có status = PENDING
      */
-    @PostMapping("/bets/{id}/update-result")
-    public ResponseEntity<ApiResponse<com.xsecret.dto.response.BetResponse>> updateBetResult(
+    @PostMapping("/bets/{id}/update-selected-numbers")
+    public ResponseEntity<ApiResponse<com.xsecret.dto.response.BetResponse>> updateBetSelectedNumbers(
             @PathVariable Long id,
-            @RequestBody java.util.Map<String, Object> request,
+            @RequestBody List<String> selectedNumbers,
             @AuthenticationPrincipal UserPrincipal adminPrincipal) {
         try {
-            @SuppressWarnings("unchecked")
-            java.util.List<String> winningNumbers = (java.util.List<String>) request.get("winningNumbers");
+            log.info("Admin {} updating selected numbers for bet {}", adminPrincipal.getId(), id);
             
-            log.info("Admin {} setting lottery result for bet {} with winning numbers: {}", 
-                adminPrincipal.getId(), id, winningNumbers);
-            
-            com.xsecret.dto.response.BetResponse bet = betService.updateBetResult(id, winningNumbers);
-            return ResponseEntity.ok(ApiResponse.success("Đã nhập kết quả xổ số thành công", bet));
+            com.xsecret.dto.response.BetResponse bet = betService.updateBetSelectedNumbers(id, selectedNumbers);
+            return ResponseEntity.ok(ApiResponse.success("Cập nhật số đã chọn thành công", bet));
         } catch (Exception e) {
-            log.error("Error setting lottery result for bet", e);
+            log.error("Error updating selected numbers for bet {}", id, e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+    
+    /**
+     * Kiểm tra kết quả tất cả bet đang chờ (manual trigger cho admin)
+     */
+    @PostMapping("/bets/check-results")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> checkAllBetResults(
+            @AuthenticationPrincipal UserPrincipal adminPrincipal) {
+        try {
+            log.info("Admin {} manually triggering bet result check", adminPrincipal.getId());
+            
+            betService.checkBetResults();
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("message", "Đã kiểm tra kết quả tất cả bet đang chờ");
+            result.put("timestamp", java.time.LocalDateTime.now());
+            
+            return ResponseEntity.ok(ApiResponse.success("Kiểm tra kết quả thành công", result));
+        } catch (Exception e) {
+            log.error("Error during manual bet result check", e);
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error(e.getMessage()));
         }

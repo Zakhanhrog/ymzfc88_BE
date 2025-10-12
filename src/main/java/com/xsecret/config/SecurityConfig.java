@@ -63,6 +63,7 @@ public class SecurityConfig {
                     .requestMatchers("/uploads/**").permitAll()
                     .requestMatchers("/files/**").permitAll()
                     .requestMatchers("/betting-odds/**").permitAll() // Public betting odds for users
+                    .requestMatchers("/public/**").permitAll() // Public endpoints (lottery results, etc.)
                     .requestMatchers("/bets/**").hasAnyRole("USER", "ADMIN") // Betting endpoints for authenticated users
                     .requestMatchers("/test/**").permitAll() // Test endpoints
                     // Admin endpoints

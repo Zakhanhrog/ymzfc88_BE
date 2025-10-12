@@ -18,6 +18,9 @@ public class BetRequest {
     @NotBlank(message = "Region không được để trống")
     private String region;
     
+    // Province (chỉ cho Miền Trung Nam)
+    private String province;
+    
     @NotBlank(message = "Bet type không được để trống")
     private String betType;
     

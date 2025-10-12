@@ -9,7 +9,6 @@ import com.xsecret.entity.Bet;
 import com.xsecret.entity.User;
 import com.xsecret.repository.BetRepository;
 import com.xsecret.repository.UserRepository;
-import com.xsecret.service.PointService;
 import com.xsecret.service.bet.checker.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -129,6 +128,7 @@ public class BetService {
         Bet bet = Bet.builder()
                 .user(user)
                 .region(request.getRegion())
+                .province(request.getProvince())
                 .betType(request.getBetType())
                 .selectedNumbers(convertToJsonString(request.getSelectedNumbers()))
                 .betAmount(betPoints) // Tổng số điểm cược (chia đều cho các số)
@@ -184,21 +184,30 @@ public class BetService {
 
     /**
      * Kiểm tra kết quả bet (sau 5 giây - mock)
+     * Không có @Transactional ở đây để mỗi bet có transaction riêng
      */
-    @Transactional
     public void checkBetResults() {
         String currentDate = getCurrentDateString();
         List<Bet> pendingBets = betRepository.findPendingBetsToCheck(currentDate);
 
-        log.info("Checking results for {} pending bets", pendingBets.size());
+        log.info("Checking results for {} pending bets on date: {}", pendingBets.size(), currentDate);
 
+        int successCount = 0;
+        int errorCount = 0;
+        
         for (Bet bet : pendingBets) {
             try {
+                log.info("Processing bet ID: {}, betType: {}, userId: {}", bet.getId(), bet.getBetType(), bet.getUser().getId());
                 checkBetResult(bet);
+                successCount++;
+                log.info("Successfully checked bet ID: {}", bet.getId());
             } catch (Exception e) {
-                log.error("Error checking result for bet {}: {}", bet.getId(), e.getMessage());
+                errorCount++;
+                log.error("Error checking result for bet ID {}: {}", bet.getId(), e.getMessage(), e);
             }
         }
+        
+        log.info("Bet check completed: {} successful, {} errors out of {} total", successCount, errorCount, pendingBets.size());
     }
 
     /**
@@ -206,9 +215,21 @@ public class BetService {
      * LOGIC CUỐI CÙNG: 
      * 1. Đặt cược: Trừ toàn bộ tiền cược
      * 2. Thắng cược: Cộng CHỈ tiền lãi của số trúng (thua mất luôn, không hoàn vốn)
+     * 
+     * REQUIRES_NEW: Mỗi bet chạy trong transaction riêng để tránh ảnh hưởng lẫn nhau
      */
-    @Transactional
-    public void checkBetResult(Bet bet) {
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void checkBetResult(Bet betParam) {
+        // Fetch fresh bet from DB to ensure we have the latest state
+        Bet bet = betRepository.findById(betParam.getId())
+                .orElseThrow(() -> new RuntimeException("Bet không tồn tại: " + betParam.getId()));
+        
+        // Kiểm tra xem bet đã được check chưa (tránh check lại)
+        if (bet.getStatus() != Bet.BetStatus.PENDING) {
+            log.info("Bet {} already checked with status {}, skipping", bet.getId(), bet.getStatus());
+            return;
+        }
+        
         log.info("Checking result for bet {}: {} - {}", bet.getId(), bet.getBetType(), bet.getSelectedNumbers());
 
         // Mock logic - giả lập kiểm tra kết quả
@@ -311,7 +332,10 @@ public class BetService {
             log.info("Bet {} LOST", bet.getId());
         }
 
-        betRepository.save(bet);
+        // Lưu và flush ngay để đảm bảo data được persist
+        bet = betRepository.save(bet);
+        log.info("Bet {} saved with status: {}, isWin: {}, winAmount: {}", 
+                bet.getId(), bet.getStatus(), bet.getIsWin(), bet.getWinAmount());
     }
 
     /**
@@ -660,33 +684,6 @@ public class BetService {
         return stats;
     }
     
-    /**
-     * Admin: Set kết quả xổ số cho bet
-     * CHỈ cho phép set khi bet chưa có kết quả (PENDING)
-     * Hệ thống sẽ tự động check thắng/thua khi đến thời gian
-     */
-    @Transactional
-    public BetResponse updateBetResult(Long betId, List<String> winningNumbers) {
-        Bet bet = betRepository.findById(betId)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy bet với ID: " + betId));
-        
-        // QUAN TRỌNG: Chỉ cho phép set khi bet chưa có kết quả
-        if (bet.getStatus() != Bet.BetStatus.PENDING) {
-            throw new RuntimeException("Không thể thay đổi kết quả của bet đã có kết quả. Chỉ có thể thay đổi bet có status = PENDING");
-        }
-        
-        // Admin chỉ set kết quả xổ số, không tự động tính thắng/thua
-        if (winningNumbers == null || winningNumbers.isEmpty()) {
-            bet.setWinningNumbers("[]");
-            log.info("Admin set bet {} with no winning numbers", betId);
-        } else {
-            bet.setWinningNumbers(convertToJsonString(winningNumbers));
-            log.info("Admin set bet {} with winning numbers: {}", betId, winningNumbers);
-        }
-        
-        betRepository.save(bet);
-        return BetResponse.fromEntity(bet);
-    }
     
     /**
      * Tính tiền thắng cho bet
@@ -703,6 +700,39 @@ public class BetService {
         // Tính theo số lượng số trúng
         int winningCount = winningNumbers.size();
         return totalBetPoints.multiply(bet.getOdds()).multiply(BigDecimal.valueOf(winningCount));
+    }
+    
+    /**
+     * Admin: Cập nhật số đã chọn của bet
+     * CHỈ cho phép cập nhật khi bet chưa có kết quả (PENDING)
+     */
+    @Transactional
+    public BetResponse updateBetSelectedNumbers(Long betId, List<String> newSelectedNumbers) {
+        Bet bet = betRepository.findById(betId)
+                .orElseThrow(() -> new RuntimeException("Bet không tồn tại với ID: " + betId));
+        
+        // QUAN TRỌNG: Chỉ cho phép cập nhật khi bet chưa có kết quả
+        if (bet.getStatus() != Bet.BetStatus.PENDING) {
+            throw new RuntimeException("Không thể cập nhật bet đã có kết quả. Chỉ có thể cập nhật bet có status = PENDING");
+        }
+        
+        // Validate số đã chọn mới
+        if (newSelectedNumbers == null || newSelectedNumbers.isEmpty()) {
+            throw new RuntimeException("Danh sách số đã chọn không được trống");
+        }
+        
+        // Cập nhật số đã chọn
+        String oldSelectedNumbers = bet.getSelectedNumbers();
+        bet.setSelectedNumbers(convertToJsonString(newSelectedNumbers));
+        
+        log.info("Admin updating bet {} selected numbers from {} to {}", 
+                betId, oldSelectedNumbers, convertToJsonString(newSelectedNumbers));
+        
+        // Lưu bet
+        bet = betRepository.save(bet);
+        log.info("Bet {} selected numbers updated successfully", betId);
+        
+        return BetResponse.fromEntity(bet);
     }
     
     /**
