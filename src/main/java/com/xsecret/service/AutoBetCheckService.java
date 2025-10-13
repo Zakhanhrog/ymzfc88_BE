@@ -26,25 +26,28 @@ public class AutoBetCheckService {
     @EventListener
     @Async
     public void handleLotteryResultPublished(LotteryResultPublishedEvent event) {
-        log.info("Received lottery result published event: ID={}, region={}, province={}, drawDate={}", 
+        log.info("========================================");
+        log.info("📢 EVENT RECEIVED: Lottery Result Published!");
+        log.info("   ID={}, region={}, province={}, drawDate={}", 
                 event.getLotteryResultId(), event.getRegion(), event.getProvince(), event.getDrawDate());
+        log.info("========================================");
         
         try {
-            // Đợi 5 giây để đảm bảo admin action hoàn tất
-            Thread.sleep(5000);
+            log.info("⏰ Waiting 10 seconds before checking bets...");
+            Thread.sleep(10000);
             
-            log.info("Starting auto bet check after publish for date: {}", event.getDrawDate());
+            log.info("🚀 Starting auto bet check after admin publish for date: {}", event.getDrawDate());
             
             // Check bet cho ngày cụ thể
             betService.checkBetResultsForDate(event.getDrawDate());
             
-            log.info("Auto bet check completed successfully for date: {}", event.getDrawDate());
+            log.info("✅ Auto bet check completed successfully for date: {}", event.getDrawDate());
             
         } catch (InterruptedException e) {
-            log.error("Auto bet check was interrupted", e);
+            log.error("❌ Auto bet check was interrupted", e);
             Thread.currentThread().interrupt();
         } catch (Exception e) {
-            log.error("Error during auto bet check after publish", e);
+            log.error("❌ Error during auto bet check after publish", e);
         }
     }
     

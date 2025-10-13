@@ -16,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 import com.xsecret.event.LotteryResultPublishedEvent;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
 import java.util.Map;
 
 @Service
@@ -85,6 +84,18 @@ public class LotteryResultService {
         LotteryResult saved = lotteryResultRepository.save(entity);
         log.info("Lottery result created with ID: {}", saved.getId());
 
+        // Nếu tạo với status = PUBLISHED, publish event để trigger auto bet check
+        if (saved.getStatus() == LotteryResult.ResultStatus.PUBLISHED) {
+            log.info("Auto-publishing event for newly created PUBLISHED result: ID={}, region={}, province={}, drawDate={}", 
+                    saved.getId(), saved.getRegion(), saved.getProvince(), saved.getDrawDate());
+            
+            eventPublisher.publishEvent(new LotteryResultPublishedEvent(
+                    saved.getId(), 
+                    saved.getRegion(), 
+                    saved.getProvince(), 
+                    saved.getDrawDate().toString()));
+        }
+
         return LotteryResultResponse.fromEntity(saved);
     }
 
@@ -126,10 +137,18 @@ public class LotteryResultService {
         }
 
         // Cập nhật status nếu có
+        LotteryResult.ResultStatus oldStatus = entity.getStatus();
+        boolean statusChangedToPublished = false;
+        
         if (request.getStatus() != null && !request.getStatus().trim().isEmpty()) {
             try {
-                LotteryResult.ResultStatus status = LotteryResult.ResultStatus.valueOf(request.getStatus().toUpperCase());
-                entity.setStatus(status);
+                LotteryResult.ResultStatus newStatus = LotteryResult.ResultStatus.valueOf(request.getStatus().toUpperCase());
+                entity.setStatus(newStatus);
+                
+                // Kiểm tra nếu status thay đổi từ DRAFT sang PUBLISHED
+                if (oldStatus == LotteryResult.ResultStatus.DRAFT && newStatus == LotteryResult.ResultStatus.PUBLISHED) {
+                    statusChangedToPublished = true;
+                }
             } catch (IllegalArgumentException e) {
                 log.warn("Invalid status: {}, keeping current status", request.getStatus());
             }
@@ -138,6 +157,18 @@ public class LotteryResultService {
         LotteryResult saved = lotteryResultRepository.save(entity);
         log.info("Lottery result updated: ID={}, status={}, drawDate={}", 
                 saved.getId(), saved.getStatus(), saved.getDrawDate());
+
+        // Nếu status thay đổi sang PUBLISHED, publish event để trigger auto bet check
+        if (statusChangedToPublished) {
+            log.info("Status changed to PUBLISHED, publishing event: ID={}, region={}, province={}, drawDate={}", 
+                    saved.getId(), saved.getRegion(), saved.getProvince(), saved.getDrawDate());
+            
+            eventPublisher.publishEvent(new LotteryResultPublishedEvent(
+                    saved.getId(), 
+                    saved.getRegion(), 
+                    saved.getProvince(), 
+                    saved.getDrawDate().toString()));
+        }
 
         return LotteryResultResponse.fromEntity(saved);
     }
@@ -273,6 +304,7 @@ public class LotteryResultService {
     /**
      * Validate JSON results format
      */
+    @SuppressWarnings("unchecked")
     private void validateResults(String results, String region) {
         try {
             Map<String, Object> resultsMap = objectMapper.readValue(results, Map.class);

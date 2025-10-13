@@ -15,11 +15,8 @@ public class ScheduledTaskService {
 
     private final BetService betService;
 
-    /**
-     * Tự động check kết quả bet mỗi phút
-     * Cron expression: 0 * * * * ? = mỗi phút (giây 0)
-     */
-    @Scheduled(cron = "0 * * * * ?")
+  
+    @Scheduled(cron = "*/10 * * * * ?")
     public void checkBetResultsAutomatically() {
         try {
             log.info("🔄 Scheduled task: Starting automatic bet result check...");
