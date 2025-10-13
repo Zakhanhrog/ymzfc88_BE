@@ -185,6 +185,7 @@ public class BetService {
     /**
      * Kiểm tra kết quả bet (sau 5 giây - mock)
      * Không có @Transactional ở đây để mỗi bet có transaction riêng
+     * CHỈ CHECK BET CỦA HÔM NAY, nếu chưa có kết quả thì bỏ qua
      */
     public void checkBetResults() {
         String currentDate = getCurrentDateString();
@@ -194,6 +195,7 @@ public class BetService {
 
         int successCount = 0;
         int errorCount = 0;
+        int skippedCount = 0;
         
         for (Bet bet : pendingBets) {
             try {
@@ -201,13 +203,61 @@ public class BetService {
                 checkBetResult(bet);
                 successCount++;
                 log.info("Successfully checked bet ID: {}", bet.getId());
+            } catch (RuntimeException e) {
+                // Nếu lỗi do chưa có kết quả xổ số thì skip (không đếm là lỗi)
+                if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
+                    skippedCount++;
+                    log.warn("Skipped bet ID {} - Chưa có kết quả xổ số: {}", bet.getId(), e.getMessage());
+                } else {
+                    errorCount++;
+                    log.error("Error checking result for bet ID {}: {}", bet.getId(), e.getMessage(), e);
+                }
             } catch (Exception e) {
                 errorCount++;
                 log.error("Error checking result for bet ID {}: {}", bet.getId(), e.getMessage(), e);
             }
         }
         
-        log.info("Bet check completed: {} successful, {} errors out of {} total", successCount, errorCount, pendingBets.size());
+        log.info("Bet check completed: {} successful, {} skipped (no result), {} errors out of {} total", 
+                successCount, skippedCount, errorCount, pendingBets.size());
+    }
+
+    /**
+     * Kiểm tra kết quả bet cho ngày cụ thể (dùng khi admin publish kết quả cho ngày trước)
+     * CHỈ CHECK BET CỦA NGÀY ĐƯỢC CHỈ ĐỊNH
+     */
+    public void checkBetResultsForDate(String targetDate) {
+        List<Bet> pendingBets = betRepository.findPendingBetsToCheck(targetDate);
+
+        log.info("Checking results for {} pending bets on specific date: {}", pendingBets.size(), targetDate);
+
+        int successCount = 0;
+        int errorCount = 0;
+        int skippedCount = 0;
+        
+        for (Bet bet : pendingBets) {
+            try {
+                log.info("Processing bet ID: {}, betType: {}, userId: {}", bet.getId(), bet.getBetType(), bet.getUser().getId());
+                checkBetResult(bet);
+                successCount++;
+                log.info("Successfully checked bet ID: {}", bet.getId());
+            } catch (RuntimeException e) {
+                // Nếu lỗi do chưa có kết quả xổ số thì skip (không đếm là lỗi)
+                if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
+                    skippedCount++;
+                    log.warn("Skipped bet ID {} - Chưa có kết quả xổ số: {}", bet.getId(), e.getMessage());
+                } else {
+                    errorCount++;
+                    log.error("Error checking result for bet ID {}: {}", bet.getId(), e.getMessage(), e);
+                }
+            } catch (Exception e) {
+                errorCount++;
+                log.error("Error checking result for bet ID {}: {}", bet.getId(), e.getMessage(), e);
+            }
+        }
+        
+        log.info("Bet check for date {} completed: {} successful, {} skipped (no result), {} errors out of {} total", 
+                targetDate, successCount, skippedCount, errorCount, pendingBets.size());
     }
 
     /**

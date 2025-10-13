@@ -7,22 +7,26 @@ import com.xsecret.entity.LotteryResult;
 import com.xsecret.repository.LotteryResultRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.xsecret.event.LotteryResultPublishedEvent;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class LotteryResultService {
-
+    
     private final LotteryResultRepository lotteryResultRepository;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Tạo kết quả xổ số mới
@@ -94,14 +98,35 @@ public class LotteryResultService {
         LotteryResult entity = lotteryResultRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy kết quả với ID: " + id));
 
+        // Cập nhật drawDate nếu có
+        if (request.getDrawDate() != null && !request.getDrawDate().trim().isEmpty()) {
+            try {
+                LocalDate newDrawDate = LocalDate.parse(request.getDrawDate(), DateTimeFormatter.ISO_LOCAL_DATE);
+                entity.setDrawDate(newDrawDate);
+                log.info("Updated drawDate to: {}", newDrawDate);
+            } catch (Exception e) {
+                log.warn("Invalid drawDate format: {}, keeping current drawDate", request.getDrawDate());
+            }
+        }
+
+        // Cập nhật region nếu có
+        if (request.getRegion() != null && !request.getRegion().trim().isEmpty()) {
+            entity.setRegion(request.getRegion());
+        }
+
+        // Cập nhật province nếu có
+        if (request.getProvince() != null) {
+            entity.setProvince(request.getProvince());
+        }
+
         // Validate JSON results nếu có cập nhật
-        if (request.getResults() != null) {
+        if (request.getResults() != null && !request.getResults().trim().isEmpty()) {
             validateResults(request.getResults(), entity.getRegion());
             entity.setResults(request.getResults());
         }
 
         // Cập nhật status nếu có
-        if (request.getStatus() != null) {
+        if (request.getStatus() != null && !request.getStatus().trim().isEmpty()) {
             try {
                 LotteryResult.ResultStatus status = LotteryResult.ResultStatus.valueOf(request.getStatus().toUpperCase());
                 entity.setStatus(status);
@@ -111,7 +136,8 @@ public class LotteryResultService {
         }
 
         LotteryResult saved = lotteryResultRepository.save(entity);
-        log.info("Lottery result updated: ID={}, status={}", saved.getId(), saved.getStatus());
+        log.info("Lottery result updated: ID={}, status={}, drawDate={}", 
+                saved.getId(), saved.getStatus(), saved.getDrawDate());
 
         return LotteryResultResponse.fromEntity(saved);
     }
@@ -213,7 +239,16 @@ public class LotteryResultService {
         entity.setStatus(LotteryResult.ResultStatus.PUBLISHED);
         LotteryResult saved = lotteryResultRepository.save(entity);
 
-        log.info("Lottery result published: ID={}", saved.getId());
+        log.info("Lottery result published: ID={}, region={}, province={}, drawDate={}", 
+                saved.getId(), saved.getRegion(), saved.getProvince(), saved.getDrawDate());
+        
+        // Publish event để trigger auto bet check
+        eventPublisher.publishEvent(new LotteryResultPublishedEvent(
+                saved.getId(), 
+                saved.getRegion(), 
+                saved.getProvince(), 
+                saved.getDrawDate().toString()));
+        
         return LotteryResultResponse.fromEntity(saved);
     }
 
@@ -233,6 +268,7 @@ public class LotteryResultService {
         log.info("Lottery result unpublished: ID={}", saved.getId());
         return LotteryResultResponse.fromEntity(saved);
     }
+
 
     /**
      * Validate JSON results format

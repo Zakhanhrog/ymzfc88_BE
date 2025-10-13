@@ -55,6 +55,14 @@ public class Loto4sResultChecker {
             bet.setWinningNumbers(convertToJsonString(winningNumbers));
             return true;
             
+        } catch (RuntimeException e) {
+            // Nếu lỗi do chưa có kết quả xổ số thì propagate lên BetService để skip
+            if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
+                throw e; // Propagate exception để BetService có thể skip bet
+            }
+            // Các lỗi khác thì log và return false
+            log.error("Lỗi check loto4s bet_id={}: {}", bet.getId(), e.getMessage());
+            return false;
         } catch (Exception e) {
             log.error("Lỗi check loto4s bet_id={}: {}", bet.getId(), e.getMessage());
             return false;

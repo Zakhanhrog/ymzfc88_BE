@@ -41,8 +41,9 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
     
     /**
      * Tìm bet chưa được kiểm tra kết quả
+     * CHỈ LẤY BET CỦA HÔM NAY (resultDate = currentDate), không check các ngày trước
      */
-    @Query("SELECT b FROM Bet b WHERE b.status = 'PENDING' AND b.resultDate <= :currentDate AND b.resultCheckedAt IS NULL")
+    @Query("SELECT b FROM Bet b WHERE b.status = 'PENDING' AND b.resultDate = :currentDate AND b.resultCheckedAt IS NULL")
     List<Bet> findPendingBetsToCheck(@Param("currentDate") String currentDate);
     
     /**

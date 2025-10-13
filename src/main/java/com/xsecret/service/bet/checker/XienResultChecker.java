@@ -84,6 +84,14 @@ public class XienResultChecker {
             log.info("Loto xiên 2 WIN: {} winning pairs: {}", winningPairs.size(), winningPairs);
             return true;
             
+        } catch (RuntimeException e) {
+            // Nếu lỗi do chưa có kết quả xổ số thì propagate lên BetService để skip
+            if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
+                throw e; // Propagate exception để BetService có thể skip bet
+            }
+            // Các lỗi khác thì log và return false
+            log.error("Error checking loto xiên 2 result: {}", e.getMessage());
+            return false;
         } catch (Exception e) {
             log.error("Error checking loto xiên 2 result: {}", e.getMessage());
             return false;
@@ -158,6 +166,14 @@ public class XienResultChecker {
             log.info("Loto xiên 3 WIN: {} winning groups: {}", winningGroups.size(), winningGroups);
             return true;
             
+        } catch (RuntimeException e) {
+            // Nếu lỗi do chưa có kết quả xổ số thì propagate lên BetService để skip
+            if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
+                throw e; // Propagate exception để BetService có thể skip bet
+            }
+            // Các lỗi khác thì log và return false
+            log.error("Error checking loto xiên 3 result: {}", e.getMessage());
+            return false;
         } catch (Exception e) {
             log.error("Error checking loto xiên 3 result: {}", e.getMessage());
             return false;
@@ -237,6 +253,14 @@ public class XienResultChecker {
             log.info("Loto xiên 4 WIN: {} winning groups: {}", winningGroups.size(), winningGroups);
             return true;
             
+        } catch (RuntimeException e) {
+            // Nếu lỗi do chưa có kết quả xổ số thì propagate lên BetService để skip
+            if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
+                throw e; // Propagate exception để BetService có thể skip bet
+            }
+            // Các lỗi khác thì log và return false
+            log.error("Error checking loto xiên 4 result: {}", e.getMessage());
+            return false;
         } catch (Exception e) {
             log.error("Error checking loto xiên 4 result: {}", e.getMessage());
             return false;

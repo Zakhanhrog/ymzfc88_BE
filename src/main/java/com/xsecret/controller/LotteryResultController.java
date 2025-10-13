@@ -237,6 +237,7 @@ public class LotteryResultController {
         }
     }
 
+
     // ==================== PUBLIC ENDPOINTS ====================
 
     /**

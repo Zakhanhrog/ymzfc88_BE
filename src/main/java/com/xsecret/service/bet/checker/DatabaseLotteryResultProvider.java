@@ -41,27 +41,27 @@ public class DatabaseLotteryResultProvider implements LotteryResultProvider {
     
     /**
      * Load kết quả từ database
+     * Throw exception nếu không tìm thấy kết quả để báo lỗi cho BetService
      */
     private void loadResult() {
         if (currentBet == null) {
-            return;
+            throw new RuntimeException("Current bet context is null");
         }
         
-        try {
-            String region = currentBet.getRegion();
-            String province = currentBet.getProvince();
-            LocalDate drawDate = LocalDate.parse(currentBet.getResultDate(), DateTimeFormatter.ISO_LOCAL_DATE);
-            
-            cachedResult = lotteryResultService.getPublishedResultForBetCheck(region, province, drawDate);
-            
-            if (cachedResult == null) {
-                log.error("Không tìm thấy kết quả xổ số published: region={}, province={}, drawDate={}", 
-                        region, province, drawDate);
-            }
-        } catch (Exception e) {
-            log.error("Lỗi khi load kết quả xổ số: bet_id={}, error={}", currentBet.getId(), e.getMessage());
-            cachedResult = null;
+        String region = currentBet.getRegion();
+        String province = currentBet.getProvince();
+        LocalDate drawDate = LocalDate.parse(currentBet.getResultDate(), DateTimeFormatter.ISO_LOCAL_DATE);
+        
+        cachedResult = lotteryResultService.getPublishedResultForBetCheck(region, province, drawDate);
+        
+        if (cachedResult == null) {
+            throw new RuntimeException(String.format(
+                "Chưa có kết quả xổ số cho ngày %s (region=%s, province=%s). Vui lòng cập nhật kết quả trước khi check bet.", 
+                drawDate, region, province != null ? province : "N/A"));
         }
+        
+        log.info("Loaded lottery result for bet_id={}: region={}, province={}, drawDate={}", 
+                currentBet.getId(), region, province, drawDate);
     }
     
     @Override

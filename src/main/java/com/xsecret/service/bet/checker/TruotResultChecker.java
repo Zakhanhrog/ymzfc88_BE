@@ -84,6 +84,14 @@ public class TruotResultChecker {
             log.info("Loto truot-4 WIN: {} winning groups: {}", winningGroups.size(), winningGroups);
             return true;
             
+        } catch (RuntimeException e) {
+            // Nếu lỗi do chưa có kết quả xổ số thì propagate lên BetService để skip
+            if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
+                throw e; // Propagate exception để BetService có thể skip bet
+            }
+            // Các lỗi khác thì log và return false
+            log.error("Error checking loto truot-4 result: {}", e.getMessage());
+            return false;
         } catch (Exception e) {
             log.error("Error checking loto truot-4 result: {}", e.getMessage());
             return false;
@@ -199,6 +207,14 @@ public class TruotResultChecker {
             log.info("Loto truot-{} WIN: {} winning groups: {}", expectedCount, winningGroups.size(), winningGroups);
             return true;
             
+        } catch (RuntimeException e) {
+            // Nếu lỗi do chưa có kết quả xổ số thì propagate lên BetService để skip
+            if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
+                throw e; // Propagate exception để BetService có thể skip bet
+            }
+            // Các lỗi khác thì log và return false
+            log.error("Error checking loto truot-{} result: {}", expectedCount, e.getMessage());
+            return false;
         } catch (Exception e) {
             log.error("Error checking loto truot-{} result: {}", expectedCount, e.getMessage());
             return false;
