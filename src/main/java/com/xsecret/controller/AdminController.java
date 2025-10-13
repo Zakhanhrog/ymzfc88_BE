@@ -706,7 +706,9 @@ public class AdminController {
     
     /**
      * Kiểm tra kết quả tất cả bet đang chờ (manual trigger cho admin)
+     * DISABLED: Chỉ cho phép check bet lúc 18:30 theo lịch trình
      */
+    /*
     @PostMapping("/bets/check-results")
     public ResponseEntity<ApiResponse<Map<String, Object>>> checkAllBetResults(
             @AuthenticationPrincipal UserPrincipal adminPrincipal) {
@@ -726,6 +728,7 @@ public class AdminController {
                     .body(ApiResponse.error(e.getMessage()));
         }
     }
+    */
     
     /**
      * Xóa bet

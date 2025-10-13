@@ -249,6 +249,22 @@ public class LotteryResultService {
     }
 
     /**
+     * Kiểm tra xem có kết quả đã published không
+     * Dùng để check trước khi auto cancel bets
+     */
+    @Transactional(readOnly = true)
+    public boolean hasPublishedResult(String region, String province, String drawDateStr) {
+        try {
+            LocalDate drawDate = LocalDate.parse(drawDateStr, DateTimeFormatter.ISO_LOCAL_DATE);
+            return lotteryResultRepository.findPublishedResult(region, province, drawDate)
+                    .isPresent();
+        } catch (Exception e) {
+            log.error("Error checking published result: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Lấy kết quả mới nhất đã published (dùng khi không chỉ định ngày)
      */
     @Transactional(readOnly = true)

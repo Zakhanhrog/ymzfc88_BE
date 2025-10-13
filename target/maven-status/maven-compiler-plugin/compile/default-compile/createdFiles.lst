@@ -1,5 +1,6 @@
 com/xsecret/dto/UserPaymentMethodResponseDto$UserPaymentMethodResponseDtoBuilder.class
 com/xsecret/entity/SystemSettings.class
+com/xsecret/dto/vnlottery/VnLotteryMienBacResponse$TData.class
 com/xsecret/dto/request/WithdrawalLockRequest.class
 com/xsecret/dto/KycSubmissionRequest.class
 com/xsecret/dto/KycResponse$KycResponseBuilder.class
@@ -38,6 +39,7 @@ com/xsecret/repository/BettingOddsRepository.class
 com/xsecret/repository/PaymentMethodRepository.class
 com/xsecret/controller/KycController.class
 com/xsecret/security/UserPrincipal.class
+com/xsecret/dto/vnlottery/VnLotteryProvinceResponse.class
 com/xsecret/dto/response/NotificationResponse.class
 com/xsecret/dto/response/PaymentMethodResponseDto$PaymentMethodResponseDtoBuilder.class
 com/xsecret/entity/Transaction$TransactionType.class
@@ -59,10 +61,12 @@ com/xsecret/dto/response/ApiResponse$ApiResponseBuilder.class
 com/xsecret/controller/LotteryResultController.class
 com/xsecret/dto/response/BetStatisticsResponse$BetStatisticsResponseBuilder.class
 com/xsecret/dto/request/SystemSettingsRequest$SystemSettingsRequestBuilder.class
+com/xsecret/dto/vnlottery/VnLotteryIssue.class
 com/xsecret/service/AutoBetCheckService.class
 com/xsecret/dto/response/BetResponse$BetResponseBuilder.class
 com/xsecret/entity/LotteryResult$ResultStatus.class
 com/xsecret/dto/response/JwtResponse.class
+com/xsecret/service/lottery/LotteryResultAutoImportService$2.class
 com/xsecret/dto/request/ProcessTransactionRequestDto.class
 com/xsecret/dto/request/LotteryResultRequest.class
 com/xsecret/controller/AuthController.class
@@ -78,6 +82,7 @@ com/xsecret/dto/KycResponse.class
 com/xsecret/service/BetService.class
 com/xsecret/dto/response/PointTransactionResponse.class
 com/xsecret/mapper/UserMapper.class
+com/xsecret/service/lottery/LotteryResultAutoImportService$1.class
 com/xsecret/entity/UserWallet.class
 com/xsecret/dto/request/UpdateUserRequestDto$UpdateUserRequestDtoBuilder.class
 com/xsecret/service/bet/checker/Loto3sResultChecker.class
@@ -118,9 +123,11 @@ com/xsecret/XSecretBackendApplication.class
 com/xsecret/repository/PointTransactionRepository.class
 com/xsecret/entity/User$UserStatus.class
 com/xsecret/entity/SystemSettings$SystemSettingsBuilder.class
+com/xsecret/service/lottery/VnLotteryApiService.class
 com/xsecret/entity/PaymentMethod$PaymentType.class
 com/xsecret/entity/Bet$BetStatus.class
 com/xsecret/dto/response/PointTransactionResponse$UserInfo$UserInfoBuilder.class
+com/xsecret/dto/vnlottery/VnLotteryMienBacResponse.class
 com/xsecret/repository/UserPointRepository.class
 com/xsecret/entity/KycVerification.class
 com/xsecret/repository/UserPaymentMethodRepository.class
@@ -139,6 +146,7 @@ com/xsecret/dto/response/UserPointResponse$UserPointResponseBuilder.class
 com/xsecret/dto/request/UserFilterRequestDto.class
 com/xsecret/config/DataInitializer.class
 com/xsecret/service/bet/checker/DatabaseLotteryResultProvider.class
+com/xsecret/service/lottery/LotteryResultAutoImportService.class
 com/xsecret/service/bet/checker/TruotResultChecker.class
 com/xsecret/dto/UserPaymentMethodRequestDto.class
 com/xsecret/config/FileUploadConfig.class
@@ -168,5 +176,6 @@ com/xsecret/dto/response/PaymentMethodResponseDto.class
 com/xsecret/controller/SystemSettingsController.class
 com/xsecret/service/UserPaymentMethodService.class
 com/xsecret/service/CustomUserDetailsService.class
+com/xsecret/dto/vnlottery/VnLotteryProvinceResponse$ProvinceData.class
 com/xsecret/dto/request/RegisterRequest.class
 com/xsecret/entity/PointTransaction.class

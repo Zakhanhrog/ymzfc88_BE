@@ -17,6 +17,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -96,19 +99,75 @@ public class LotteryResultController {
 
     /**
      * Admin: Publish kết quả (chuyển từ DRAFT sang PUBLISHED)
+     * Không tự động check bet - chỉ chờ đến 18:30
      */
     @PostMapping("/admin/lottery-results/{id}/publish")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<LotteryResultResponse>> publishResult(@PathVariable Long id) {
         log.info("Admin publishing lottery result ID: {}", id);
-        
+
         try {
             LotteryResultResponse response = lotteryResultService.publishResult(id);
-            return ResponseEntity.ok(ApiResponse.success("Công bố kết quả thành công", response));
+
+            return ResponseEntity.ok(ApiResponse.success("Công bố kết quả thành công. Hệ thống sẽ check bet lúc 18:30.", response));
         } catch (Exception e) {
             log.error("Error publishing lottery result", e);
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("Lỗi công bố kết quả: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Admin: Trigger auto-import lottery results từ API
+     * Import tất cả kết quả còn thiếu (Miền Bắc + các tỉnh)
+     */
+    @PostMapping("/admin/lottery-results/auto-import")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> triggerAutoImport() {
+        log.info("Admin triggering auto-import lottery results...");
+
+        try {
+            Map<String, Object> result = new HashMap<>();
+            int totalImported = 0;
+            List<String> errors = new ArrayList<>();
+
+            // Import Miền Bắc
+            try {
+                autoImportService.autoImportMienBac();
+                totalImported++;
+                result.put("mienBac", "Success");
+            } catch (Exception e) {
+                log.error("Error importing Miền Bắc: {}", e.getMessage());
+                errors.add("Miền Bắc: " + e.getMessage());
+                result.put("mienBac", "Failed: " + e.getMessage());
+            }
+
+            // Import các tỉnh
+            String[] provinces = {"gialai", "binhduong", "ninhthuan", "travinh", "vinhlong"};
+            for (String province : provinces) {
+                try {
+                    autoImportService.autoImportProvince(province);
+                    totalImported++;
+                    result.put(province, "Success");
+                } catch (Exception e) {
+                    log.error("Error importing province {}: {}", province, e.getMessage());
+                    errors.add(province + ": " + e.getMessage());
+                    result.put(province, "Failed: " + e.getMessage());
+                }
+            }
+
+            result.put("totalImported", totalImported);
+            result.put("totalProvinces", provinces.length + 1); // +1 for Miền Bắc
+            result.put("errors", errors);
+
+            String message = String.format("Auto-import hoàn thành: %d/%d thành công", 
+                    totalImported, provinces.length + 1);
+
+            return ResponseEntity.ok(ApiResponse.success(message, result));
+        } catch (Exception e) {
+            log.error("Error during auto-import", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Lỗi auto-import: " + e.getMessage()));
         }
     }
 
@@ -362,6 +421,65 @@ public class LotteryResultController {
             log.error("Error getting latest published lottery result", e);
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("Lỗi lấy kết quả: " + e.getMessage()));
+        }
+    }
+    
+    // ==================== TEST/DEBUG ENDPOINTS ====================
+    
+    private final com.xsecret.service.lottery.LotteryResultAutoImportService autoImportService;
+    private final com.xsecret.service.BetService betService;
+    
+    /**
+     * Admin: Test import Miền Bắc manually
+     */
+    @PostMapping("/admin/lottery-results/test-import/mien-bac")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> testImportMienBac() {
+        log.info("Admin manually triggering Miền Bắc import test");
+        
+        try {
+            autoImportService.autoImportMienBac();
+            return ResponseEntity.ok(ApiResponse.success("Import Miền Bắc thành công", null));
+        } catch (Exception e) {
+            log.error("Test import Miền Bắc failed", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Lỗi import: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * Admin: Test import 1 tỉnh manually
+     */
+    @PostMapping("/admin/lottery-results/test-import/province/{province}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> testImportProvince(@PathVariable String province) {
+        log.info("Admin manually triggering {} import test", province);
+        
+        try {
+            autoImportService.autoImportProvince(province);
+            return ResponseEntity.ok(ApiResponse.success("Import " + province + " thành công", null));
+        } catch (Exception e) {
+            log.error("Test import {} failed", province, e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Lỗi import: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * Admin: Test import tất cả các tỉnh manually
+     */
+    @PostMapping("/admin/lottery-results/test-import/all-provinces")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> testImportAllProvinces() {
+        log.info("Admin manually triggering all provinces import test");
+        
+        try {
+            autoImportService.autoImportAllProvinces();
+            return ResponseEntity.ok(ApiResponse.success("Import tất cả tỉnh thành công", null));
+        } catch (Exception e) {
+            log.error("Test import all provinces failed", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Lỗi import: " + e.getMessage()));
         }
     }
 }

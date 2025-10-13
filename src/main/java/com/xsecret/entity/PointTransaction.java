@@ -71,7 +71,8 @@ public class PointTransaction {
         REFUND("Hoàn điểm"),
         BET_PLACED("Đặt cược"),
         BET_WIN("Thắng cược"),
-        BET_REFUND("Hoàn cược");
+        BET_REFUND("Hoàn cược"),
+        BET_CANCELLED("Hủy cược");
 
         private final String displayName;
 

@@ -183,24 +183,45 @@ public class BetController {
     }
 
     /**
-     * Hủy bet - CHỨC NĂNG ĐÃ BỊ VÔ HIỆU HÓA
-     * Đặt cược rồi thì không được hủy
+     * Hủy bet - CHO PHÉP HỦY TRƯỚC 18:10
+     * Logic: Chỉ cho phép hủy trước 18:10 hàng ngày và hoàn lại toàn bộ tiền cược
      */
     @PostMapping("/{betId}/cancel")
     public ResponseEntity<Map<String, Object>> cancelBet(
             @PathVariable Long betId,
             Authentication authentication) {
         
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", false);
-        response.put("message", "Chức năng hủy cược đã bị vô hiệu hóa. Một khi đã đặt cược thì không thể hủy.");
-        
-        return ResponseEntity.badRequest().body(response);
+        try {
+            Long userId = getCurrentUserId(authentication);
+            BetResponse bet = betService.cancelBet(betId, userId);
+            
+            // Lấy số điểm mới nhất
+            User user = betService.getUserWithCurrentPoints(userId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("data", bet);
+            response.put("currentPoints", user.getPoints());
+            response.put("message", "Hủy cược thành công! Tiền đã được hoàn lại.");
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error cancelling bet: {}", e.getMessage());
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            
+            return ResponseEntity.badRequest().body(response);
+        }
     }
 
     /**
      * Kiểm tra kết quả cho 1 bet cụ thể
+     * DISABLED: Chỉ cho phép check bet lúc 18:30 theo lịch trình
      */
+    /*
     @PostMapping("/{betId}/check-result")
     public ResponseEntity<Map<String, Object>> checkSingleBetResult(
             @PathVariable Long betId,
@@ -242,10 +263,13 @@ public class BetController {
             return ResponseEntity.badRequest().body(response);
         }
     }
+    */
 
     /**
      * Kiểm tra kết quả bet (admin endpoint - để test)
+     * DISABLED: Chỉ cho phép check bet lúc 18:30 theo lịch trình
      */
+    /*
     @PostMapping("/check-results")
     public ResponseEntity<Map<String, Object>> checkBetResults(Authentication authentication) {
         
@@ -273,6 +297,7 @@ public class BetController {
             return ResponseEntity.badRequest().body(response);
         }
     }
+    */
 
     /**
      * Đánh dấu bet đã xem kết quả (dismiss)

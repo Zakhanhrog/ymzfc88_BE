@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface BetRepository extends JpaRepository<Bet, Long> {
@@ -42,9 +43,17 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
     /**
      * Tìm bet chưa được kiểm tra kết quả
      * CHỈ LẤY BET CỦA HÔM NAY (resultDate = currentDate), không check các ngày trước
+     * JOIN FETCH user để tránh LazyInitializationException
      */
-    @Query("SELECT b FROM Bet b WHERE b.status = 'PENDING' AND b.resultDate = :currentDate ORDER BY b.createdAt ASC")
+    @Query("SELECT b FROM Bet b JOIN FETCH b.user WHERE b.status = 'PENDING' AND b.resultDate = :currentDate ORDER BY b.createdAt ASC")
     List<Bet> findPendingBetsToCheck(@Param("currentDate") String currentDate);
+    
+    /**
+     * Tìm bet theo ID và eager fetch user
+     * Dùng trong checkBetResult() để tránh LazyInitializationException khi access user.points
+     */
+    @Query("SELECT b FROM Bet b JOIN FETCH b.user WHERE b.id = :id")
+    Optional<Bet> findByIdWithUser(@Param("id") Long id);
     
     /**
      * Đếm tổng số bet của user

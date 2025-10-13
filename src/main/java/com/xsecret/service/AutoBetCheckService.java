@@ -12,8 +12,9 @@ import java.time.format.DateTimeFormatter;
 
 /**
  * Service để tự động check bet sau khi admin publish kết quả mới
+ * DEPRECATED: Logic cũ, đã được thay thế bởi triggerBetCheckAfterPublish() trong LotteryResultController
  */
-@Service
+// @Service // Disabled - logic cũ
 @RequiredArgsConstructor
 @Slf4j
 public class AutoBetCheckService {
@@ -22,9 +23,10 @@ public class AutoBetCheckService {
     
     /**
      * Event listener để tự động check bet khi admin publish kết quả mới
+     * DISABLED: Không còn check bet tự động sau khi admin publish
      */
-    @EventListener
-    @Async
+    // @EventListener // Disabled - logic cũ
+    // @Async // Disabled - logic cũ
     public void handleLotteryResultPublished(LotteryResultPublishedEvent event) {
         log.info("========================================");
         log.info("📢 EVENT RECEIVED: Lottery Result Published!");

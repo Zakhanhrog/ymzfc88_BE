@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
@@ -45,8 +46,11 @@ public class BetService {
      */
     @Transactional
     public BetResponse placeBet(BetRequest request, Long userId) {
-        log.info("User {} placing bet: region={}, betType={}, numbers={}, amount={}", 
-                userId, request.getRegion(), request.getBetType(), request.getSelectedNumbers(), request.getBetAmount());
+        log.info("User {} placing bet: region={}, province={}, betType={}, numbers={}, amount={}", 
+                userId, request.getRegion(), request.getProvince(), request.getBetType(), request.getSelectedNumbers(), request.getBetAmount());
+
+        // Kiểm tra thời gian khóa cược theo vùng miền
+        checkBettingTimeLimit(request.getRegion(), request.getProvince());
 
         // Kiểm tra loại cược được hỗ trợ
         if (!isSupportedBetType(request.getBetType())) {
@@ -184,7 +188,10 @@ public class BetService {
 
     /**
      * Kiểm tra kết quả bet - tự động check mỗi 10 giây
-     * Không có @Transactional ở đây để mỗi bet có transaction riêng
+     * KHÔNG CẦN @Transactional vì:
+     * 1. Query đã JOIN FETCH user, không cần lazy loading
+     * 2. Mỗi bet có transaction riêng (REQUIRES_NEW)
+     * 3. Tránh conflict với nested transactions
      * CHỈ CHECK BET CỦA HÔM NAY, nếu chưa có kết quả thì bỏ qua
      */
     public void checkBetResults() {
@@ -236,6 +243,10 @@ public class BetService {
 
     /**
      * Kiểm tra kết quả bet cho ngày cụ thể (dùng khi admin publish kết quả)
+     * KHÔNG CẦN @Transactional vì:
+     * 1. Query đã JOIN FETCH user, không cần lazy loading
+     * 2. Mỗi bet có transaction riêng (REQUIRES_NEW)
+     * 3. Tránh conflict với nested transactions
      * CHỈ CHECK BET CỦA NGÀY ĐƯỢC CHỈ ĐỊNH
      */
     public void checkBetResultsForDate(String targetDate) {
@@ -294,8 +305,8 @@ public class BetService {
      */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public void checkBetResult(Bet betParam) {
-        // Fetch fresh bet from DB to ensure we have the latest state
-        Bet bet = betRepository.findById(betParam.getId())
+        // Fetch fresh bet from DB WITH user to avoid LazyInitializationException
+        Bet bet = betRepository.findByIdWithUser(betParam.getId())
                 .orElseThrow(() -> new RuntimeException("Bet không tồn tại: " + betParam.getId()));
         
         // Kiểm tra xem bet đã được check chưa (tránh check lại)
@@ -576,12 +587,113 @@ public class BetService {
     }
 
     /**
-     * Hủy bet - CHỨC NĂNG ĐÃ BỊ VÔ HIỆU HÓA
-     * Đặt cược rồi thì không được hủy để tránh xung đột logic
+     * Hủy bet - CHO PHÉP HỦY TRƯỚC GIỜ KHÓA CƯỢC
+     * Logic:
+     * 1. Miền Bắc: Chỉ cho phép hủy trước 18:10
+     * 2. Miền Trung: Chỉ cho phép hủy trước 17:00
+     * 3. Miền Nam: Chỉ cho phép hủy trước 16:00
+     * 4. Chỉ hủy được bet ở trạng thái PENDING
+     * 5. Hoàn lại toàn bộ tiền cược
      */
     @Transactional
     public BetResponse cancelBet(Long betId, Long userId) {
-        throw new RuntimeException("Chức năng hủy cược đã bị vô hiệu hóa. Một khi đã đặt cược thì không thể hủy.");
+        // 1. Tìm bet và kiểm tra quyền sở hữu
+        Bet bet = betRepository.findByIdWithUser(betId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy lệnh cược"));
+        
+        if (!bet.getUser().getId().equals(userId)) {
+            throw new RuntimeException("Bạn không có quyền hủy lệnh cược này");
+        }
+        
+        // 2. Check thời gian khóa cược theo vùng miền
+        checkBettingTimeLimit(bet.getRegion(), bet.getProvince());
+        
+        // 3. Kiểm tra trạng thái: chỉ hủy được PENDING
+        if (bet.getStatus() != Bet.BetStatus.PENDING) {
+            throw new RuntimeException("Chỉ có thể hủy lệnh cược đang chờ kết quả. Trạng thái hiện tại: " + bet.getStatus());
+        }
+        
+        // 4. Hoàn lại tiền cược
+        User user = bet.getUser();
+        BigDecimal refundAmount = bet.getTotalAmount();
+        
+        log.info("User {} cancelling bet ID {}. Refund amount: {} points", user.getUsername(), betId, refundAmount);
+        
+        // Cộng điểm hoàn lại vào tài khoản
+        pointService.addPoints(user, refundAmount, 
+            com.xsecret.entity.PointTransaction.PointTransactionType.BET_CANCELLED,
+            "Hoàn tiền do hủy lệnh cược #" + betId,
+            "BET_CANCEL", betId, null);
+        
+        // 5. Cập nhật trạng thái bet
+        bet.setStatus(Bet.BetStatus.CANCELLED);
+        bet.setResultCheckedAt(LocalDateTime.now());
+        betRepository.save(bet);
+        
+        log.info("✅ Bet {} cancelled successfully. Refunded {} points to user {}", 
+                betId, refundAmount, user.getUsername());
+        
+        return BetResponse.fromEntity(bet);
+    }
+
+    /**
+     * Tự động hủy các bet expired (PENDING sau 20:00)
+     * Chạy vào 20:00 mỗi ngày, hủy tất cả bets PENDING của hôm nay và hoàn tiền
+     */
+    @Transactional
+    public int autoCancelExpiredBets() {
+        String currentDate = getCurrentDateString();
+        log.info("========================================");
+        log.info("🚫 AUTO CANCEL EXPIRED BETS - Date: {}", currentDate);
+        log.info("========================================");
+        
+        // Tìm tất cả bets PENDING của hôm nay
+        List<Bet> pendingBets = betRepository.findPendingBetsToCheck(currentDate);
+        
+        if (pendingBets.isEmpty()) {
+            log.info("✅ No expired bets to cancel for date: {}", currentDate);
+            return 0;
+        }
+        
+        log.info("📊 Found {} PENDING bets to cancel for date: {}", pendingBets.size(), currentDate);
+        
+        int cancelledCount = 0;
+        
+        for (Bet bet : pendingBets) {
+            try {
+                // Hoàn tiền
+                User user = bet.getUser();
+                BigDecimal refundAmount = bet.getTotalAmount();
+                
+                log.info("⚡ Auto cancelling expired bet ID: {}, userId: {}, refund: {} points", 
+                        bet.getId(), user.getId(), refundAmount);
+                
+                // Cộng điểm hoàn lại vào tài khoản
+                pointService.addPoints(user, refundAmount, 
+                    com.xsecret.entity.PointTransaction.PointTransactionType.BET_CANCELLED,
+                    "Hoàn tiền do lệnh cược hết hạn (chưa có kết quả sau 20:00) #" + bet.getId(),
+                    "BET_EXPIRED", bet.getId(), null);
+                
+                // Cập nhật trạng thái bet
+                bet.setStatus(Bet.BetStatus.CANCELLED);
+                bet.setResultCheckedAt(LocalDateTime.now());
+                betRepository.save(bet);
+                
+                cancelledCount++;
+                log.info("✅ Bet {} auto cancelled. Refunded {} points to user {}", 
+                        bet.getId(), refundAmount, user.getUsername());
+                
+            } catch (Exception e) {
+                log.error("❌ Error auto cancelling bet {}: {}", bet.getId(), e.getMessage(), e);
+            }
+        }
+        
+        log.info("========================================");
+        log.info("📈 Auto cancel COMPLETED: {} bets cancelled out of {} total", 
+                cancelledCount, pendingBets.size());
+        log.info("========================================");
+        
+        return cancelledCount;
     }
 
     private String convertToJsonString(List<String> list) {
@@ -645,7 +757,9 @@ public class BetService {
 
     /**
      * Kiểm tra kết quả cho 1 bet cụ thể (public method để frontend gọi)
+     * DISABLED: Chỉ cho phép check bet lúc 18:30 theo lịch trình
      */
+    /*
     @Transactional
     public BetResponse checkSingleBetResult(Long betId, Long userId) {
         Bet bet = betRepository.findById(betId)
@@ -668,6 +782,7 @@ public class BetService {
         bet = betRepository.findById(betId).orElse(bet);
         return BetResponse.fromEntity(bet);
     }
+    */
 
     /**
      * Đánh dấu bet đã xem kết quả (dismiss)
@@ -698,6 +813,49 @@ public class BetService {
     public User getUserWithCurrentPoints(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User không tồn tại"));
+    }
+    
+    /**
+     * Kiểm tra thời gian khóa cược theo vùng miền
+     * - Miền Bắc: Khóa sau 18:10
+     * - Miền Trung: Khóa sau 17:00
+     * - Miền Nam: Khóa sau 16:00
+     */
+    private void checkBettingTimeLimit(String region, String province) {
+        LocalTime now = LocalTime.now();
+        
+        if ("mienBac".equals(region)) {
+            // Miền Bắc: Khóa sau 18:10
+            if (now.isAfter(LocalTime.of(18, 10))) {
+                throw new RuntimeException("Miền Bắc đã khóa cược sau 18:10. Vui lòng liên hệ admin nếu cần hỗ trợ.");
+            }
+        } else if ("mienTrungNam".equals(region)) {
+            // Kiểm tra tỉnh để xác định Miền Trung hay Miền Nam
+            if (isMienTrung(province)) {
+                // Miền Trung: Khóa sau 17:00
+                if (now.isAfter(LocalTime.of(17, 0))) {
+                    throw new RuntimeException("Miền Trung (" + province + ") đã khóa cược sau 17:00. Vui lòng liên hệ admin nếu cần hỗ trợ.");
+                }
+            } else {
+                // Miền Nam: Khóa sau 16:00
+                if (now.isAfter(LocalTime.of(16, 0))) {
+                    throw new RuntimeException("Miền Nam (" + province + ") đã khóa cược sau 16:00. Vui lòng liên hệ admin nếu cần hỗ trợ.");
+                }
+            }
+        }
+    }
+    
+    /**
+     * Kiểm tra xem tỉnh có thuộc Miền Trung không
+     * Miền Trung: Gia Lai, Ninh Thuận
+     * Miền Nam: Bình Dương, Trà Vinh, Vĩnh Long
+     */
+    private boolean isMienTrung(String province) {
+        if (province == null) {
+            return false;
+        }
+        // Miền Trung
+        return "gialai".equalsIgnoreCase(province) || "ninhthuan".equalsIgnoreCase(province);
     }
     
     // ======================== ADMIN METHODS ========================
