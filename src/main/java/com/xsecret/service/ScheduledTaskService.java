@@ -35,7 +35,7 @@ public class ScheduledTaskService {
      * Check bet results automatically - chạy lúc 18:30 mỗi ngày
      * Sau khi auto import kết quả xổ số xong (18:20-18:50)
      */
-    @Scheduled(cron = "0 30 18 * * ?")
+    @Scheduled(cron = "0 30 18 * * ?", zone = "Asia/Ho_Chi_Minh")
     public void checkBetResultsAt1830() {
         try {
             log.info("🔄 Scheduled task [18:30]: Starting automatic bet result check...");
@@ -50,7 +50,7 @@ public class ScheduledTaskService {
      * Auto import Miền Bắc - chạy mỗi phút từ 18:20 đến 18:50
      * Retry logic: nếu fail thì retry mỗi 1 phút cho đến 18:50
      */
-    @Scheduled(cron = "0 */1 18 * * ?")
+    @Scheduled(cron = "0 */1 18 * * ?", zone = "Asia/Ho_Chi_Minh")
     public void autoImportMienBac() {
         LocalTime now = LocalTime.now(VN_ZONE);
         String today = LocalDate.now(VN_ZONE).toString();
@@ -90,7 +90,7 @@ public class ScheduledTaskService {
      * Auto import Miền Trung/Nam - chạy mỗi phút từ 17:20 đến 17:50
      * Retry logic: nếu fail thì retry mỗi 1 phút cho đến 17:50
      */
-    @Scheduled(cron = "0 */1 17 * * ?")
+    @Scheduled(cron = "0 */1 17 * * ?", zone = "Asia/Ho_Chi_Minh")
     public void autoImportProvinces() {
         LocalTime now = LocalTime.now(VN_ZONE);
         String today = LocalDate.now(VN_ZONE).toString();
@@ -133,7 +133,7 @@ public class ScheduledTaskService {
      * 2. Nếu có → Check bet trước, sau đó cancel bet còn PENDING
      * 3. Nếu không → Cancel tất cả bet PENDING và hoàn tiền
      */
-    @Scheduled(cron = "0 0 20 * * ?")
+    @Scheduled(cron = "0 0 20 * * ?", zone = "Asia/Ho_Chi_Minh")
     public void autoCancelExpiredBets() {
         try {
             log.info("🔄 Scheduled task [20:00]: Starting auto cancel expired bets...");
@@ -173,7 +173,7 @@ public class ScheduledTaskService {
     /**
      * Reset import success flags vào đầu ngày mới (00:01)
      */
-    @Scheduled(cron = "0 1 0 * * ?")
+    @Scheduled(cron = "0 1 0 * * ?", zone = "Asia/Ho_Chi_Minh")
     public void resetImportFlags() {
         mienBacImportSuccess.clear();
         provinceImportSuccess.clear();

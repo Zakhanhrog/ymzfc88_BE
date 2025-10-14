@@ -605,8 +605,9 @@ public class BetService {
             throw new RuntimeException("Bạn không có quyền hủy lệnh cược này");
         }
         
-        // 2. Check thời gian khóa cược theo vùng miền
-        checkBettingTimeLimit(bet.getRegion(), bet.getProvince());
+        // 2. Check thời gian cho phép hủy cược theo vùng miền
+        // SAU GIỜ QUY ĐỊNH thì KHÔNG CHO HỦY
+        checkCancelTimeLimit(bet.getRegion(), bet.getProvince());
         
         // 3. Kiểm tra trạng thái: chỉ hủy được PENDING
         if (bet.getStatus() != Bet.BetStatus.PENDING) {
@@ -817,31 +818,81 @@ public class BetService {
     
     /**
      * Kiểm tra thời gian khóa cược theo vùng miền
-     * - Miền Bắc: Khóa sau 18:10
-     * - Miền Trung: Khóa sau 17:00
-     * - Miền Nam: Khóa sau 16:00
+     * - Miền Bắc: Khóa từ 18:10 đến 18:45
+     * - Miền Trung: Khóa từ 17:00 đến 18:45
+     * - Miền Nam: Khóa từ 16:00 đến 18:45
      */
     private void checkBettingTimeLimit(String region, String province) {
         LocalTime now = LocalTime.now();
         
         if ("mienBac".equals(region)) {
-            // Miền Bắc: Khóa sau 18:10
-            if (now.isAfter(LocalTime.of(18, 10))) {
-                throw new RuntimeException("Miền Bắc đã khóa cược sau 18:10. Vui lòng liên hệ admin nếu cần hỗ trợ.");
+            // Miền Bắc: Khóa từ 18:10 đến 18:45
+            if (isInLockTimeRange(now, 18, 10, 18, 45)) {
+                throw new RuntimeException("Miền Bắc đang khóa cược từ 18:10 đến 18:45. Vui lòng đợi đến 18:45.");
             }
         } else if ("mienTrungNam".equals(region)) {
             // Kiểm tra tỉnh để xác định Miền Trung hay Miền Nam
             if (isMienTrung(province)) {
-                // Miền Trung: Khóa sau 17:00
-                if (now.isAfter(LocalTime.of(17, 0))) {
-                    throw new RuntimeException("Miền Trung (" + province + ") đã khóa cược sau 17:00. Vui lòng liên hệ admin nếu cần hỗ trợ.");
+                // Miền Trung: Khóa từ 17:00 đến 18:45
+                if (isInLockTimeRange(now, 17, 0, 18, 45)) {
+                    throw new RuntimeException("Miền Trung (" + province + ") đang khóa cược từ 17:00 đến 18:45. Vui lòng đợi đến 18:45.");
                 }
             } else {
-                // Miền Nam: Khóa sau 16:00
-                if (now.isAfter(LocalTime.of(16, 0))) {
-                    throw new RuntimeException("Miền Nam (" + province + ") đã khóa cược sau 16:00. Vui lòng liên hệ admin nếu cần hỗ trợ.");
+                // Miền Nam: Khóa từ 16:00 đến 18:45
+                if (isInLockTimeRange(now, 16, 0, 18, 45)) {
+                    throw new RuntimeException("Miền Nam (" + province + ") đang khóa cược từ 16:00 đến 18:45. Vui lòng đợi đến 18:45.");
+                }
+
+            }
+        }
+    }
+    
+    /**
+     * Kiểm tra thời gian cho phép HỦY CƯỢC theo vùng miền
+     * SAU GIỜ QUY ĐỊNH thì KHÔNG CHO HỦY các lệnh đã đặt trước đó
+     * - Miền Bắc: Không cho hủy từ 18:10 trở đi
+     * - Miền Trung: Không cho hủy từ 17:00 trở đi
+     * - Miền Nam: Không cho hủy từ 16:00 trở đi
+     */
+    private void checkCancelTimeLimit(String region, String province) {
+        LocalTime now = LocalTime.now();
+        
+        if ("mienBac".equals(region)) {
+            // Miền Bắc: Không cho hủy từ 18:10 trở đi (bao gồm cả 18:10)
+            if (!now.isBefore(LocalTime.of(18, 10))) {
+                throw new RuntimeException("Đã quá giờ cho phép hủy cược Miền Bắc (18:10). Vui lòng liên hệ admin nếu cần hỗ trợ.");
+            }
+        } else if ("mienTrungNam".equals(region)) {
+            // Kiểm tra tỉnh để xác định Miền Trung hay Miền Nam
+            if (isMienTrung(province)) {
+                // Miền Trung: Không cho hủy từ 17:00 trở đi (bao gồm cả 17:00)
+                if (!now.isBefore(LocalTime.of(17, 0))) {
+                    throw new RuntimeException("Đã quá giờ cho phép hủy cược Miền Trung (17:00). Vui lòng liên hệ admin nếu cần hỗ trợ.");
+                }
+            } else {
+                // Miền Nam: Không cho hủy từ 16:00 trở đi (bao gồm cả 16:00)
+                if (!now.isBefore(LocalTime.of(16, 0))) {
+                    throw new RuntimeException("Đã quá giờ cho phép hủy cược Miền Nam (16:00). Vui lòng liên hệ admin nếu cần hỗ trợ.");
                 }
             }
+        }
+    }
+    
+    /**
+     * Kiểm tra xem thời gian hiện tại có nằm trong khoảng khóa cược không
+     */
+    private boolean isInLockTimeRange(LocalTime now, int startHour, int startMinute, int endHour, int endMinute) {
+        LocalTime startTime = LocalTime.of(startHour, startMinute);
+        LocalTime endTime = LocalTime.of(endHour, endMinute);
+        
+        // Nếu khoảng thời gian không vượt qua nửa đêm (VD: 18:10 - 18:45)
+        if (startTime.isBefore(endTime)) {
+            // Khóa từ startTime đến endTime (bao gồm cả startTime, không bao gồm endTime)
+            return !now.isBefore(startTime) && now.isBefore(endTime);
+        } 
+        // Nếu khoảng thời gian vượt qua nửa đêm (VD: 23:30 - 00:30) - trường hợp này không áp dụng
+        else {
+            return !now.isBefore(startTime) || !now.isAfter(endTime);
         }
     }
     
@@ -1006,3 +1057,5 @@ public class BetService {
         return BetResponse.fromEntity(bet);
     }
 }
+
+
