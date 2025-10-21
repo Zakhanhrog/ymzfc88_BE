@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -141,7 +142,7 @@ public class BetService {
                 .odds(request.getOdds())
                 .potentialWin(potentialWin) // Tổng tiền có thể nhận (gốc + lãi)
                 .status(Bet.BetStatus.PENDING)
-                .resultDate(getCurrentDateString())
+                .resultDate(getBetResultDate(request.getRegion(), request.getProvince()))
                 .build();
 
         Bet savedBet = betRepository.save(bet);
@@ -263,6 +264,9 @@ public class BetService {
             log.info("🔍 DEBUG Bet ID: {}, region: {}, province: {}, betType: {}, resultDate: {}, status: {}", 
                     bet.getId(), bet.getRegion(), bet.getProvince(), bet.getBetType(), bet.getResultDate(), bet.getStatus());
         }
+        
+        // Debug: Log target date format
+        log.info("🔍 DEBUG Target date format: '{}', length: {}", targetDate, targetDate.length());
         
         if (pendingBets.isEmpty()) {
             log.info("✅ No pending bets to check for date: {}", targetDate);
@@ -715,6 +719,35 @@ public class BetService {
     private String getCurrentDateString() {
         return LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
     }
+    
+    /**
+     * Xác định ngày kết quả cho bet dựa trên thời gian đặt cược
+     * Logic: Sau 18:30 thì bet sẽ check với kết quả ngày hôm sau
+     */
+    private String getBetResultDate(String region, String province) {
+        LocalTime now = LocalTime.now();
+        LocalDate today = LocalDate.now();
+        
+        // Kiểm tra thời gian chuyển ngày theo vùng miền
+        boolean shouldUseNextDay = false;
+        
+        if ("mienBac".equals(region)) {
+            // Miền Bắc: Sau 18:30 thì dùng kết quả ngày hôm sau
+            shouldUseNextDay = now.isAfter(LocalTime.of(18, 30));
+        } else if ("mienTrungNam".equals(region)) {
+            // Miền Trung Nam: Sau 17:30 thì dùng kết quả ngày hôm sau
+            shouldUseNextDay = now.isAfter(LocalTime.of(17, 30));
+        }
+        
+        if (shouldUseNextDay) {
+            LocalDate nextDay = today.plusDays(1);
+            log.info("🔄 Bet placed after cutoff time, using next day result: {} -> {}", today, nextDay);
+            return nextDay.toString();
+        } else {
+            log.info("📅 Bet placed before cutoff time, using same day result: {}", today);
+            return today.toString();
+        }
+    }
 
     /**
      * Kiểm tra loại cược được hỗ trợ
@@ -766,7 +799,6 @@ public class BetService {
      * Kiểm tra kết quả cho 1 bet cụ thể (public method để frontend gọi)
      * DISABLED: Chỉ cho phép check bet lúc 18:30 theo lịch trình
      */
-    /*
     @Transactional
     public BetResponse checkSingleBetResult(Long betId, Long userId) {
         Bet bet = betRepository.findById(betId)
@@ -789,7 +821,6 @@ public class BetService {
         bet = betRepository.findById(betId).orElse(bet);
         return BetResponse.fromEntity(bet);
     }
-    */
 
     /**
      * Đánh dấu bet đã xem kết quả (dismiss)

@@ -32,31 +32,42 @@ public class ScheduledTaskService {
     private final Map<String, Boolean> provinceImportSuccess = new HashMap<>();
 
     /**
-     * Check bet results automatically - chạy lúc 18:30 mỗi ngày
-     * Sau khi auto import kết quả xổ số xong (18:20-18:50)
+     * REMOVED: Check bet results automatically - chạy lúc 18:30 mỗi ngày
+     * Logic mới: Check bet ngay khi có kết quả trong thời gian auto import (18:20-19:00)
+     * Chỉ giữ 19:00 làm backup check
      */
-    @Scheduled(cron = "0 30 18 * * ?", zone = "Asia/Ho_Chi_Minh")
-    public void checkBetResultsAt1830() {
+    // @Scheduled(cron = "0 30 18 * * ?", zone = "Asia/Ho_Chi_Minh")
+    // public void checkBetResultsAt1830() {
+    //     // REMOVED: Logic check bet đã chuyển vào auto import
+    // }
+
+    /**
+     * Check bet results automatically - chạy lúc 19:00 mỗi ngày
+     * Backup check sau khi auto import mở rộng thời gian (18:20-19:00)
+     */
+    @Scheduled(cron = "0 0 19 * * ?", zone = "Asia/Ho_Chi_Minh")
+    public void checkBetResultsAt1900() {
         try {
-            log.info("🔄 Scheduled task [18:30]: Starting automatic bet result check...");
+            log.info("🔄 Scheduled task [19:00]: Starting backup automatic bet result check...");
             betService.checkBetResults();
-            log.info("✅ Scheduled task [18:30]: Bet result check completed successfully");
+            log.info("✅ Scheduled task [19:00]: Backup bet result check completed successfully");
         } catch (Exception e) {
-            log.error("❌ Scheduled task [18:30]: Error during automatic bet result check", e);
+            log.error("❌ Scheduled task [19:00]: Error during backup automatic bet result check", e);
         }
     }
 
     /**
-     * Auto import Miền Bắc - chạy mỗi phút từ 18:20 đến 18:50
-     * Retry logic: nếu fail thì retry mỗi 1 phút cho đến 18:50
+     * Auto import Miền Bắc - chạy mỗi phút từ 18:20 đến 19:00
+     * Retry logic: nếu fail thì retry mỗi 1 phút cho đến 19:00
+     * Mở rộng thời gian để đợi API có dữ liệu
      */
     @Scheduled(cron = "0 */1 18 * * ?", zone = "Asia/Ho_Chi_Minh")
     public void autoImportMienBac() {
         LocalTime now = LocalTime.now(VN_ZONE);
         String today = LocalDate.now(VN_ZONE).toString();
         
-        // Chỉ chạy từ 18:20 đến 18:50
-        if (now.isBefore(LocalTime.of(18, 20)) || now.isAfter(LocalTime.of(18, 50))) {
+        // Chỉ chạy từ 18:20 đến 19:00 (mở rộng thêm 10 phút)
+        if (now.isBefore(LocalTime.of(18, 20)) || now.isAfter(LocalTime.of(19, 0))) {
             return;
         }
         
@@ -73,14 +84,25 @@ public class ScheduledTaskService {
             mienBacImportSuccess.put(today, true);
             log.info("✅ Miền Bắc import SUCCESS at {}", now);
             
+            // 🎯 CHECK BET NGAY KHI IMPORT THÀNH CÔNG (18:30-19:00)
+            if (now.isAfter(LocalTime.of(18, 29))) {
+                log.info("🚀 Miền Bắc import thành công, đang check bet ngay lập tức...");
+                try {
+                    betService.checkBetResults();
+                    log.info("✅ Bet check completed immediately after Miền Bắc import");
+                } catch (Exception betError) {
+                    log.error("❌ Error checking bets after Miền Bắc import: {}", betError.getMessage());
+                }
+            }
+            
             // Clean up old dates (keep only today)
             mienBacImportSuccess.keySet().removeIf(date -> !date.equals(today));
             
         } catch (Exception e) {
             log.error("❌ Miền Bắc import failed at {}: {}", now, e.getMessage());
             
-            // Nếu đã hết thời gian retry (18:50) thì alert
-            if (now.isAfter(LocalTime.of(18, 49))) {
+            // Nếu đã hết thời gian retry (19:00) thì alert
+            if (now.isAfter(LocalTime.of(18, 59))) {
                 log.error("🚨 ALERT: Miền Bắc import FAILED after all retries! Please check manually.");
             }
         }
@@ -112,6 +134,17 @@ public class ScheduledTaskService {
             // Mark success
             provinceImportSuccess.put(today, true);
             log.info("✅ All provinces import SUCCESS at {}", now);
+            
+            // 🎯 CHECK BET NGAY KHI IMPORT THÀNH CÔNG (17:30-18:00)
+            if (now.isAfter(LocalTime.of(17, 29))) {
+                log.info("🚀 Provinces import thành công, đang check bet ngay lập tức...");
+                try {
+                    betService.checkBetResults();
+                    log.info("✅ Bet check completed immediately after provinces import");
+                } catch (Exception betError) {
+                    log.error("❌ Error checking bets after provinces import: {}", betError.getMessage());
+                }
+            }
             
             // Clean up old dates (keep only today)
             provinceImportSuccess.keySet().removeIf(date -> !date.equals(today));

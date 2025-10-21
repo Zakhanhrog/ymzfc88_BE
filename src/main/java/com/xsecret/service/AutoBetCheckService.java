@@ -39,7 +39,8 @@ public class AutoBetCheckService {
             
             log.info("🚀 Starting auto bet check after admin publish for date: {}", event.getDrawDate());
             
-            // Check bet cho ngày cụ thể
+            // Check bet cho ngày của kết quả được publish
+            log.info("🎯 Checking bets for result date: {}", event.getDrawDate());
             betService.checkBetResultsForDate(event.getDrawDate());
             
             log.info("✅ Auto bet check completed successfully for date: {}", event.getDrawDate());

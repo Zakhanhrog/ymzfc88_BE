@@ -219,9 +219,8 @@ public class BetController {
 
     /**
      * Kiểm tra kết quả cho 1 bet cụ thể
-     * DISABLED: Chỉ cho phép check bet lúc 18:30 theo lịch trình
+     * ENABLED: Cho phép check bet ngay lập tức
      */
-    /*
     @PostMapping("/{betId}/check-result")
     public ResponseEntity<Map<String, Object>> checkSingleBetResult(
             @PathVariable Long betId,
@@ -263,7 +262,6 @@ public class BetController {
             return ResponseEntity.badRequest().body(response);
         }
     }
-    */
 
     /**
      * Kiểm tra kết quả bet (admin endpoint - để test)
