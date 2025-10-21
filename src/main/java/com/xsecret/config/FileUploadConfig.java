@@ -28,5 +28,9 @@ public class FileUploadConfig implements WebMvcConfigurer {
         // Serve static files từ upload directory
         registry.addResourceHandler("/uploads/**")
                 .addResourceLocations("file:" + uploadDir + "/");
+                
+        // Handle banner static resources
+        registry.addResourceHandler("/banners/**")
+                .addResourceLocations("classpath:/static/banners/", "file:" + uploadDir + "/banners/");
     }
 }

@@ -64,6 +64,8 @@ public class SecurityConfig {
                     .requestMatchers("/files/**").permitAll()
                     .requestMatchers("/betting-odds/**").permitAll() // Public betting odds for users
                     .requestMatchers("/public/**").permitAll() // Public endpoints (lottery results, etc.)
+                    .requestMatchers("/banners/public/**").permitAll() // Public banner endpoints
+                    .requestMatchers("/banners/**").hasRole("ADMIN") // Banner management endpoints for admin only
                     .requestMatchers("/bets/**").hasAnyRole("USER", "ADMIN") // Betting endpoints for authenticated users
                     .requestMatchers("/test/**").permitAll() // Test endpoints
                     // Admin endpoints
