@@ -71,16 +71,23 @@ public class LotteryResultAutoImportService {
      */
     public void autoImportProvince(String province) {
         try {
-            log.info("🔄 Starting auto import for province: {}", province);
+            log.info("🔄 [DEBUG] Starting auto import for province: {}", province);
             
             // 1. Fetch từ API
+            log.info("🌐 [DEBUG] Step 1: Fetching from API for province: {}", province);
             VnLotteryIssue issue = vnLotteryApiService.fetchLatestProvince(province);
+            log.info("✅ [DEBUG] Step 1 COMPLETE: Fetched API data for {}", province);
             
             // 2. Parse và tạo request
+            log.info("🔧 [DEBUG] Step 2: Building request for province: {}", province);
             LotteryResultRequest request = buildProvinceRequest(issue, province);
+            log.info("✅ [DEBUG] Step 2 COMPLETE: Built request for {} - region: {}, drawDate: {}", 
+                province, request.getRegion(), request.getDrawDate());
             
             // 3. Insert vào DB
+            log.info("💾 [DEBUG] Step 3: Inserting to database for province: {}", province);
             insertToDatabase(request, province);
+            log.info("✅ [DEBUG] Step 3 COMPLETE: Saved to database for {}", province);
             
         } catch (RuntimeException e) {
             // Nếu là lỗi "chưa có kết quả hôm nay" thì chỉ log warning, không throw exception
@@ -99,31 +106,108 @@ public class LotteryResultAutoImportService {
     }
     
     /**
-     * Tự động import tất cả 5 tỉnh
+     * Tự động import TẤT CẢ tỉnh có lịch quay hôm nay
+     * LOGIC MỚI: Lấy đúng tỉnh theo ngày trong tuần (thay vì hardcode 5 tỉnh)
      */
     public void autoImportAllProvinces() {
-        List<String> provinces = Arrays.asList("gialai", "ninhthuan", "binhduong", "travinh", "vinhlong");
+        LocalDate today = LocalDate.now(VN_ZONE);
+        java.time.DayOfWeek dayOfWeek = today.getDayOfWeek();
+        
+        // Lấy danh sách tỉnh quay hôm nay
+        List<String> provincesThatDrawToday = getProvincesForDay(dayOfWeek);
+        
+        log.info("📅 [DEBUG] Hôm nay ({}) có {} tỉnh quay: {}", 
+                dayOfWeek, provincesThatDrawToday.size(), provincesThatDrawToday);
+        log.info("🔍 [DEBUG] Checking each province for today's draw schedule...");
+        
+        if (provincesThatDrawToday.isEmpty()) {
+            log.warn("⚠️ Không có tỉnh nào quay hôm nay theo lịch");
+            return;
+        }
         
         int successCount = 0;
         int skipCount = 0;
+        int failCount = 0;
         
-        for (String province : provinces) {
+        for (String province : provincesThatDrawToday) {
             try {
+                log.info("🔄 [DEBUG] Starting import for province: {}", province);
                 autoImportProvince(province);
                 successCount++;
-            } catch (Exception e) {
+                log.info("✅ [DEBUG] {} import SUCCESS", province);
+            } catch (RuntimeException e) {
                 if (e.getMessage() != null && e.getMessage().contains("không phải ngày hôm nay")) {
                     skipCount++;
-                    log.warn("⚠️ Skipped {}: {}", province, e.getMessage());
+                    log.warn("⏭️ {} skipped - API chưa có kết quả hôm nay", province);
                 } else {
-                    log.error("❌ Failed to import {}: {}", province, e.getMessage());
+                    failCount++;
+                    log.error("❌ {} import FAILED: {}", province, e.getMessage());
                 }
-                // Continue with other provinces
+            } catch (Exception e) {
+                failCount++;
+                log.error("❌ {} import FAILED: {}", province, e.getMessage(), e);
             }
         }
         
-        log.info("📊 Import summary: {} success, {} skipped (no result today), {} failed", 
-                successCount, skipCount, provinces.size() - successCount - skipCount);
+        log.info("📊 Import summary: ✅ {} success, ⏭️ {} skipped, ❌ {} failed out of {} total", 
+                successCount, skipCount, failCount, provincesThatDrawToday.size());
+        
+        // Nếu tất cả đều success thì log success
+        if (successCount == provincesThatDrawToday.size()) {
+            log.info("🎉 TẤT CẢ {} tỉnh đã import thành công!", successCount);
+        } else if (successCount > 0) {
+            log.info("⚠️ Import hoàn tất nhưng không đầy đủ: {}/{} tỉnh thành công", 
+                    successCount, provincesThatDrawToday.size());
+        } else {
+            log.error("🚨 KHÔNG CÓ tỉnh nào import thành công! Vui lòng kiểm tra lại.");
+        }
+    }
+    
+    /**
+     * Lấy danh sách tỉnh quay theo ngày trong tuần
+     * Dựa trên lịch quay thực tế của xổ số Việt Nam
+     * @param dayOfWeek MONDAY, TUESDAY, ..., SUNDAY
+     * @return List of province names (backend format: lowercase, no diacritics)
+     */
+    private List<String> getProvincesForDay(java.time.DayOfWeek dayOfWeek) {
+        Map<java.time.DayOfWeek, List<String>> schedule = new java.util.HashMap<>();
+        
+        // Thứ 2
+        schedule.put(java.time.DayOfWeek.MONDAY, Arrays.asList(
+            "phuyen", "thuathienhue", "camau", "dongthap", "hcm"
+        ));
+        
+        // Thứ 3
+        schedule.put(java.time.DayOfWeek.TUESDAY, Arrays.asList(
+            "daklak", "quangnam", "baclieu", "bentre", "vungtau"
+        ));
+        
+        // Thứ 4
+        schedule.put(java.time.DayOfWeek.WEDNESDAY, Arrays.asList(
+            "danang", "khanhhoa", "cantho", "dongnai", "soctrang"
+        ));
+        
+        // Thứ 5
+        schedule.put(java.time.DayOfWeek.THURSDAY, Arrays.asList(
+            "binhdinh", "quangbinh", "quangtri", "angiang", "binhthuan", "tayninh"
+        ));
+        
+        // Thứ 6
+        schedule.put(java.time.DayOfWeek.FRIDAY, Arrays.asList(
+            "gialai", "ninhthuan", "binhduong", "travinh", "vinhlong"
+        ));
+        
+        // Thứ 7
+        schedule.put(java.time.DayOfWeek.SATURDAY, Arrays.asList(
+            "danang", "daknong", "quangngai", "binhphuoc", "haugiang", "hcm", "longan"
+        ));
+        
+        // Chủ Nhật
+        schedule.put(java.time.DayOfWeek.SUNDAY, Arrays.asList(
+            "khanhhoa", "kontum", "thuathienhue", "dalat", "kiengiang", "tiengiang"
+        ));
+        
+        return schedule.getOrDefault(dayOfWeek, new ArrayList<>());
     }
     
     /**
@@ -324,13 +408,19 @@ public class LotteryResultAutoImportService {
      */
     private void insertToDatabase(LotteryResultRequest request, String name) {
         try {
+            log.info("💾 [DEBUG] Creating lottery result in DB: region={}, province={}, drawDate={}", 
+                request.getRegion(), request.getProvince(), request.getDrawDate());
+            
             lotteryResultService.createLotteryResult(request);
-            log.info("✅ Successfully imported {} result for date: {}", name, request.getDrawDate());
+            
+            log.info("✅ [DEBUG] Successfully imported {} result for date: {} (region: {}, province: {})", 
+                name, request.getDrawDate(), request.getRegion(), request.getProvince());
         } catch (RuntimeException e) {
             // Check if it's a duplicate error
             if (e.getMessage() != null && e.getMessage().contains("đã tồn tại")) {
-                log.warn("⚠️ {} result for {} already exists, skipping", name, request.getDrawDate());
+                log.warn("⚠️ [DEBUG] {} result for {} already exists, skipping", name, request.getDrawDate());
             } else {
+                log.error("❌ [DEBUG] Failed to insert {} result: {}", name, e.getMessage());
                 throw e;
             }
         }

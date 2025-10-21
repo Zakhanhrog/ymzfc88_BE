@@ -441,26 +441,25 @@ public class LotteryResultController {
                 result.put("mienBac", "Failed: " + e.getMessage());
             }
 
-            // Import các tỉnh
-            String[] provinces = {"gialai", "binhduong", "ninhthuan", "travinh", "vinhlong"};
-            for (String province : provinces) {
-                try {
-                    autoImportService.autoImportProvince(province);
-                    totalImported++;
-                    result.put(province, "Success");
-                } catch (Exception e) {
-                    log.error("Error importing province {}: {}", province, e.getMessage());
-                    errors.add(province + ": " + e.getMessage());
-                    result.put(province, "Failed: " + e.getMessage());
-                }
+            // Import các tỉnh theo lịch quay hôm nay (LOGIC MỚI)
+            try {
+                log.info("🔄 [DEBUG] Triggering auto import for all provinces drawing today...");
+                autoImportService.autoImportAllProvinces();
+                result.put("provinces", "Success - All provinces for today imported");
+                totalImported++;
+                log.info("✅ [DEBUG] All provinces auto import completed successfully");
+            } catch (Exception e) {
+                log.error("❌ [DEBUG] Error importing provinces for today: {}", e.getMessage());
+                errors.add("Provinces: " + e.getMessage());
+                result.put("provinces", "Failed: " + e.getMessage());
             }
 
             result.put("totalImported", totalImported);
-            result.put("totalProvinces", provinces.length + 1); // +1 for Miền Bắc
+            result.put("totalProvinces", 2); // Miền Bắc + All Provinces for today
             result.put("errors", errors);
 
-            String message = String.format("Auto-import hoàn thành: %d/%d thành công", 
-                    totalImported, provinces.length + 1);
+            String message = String.format("Auto-import hoàn thành: %d/2 thành công (Miền Bắc + Tất cả tỉnh quay hôm nay)", 
+                    totalImported);
 
             return ResponseEntity.ok(ApiResponse.success(message, result));
         } catch (Exception e) {
@@ -779,6 +778,57 @@ public class LotteryResultController {
             log.error("Test import all provinces failed", e);
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("Lỗi import: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * Admin: Auto import kết quả cho ngày hôm nay (trigger từ admin panel)
+     * Logic: Check xem có kết quả hôm nay chưa, nếu chưa thì import
+     */
+    @PostMapping("/admin/lottery-results/auto-import-today")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> autoImportToday() {
+        log.info("🔧 [DEBUG] Admin triggering auto import for today's results");
+        
+        try {
+            Map<String, Object> result = new HashMap<>();
+            List<String> imported = new ArrayList<>();
+            List<String> errors = new ArrayList<>();
+            
+            // 1. Import Miền Bắc
+            try {
+                log.info("🔄 [DEBUG] Importing Miền Bắc for today...");
+                autoImportService.autoImportMienBac();
+                imported.add("Miền Bắc");
+                log.info("✅ [DEBUG] Miền Bắc imported successfully");
+            } catch (Exception e) {
+                log.error("❌ [DEBUG] Miền Bắc import failed: {}", e.getMessage());
+                errors.add("Miền Bắc: " + e.getMessage());
+            }
+            
+            // 2. Import tất cả tỉnh quay hôm nay
+            try {
+                log.info("🔄 [DEBUG] Importing all provinces drawing today...");
+                autoImportService.autoImportAllProvinces();
+                imported.add("Tất cả tỉnh quay hôm nay");
+                log.info("✅ [DEBUG] All provinces imported successfully");
+            } catch (Exception e) {
+                log.error("❌ [DEBUG] Provinces import failed: {}", e.getMessage());
+                errors.add("Tỉnh: " + e.getMessage());
+            }
+            
+            result.put("imported", imported);
+            result.put("errors", errors);
+            result.put("success", errors.isEmpty());
+            
+            String message = String.format("Auto-import hôm nay hoàn thành: %d thành công, %d lỗi", 
+                    imported.size(), errors.size());
+            
+            return ResponseEntity.ok(ApiResponse.success(message, result));
+        } catch (Exception e) {
+            log.error("❌ [DEBUG] Error during auto import today: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Lỗi auto-import hôm nay: " + e.getMessage()));
         }
     }
 }

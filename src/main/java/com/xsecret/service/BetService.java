@@ -18,11 +18,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -721,32 +725,57 @@ public class BetService {
     }
     
     /**
-     * Xác định ngày kết quả cho bet dựa trên thời gian đặt cược
-     * Logic: Sau 18:30 thì bet sẽ check với kết quả ngày hôm sau
+     * Xác định ngày kết quả cho bet dựa trên thời gian đặt cược và lịch quay
+     * - Miền Bắc: Sau 18:30 → ngày mai (quay hàng ngày)
+     * - Miền Trung/Nam: Tính động dựa trên lịch quay của tỉnh
      */
     private String getBetResultDate(String region, String province) {
         LocalTime now = LocalTime.now();
         LocalDate today = LocalDate.now();
         
-        // Kiểm tra thời gian chuyển ngày theo vùng miền
-        boolean shouldUseNextDay = false;
-        
         if ("mienBac".equals(region)) {
-            // Miền Bắc: Sau 18:30 thì dùng kết quả ngày hôm sau
-            shouldUseNextDay = now.isAfter(LocalTime.of(18, 30));
-        } else if ("mienTrungNam".equals(region)) {
-            // Miền Trung Nam: Sau 17:30 thì dùng kết quả ngày hôm sau
-            shouldUseNextDay = now.isAfter(LocalTime.of(17, 30));
+            // Miền Bắc: Logic cũ (quay hàng ngày)
+            boolean shouldUseNextDay = now.isAfter(LocalTime.of(18, 30));
+            LocalDate resultDate = shouldUseNextDay ? today.plusDays(1) : today;
+            log.info("📅 Miền Bắc bet result date: {}", resultDate);
+            return resultDate.toString();
         }
         
-        if (shouldUseNextDay) {
-            LocalDate nextDay = today.plusDays(1);
-            log.info("🔄 Bet placed after cutoff time, using next day result: {} -> {}", today, nextDay);
-            return nextDay.toString();
-        } else {
-            log.info("📅 Bet placed before cutoff time, using same day result: {}", today);
-            return today.toString();
+        // Miền Trung Nam: Logic ĐỘNG dựa trên lịch tỉnh
+        if ("mienTrungNam".equals(region) && province != null) {
+            log.info("🔍 [DEBUG] Calculating result date for province: {}", province);
+            
+            // 1. Check hôm nay có phải ngày quay của tỉnh không?
+            boolean isTodayDrawDay = isProvinceDrawDay(province, today);
+            log.info("📅 [DEBUG] Is today draw day for {}: {}", province, isTodayDrawDay);
+            
+            if (!isTodayDrawDay) {
+                // Hôm nay không quay → resultDate = ngày quay tiếp theo
+                LocalDate nextDrawDate = getNextProvinceDrawDate(province, today);
+                log.info("📅 [DEBUG] {} không quay hôm nay. Result date = {} (ngày quay tiếp theo)", 
+                        province, nextDrawDate);
+                return nextDrawDate.toString();
+            }
+            
+            // 2. Hôm nay có quay → Check giờ
+            LocalTime lockEnd = LocalTime.of(18, 45);
+            
+            if (now.isBefore(lockEnd)) {
+                // Trước 18:45 → Đánh cho hôm nay
+                log.info("📅 [DEBUG] {} quay hôm nay và chưa qua 18:45. Result date = {}", province, today);
+                return today.toString();
+            } else {
+                // Sau 18:45 → Đánh cho kỳ tiếp theo
+                LocalDate nextDrawDate = getNextProvinceDrawDate(province, today);
+                log.info("📅 [DEBUG] {} đã qua 18:45. Result date = {} (kỳ tiếp theo)", 
+                        province, nextDrawDate);
+                return nextDrawDate.toString();
+            }
         }
+        
+        // Fallback
+        log.warn("⚠️ Không xác định được result date, dùng hôm nay: {}", today);
+        return today.toString();
     }
 
     /**
@@ -854,32 +883,50 @@ public class BetService {
     }
     
     /**
-     * Kiểm tra thời gian khóa cược theo vùng miền
-     * - Miền Bắc: Khóa từ 18:10 đến 18:45
-     * - Miền Trung: Khóa từ 17:00 đến 18:45
-     * - Miền Nam: Khóa từ 16:00 đến 18:45
+     * Kiểm tra thời gian khóa cược ĐỘNG theo lịch tỉnh
+     * - Miền Bắc: Khóa cố định từ 18:10 đến 18:45 (quay hàng ngày)
+     * - Miền Trung/Nam: CHỈ khóa giờ nếu HÔM NAY là ngày quay của tỉnh đó
+     *   + Miền Trung: 17:00 - 18:45
+     *   + Miền Nam: 16:00 - 18:45
      */
     private void checkBettingTimeLimit(String region, String province) {
         LocalTime now = LocalTime.now();
         
         if ("mienBac".equals(region)) {
-            // Miền Bắc: Khóa từ 18:10 đến 18:45
+            // Miền Bắc: Khóa cố định từ 18:10 đến 18:45 (quay hàng ngày)
             if (isInLockTimeRange(now, 18, 10, 18, 45)) {
                 throw new RuntimeException("Miền Bắc đang khóa cược từ 18:10 đến 18:45. Vui lòng đợi đến 18:45.");
             }
-        } else if ("mienTrungNam".equals(region)) {
-            // Kiểm tra tỉnh để xác định Miền Trung hay Miền Nam
-            if (isMienTrung(province)) {
-                // Miền Trung: Khóa từ 17:00 đến 18:45
-                if (isInLockTimeRange(now, 17, 0, 18, 45)) {
-                    throw new RuntimeException("Miền Trung (" + province + ") đang khóa cược từ 17:00 đến 18:45. Vui lòng đợi đến 18:45.");
-                }
-            } else {
-                // Miền Nam: Khóa từ 16:00 đến 18:45
-                if (isInLockTimeRange(now, 16, 0, 18, 45)) {
-                    throw new RuntimeException("Miền Nam (" + province + ") đang khóa cược từ 16:00 đến 18:45. Vui lòng đợi đến 18:45.");
-                }
-
+        } else if ("mienTrungNam".equals(region) && province != null) {
+            // Miền Trung Nam: Kiểm tra ĐỘNG theo lịch tỉnh
+            
+            // 1. Check hôm nay có phải ngày quay của tỉnh này không?
+            boolean isTodayDrawDay = isProvinceDrawDay(province, LocalDate.now());
+            log.info("🔍 [DEBUG] Checking betting time lock for province: {}", province);
+            log.info("📅 [DEBUG] Is today draw day for {}: {}", province, isTodayDrawDay);
+            
+            if (!isTodayDrawDay) {
+                // Hôm nay không quay → KHÔNG khóa giờ
+                log.info("✅ [DEBUG] Province {} không quay hôm nay, cho phép đặt cược mọi giờ", province);
+                return;
+            }
+            
+            // 2. Hôm nay là ngày quay → Áp dụng khóa giờ
+            boolean isMienTrungProvince = isMienTrung(province);
+            LocalTime lockStart = isMienTrungProvince ? LocalTime.of(17, 0) : LocalTime.of(16, 0);
+            LocalTime lockEnd = LocalTime.of(18, 45);
+            
+            log.info("⏰ [DEBUG] Province {} is draw day today. Lock time: {} - {} (isMienTrung: {})", 
+                province, lockStart, lockEnd, isMienTrungProvince);
+            log.info("🕐 [DEBUG] Current time: {}, isInLockRange: {}", now, 
+                isInLockTimeRange(now, lockStart.getHour(), lockStart.getMinute(), lockEnd.getHour(), lockEnd.getMinute()));
+            
+            if (isInLockTimeRange(now, lockStart.getHour(), lockStart.getMinute(), lockEnd.getHour(), lockEnd.getMinute())) {
+                String regionName = isMienTrungProvince ? "Miền Trung" : "Miền Nam";
+                throw new RuntimeException(String.format(
+                    "%s (%s) đang khóa cược từ %s đến 18:45 (hôm nay là ngày quay). Vui lòng đợi đến 18:45.",
+                    regionName, province, lockStart
+                ));
             }
         }
     }
@@ -935,15 +982,121 @@ public class BetService {
     
     /**
      * Kiểm tra xem tỉnh có thuộc Miền Trung không
-     * Miền Trung: Gia Lai, Ninh Thuận
-     * Miền Nam: Bình Dương, Trà Vinh, Vĩnh Long
+     * Dựa trên danh sách đầy đủ 31 tỉnh
      */
     private boolean isMienTrung(String province) {
         if (province == null) {
             return false;
         }
-        // Miền Trung
-        return "gialai".equalsIgnoreCase(province) || "ninhthuan".equalsIgnoreCase(province);
+        
+        List<String> mienTrungProvinces = Arrays.asList(
+            "phuyen", "thuathienhue", "daklak", "quangnam", "danang",
+            "khanhhoa", "binhdinh", "quangbinh", "quangtri",
+            "gialai", "ninhthuan", "daknong", "quangngai", "kontum"
+        );
+        
+        return mienTrungProvinces.contains(province.toLowerCase());
+    }
+    
+    /**
+     * Kiểm tra ngày cụ thể có phải ngày quay của tỉnh không
+     * @param province Tên tỉnh (backend format: lowercase)
+     * @param date Ngày cần check
+     * @return true nếu ngày đó tỉnh có quay
+     */
+    private boolean isProvinceDrawDay(String province, LocalDate date) {
+        if (province == null) {
+            return false;
+        }
+        
+        java.time.DayOfWeek dayOfWeek = date.getDayOfWeek();
+        List<String> provincesThatDay = getProvincesForDayOfWeek(dayOfWeek);
+        
+        return provincesThatDay.contains(province.toLowerCase());
+    }
+    
+    /**
+     * Tìm ngày quay TIẾP THEO của tỉnh (từ ngày chỉ định)
+     * @param province Tên tỉnh
+     * @param fromDate Ngày bắt đầu tìm
+     * @return Ngày quay tiếp theo
+     */
+    private LocalDate getNextProvinceDrawDate(String province, LocalDate fromDate) {
+        if (province == null) {
+            return fromDate.plusDays(1);
+        }
+        
+        // Tìm tất cả các ngày trong tuần mà tỉnh này quay
+        List<java.time.DayOfWeek> drawDays = new ArrayList<>();
+        for (java.time.DayOfWeek day : java.time.DayOfWeek.values()) {
+            List<String> provinces = getProvincesForDayOfWeek(day);
+            if (provinces.contains(province.toLowerCase())) {
+                drawDays.add(day);
+            }
+        }
+        
+        if (drawDays.isEmpty()) {
+            // Nếu không tìm thấy lịch, mặc định là ngày mai
+            log.warn("⚠️ Không tìm thấy lịch quay cho province: {}", province);
+            return fromDate.plusDays(1);
+        }
+        
+        // Tìm ngày quay gần nhất trong tương lai (từ ngày mai trở đi)
+        LocalDate currentDate = fromDate.plusDays(1);
+        for (int i = 0; i < 7; i++) {
+            if (drawDays.contains(currentDate.getDayOfWeek())) {
+                return currentDate;
+            }
+            currentDate = currentDate.plusDays(1);
+        }
+        
+        // Fallback: nếu không tìm được trong 7 ngày thì trả về 7 ngày sau
+        return fromDate.plusDays(7);
+    }
+    
+    /**
+     * Lấy danh sách tỉnh quay theo ngày trong tuần
+     * GIỐNG HỆT LotteryResultAutoImportService để đồng bộ
+     */
+    private List<String> getProvincesForDayOfWeek(java.time.DayOfWeek dayOfWeek) {
+        Map<DayOfWeek, List<String>> schedule = new java.util.HashMap<>();
+        
+        // Thứ 2
+        schedule.put(java.time.DayOfWeek.MONDAY, Arrays.asList(
+            "phuyen", "thuathienhue", "camau", "dongthap", "hcm"
+        ));
+        
+        // Thứ 3
+        schedule.put(java.time.DayOfWeek.TUESDAY, Arrays.asList(
+            "daklak", "quangnam", "baclieu", "bentre", "vungtau"
+        ));
+        
+        // Thứ 4
+        schedule.put(java.time.DayOfWeek.WEDNESDAY, Arrays.asList(
+            "danang", "khanhhoa", "cantho", "dongnai", "soctrang"
+        ));
+        
+        // Thứ 5
+        schedule.put(java.time.DayOfWeek.THURSDAY, Arrays.asList(
+            "binhdinh", "quangbinh", "quangtri", "angiang", "binhthuan", "tayninh"
+        ));
+        
+        // Thứ 6
+        schedule.put(java.time.DayOfWeek.FRIDAY, Arrays.asList(
+            "gialai", "ninhthuan", "binhduong", "travinh", "vinhlong"
+        ));
+        
+        // Thứ 7
+        schedule.put(java.time.DayOfWeek.SATURDAY, Arrays.asList(
+            "danang", "daknong", "quangngai", "binhphuoc", "haugiang", "hcm", "longan"
+        ));
+        
+        // Chủ Nhật
+        schedule.put(java.time.DayOfWeek.SUNDAY, Arrays.asList(
+            "khanhhoa", "kontum", "thuathienhue", "dalat", "kiengiang", "tiengiang"
+        ));
+        
+        return schedule.getOrDefault(dayOfWeek, new ArrayList<>());
     }
     
     // ======================== ADMIN METHODS ========================

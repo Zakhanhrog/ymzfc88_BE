@@ -20,5 +20,14 @@ public class VnLotteryIssue {
     
     @JsonProperty("status")
     private Integer status;
+    
+    // Additional methods for compatibility
+    public String getIssue() {
+        return turnNum; // Use turnNum as issue
+    }
+    
+    public String getResult() {
+        return detail; // Use detail as result
+    }
 }
 
