@@ -114,5 +114,48 @@ public class SystemSettingsController {
                     .body(ApiResponse.error(e.getMessage()));
         }
     }
+
+    /**
+     * Lấy tất cả contact links
+     */
+    @GetMapping("/contact-links")
+    public ResponseEntity<ApiResponse<java.util.Map<String, String>>> getContactLinks() {
+        try {
+            log.info("Getting contact links - Request received");
+            java.util.Map<String, String> contactLinks = systemSettingsService.getContactLinks();
+            log.info("Contact links retrieved successfully: {}", contactLinks);
+            return ResponseEntity.ok(ApiResponse.success(contactLinks));
+        } catch (Exception e) {
+            log.error("Error getting contact links", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    /**
+     * Cập nhật contact link
+     */
+    @PostMapping("/contact-links/{linkType}")
+    public ResponseEntity<ApiResponse<SystemSettingsResponse>> updateContactLink(
+            @PathVariable String linkType,
+            @RequestBody java.util.Map<String, String> request) {
+        try {
+            log.info("Updating contact link - Request received for linkType: {}, request: {}", linkType, request);
+            String linkUrl = request.get("linkUrl");
+            if (linkUrl == null || linkUrl.trim().isEmpty()) {
+                log.warn("Link URL is empty for linkType: {}", linkType);
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Link URL không được để trống"));
+            }
+            
+            SystemSettingsResponse setting = systemSettingsService.updateContactLink(linkType, linkUrl);
+            log.info("Contact link updated successfully for linkType: {}, new value: {}", linkType, linkUrl);
+            return ResponseEntity.ok(ApiResponse.success("Cập nhật link thành công", setting));
+        } catch (Exception e) {
+            log.error("Error updating contact link: {}", linkType, e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
+        }
+    }
 }
 

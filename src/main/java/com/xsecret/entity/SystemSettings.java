@@ -51,5 +51,12 @@ public class SystemSettings {
     public static final String MAX_WITHDRAWAL_AMOUNT = "max_withdrawal_amount";
     public static final String MIN_DEPOSIT_AMOUNT = "min_deposit_amount";
     public static final String MAX_DEPOSIT_AMOUNT = "max_deposit_amount";
+    
+    // Contact page links
+    public static final String CONTACT_LIVECHAT_LINK = "contact_livechat_link";
+    public static final String CONTACT_FACEBOOK_LINK = "contact_facebook_link";
+    public static final String CONTACT_MESSENGER_LINK = "contact_messenger_link";
+    public static final String CONTACT_TELEGRAM_LINK = "contact_telegram_link";
+    public static final String CONTACT_HOTLINE_LINK = "contact_hotline_link";
 }
 

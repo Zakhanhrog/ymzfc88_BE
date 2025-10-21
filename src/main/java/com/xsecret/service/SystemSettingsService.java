@@ -122,6 +122,61 @@ public class SystemSettingsService {
     }
 
     /**
+     * Lấy tất cả contact links
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<String, String> getContactLinks() {
+        java.util.Map<String, String> contactLinks = new java.util.HashMap<>();
+        contactLinks.put("livechat", getSettingValue(SystemSettings.CONTACT_LIVECHAT_LINK, "#"));
+        contactLinks.put("facebook", getSettingValue(SystemSettings.CONTACT_FACEBOOK_LINK, "#"));
+        contactLinks.put("messenger", getSettingValue(SystemSettings.CONTACT_MESSENGER_LINK, "#"));
+        contactLinks.put("telegram", getSettingValue(SystemSettings.CONTACT_TELEGRAM_LINK, "#"));
+        contactLinks.put("hotline", getSettingValue(SystemSettings.CONTACT_HOTLINE_LINK, "#"));
+        return contactLinks;
+    }
+
+    /**
+     * Cập nhật contact link
+     */
+    @Transactional
+    public SystemSettingsResponse updateContactLink(String linkType, String linkUrl) {
+        String settingKey;
+        String description;
+        
+        switch (linkType.toLowerCase()) {
+            case "livechat":
+                settingKey = SystemSettings.CONTACT_LIVECHAT_LINK;
+                description = "Link cho thẻ Livechat 24/24";
+                break;
+            case "facebook":
+                settingKey = SystemSettings.CONTACT_FACEBOOK_LINK;
+                description = "Link cho thẻ Kênh Facebook";
+                break;
+            case "messenger":
+                settingKey = SystemSettings.CONTACT_MESSENGER_LINK;
+                description = "Link cho thẻ Messenger Facebook";
+                break;
+            case "telegram":
+                settingKey = SystemSettings.CONTACT_TELEGRAM_LINK;
+                description = "Link cho thẻ Telegram";
+                break;
+            case "hotline":
+                settingKey = SystemSettings.CONTACT_HOTLINE_LINK;
+                description = "Link cho thẻ Hotline";
+                break;
+            default:
+                throw new RuntimeException("Invalid contact link type: " + linkType);
+        }
+        
+        return createOrUpdateSetting(SystemSettingsRequest.builder()
+                .settingKey(settingKey)
+                .settingValue(linkUrl)
+                .description(description)
+                .category("CONTACT")
+                .build());
+    }
+
+    /**
      * Khởi tạo các settings mặc định
      */
     @Transactional
@@ -182,6 +237,52 @@ public class SystemSettingsService {
                     .settingValue("100000000")
                     .description("Số tiền nạp tối đa")
                     .category("DEPOSIT")
+                    .build());
+        }
+
+        // Contact page links
+        if (!systemSettingsRepository.existsBySettingKey(SystemSettings.CONTACT_LIVECHAT_LINK)) {
+            createOrUpdateSetting(SystemSettingsRequest.builder()
+                    .settingKey(SystemSettings.CONTACT_LIVECHAT_LINK)
+                    .settingValue("#")
+                    .description("Link cho thẻ Livechat 24/24")
+                    .category("CONTACT")
+                    .build());
+        }
+
+        if (!systemSettingsRepository.existsBySettingKey(SystemSettings.CONTACT_FACEBOOK_LINK)) {
+            createOrUpdateSetting(SystemSettingsRequest.builder()
+                    .settingKey(SystemSettings.CONTACT_FACEBOOK_LINK)
+                    .settingValue("#")
+                    .description("Link cho thẻ Kênh Facebook")
+                    .category("CONTACT")
+                    .build());
+        }
+
+        if (!systemSettingsRepository.existsBySettingKey(SystemSettings.CONTACT_MESSENGER_LINK)) {
+            createOrUpdateSetting(SystemSettingsRequest.builder()
+                    .settingKey(SystemSettings.CONTACT_MESSENGER_LINK)
+                    .settingValue("#")
+                    .description("Link cho thẻ Messenger Facebook")
+                    .category("CONTACT")
+                    .build());
+        }
+
+        if (!systemSettingsRepository.existsBySettingKey(SystemSettings.CONTACT_TELEGRAM_LINK)) {
+            createOrUpdateSetting(SystemSettingsRequest.builder()
+                    .settingKey(SystemSettings.CONTACT_TELEGRAM_LINK)
+                    .settingValue("#")
+                    .description("Link cho thẻ Telegram")
+                    .category("CONTACT")
+                    .build());
+        }
+
+        if (!systemSettingsRepository.existsBySettingKey(SystemSettings.CONTACT_HOTLINE_LINK)) {
+            createOrUpdateSetting(SystemSettingsRequest.builder()
+                    .settingKey(SystemSettings.CONTACT_HOTLINE_LINK)
+                    .settingValue("#")
+                    .description("Link cho thẻ Hotline")
+                    .category("CONTACT")
                     .build());
         }
     }
