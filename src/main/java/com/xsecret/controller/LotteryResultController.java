@@ -99,7 +99,7 @@ public class LotteryResultController {
 
     /**
      * Admin: Publish kết quả (chuyển từ DRAFT sang PUBLISHED)
-     * Không tự động check bet - chỉ chờ đến 18:30
+     * Tự động check bet ngay sau khi publish
      */
     @PostMapping("/admin/lottery-results/{id}/publish")
     @PreAuthorize("hasRole('ADMIN')")
@@ -108,12 +108,41 @@ public class LotteryResultController {
 
         try {
             LotteryResultResponse response = lotteryResultService.publishResult(id);
+            
+            // Trigger auto bet check ngay sau khi publish
+            try {
+                log.info("🚀 Triggering auto bet check after admin publish for date: {}", response.getDrawDate());
+                betService.checkBetResultsForDate(response.getDrawDate().toString());
+                log.info("✅ Auto bet check completed after admin publish");
+            } catch (Exception e) {
+                log.error("❌ Error during auto bet check after publish: {}", e.getMessage());
+                // Không throw exception, chỉ log lỗi
+            }
 
-            return ResponseEntity.ok(ApiResponse.success("Công bố kết quả thành công. Hệ thống sẽ check bet lúc 18:30.", response));
+            return ResponseEntity.ok(ApiResponse.success("Công bố kết quả thành công và đã check bet tự động.", response));
         } catch (Exception e) {
             log.error("Error publishing lottery result", e);
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("Lỗi công bố kết quả: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Admin: Manual trigger check bet cho ngày cụ thể
+     * Dùng để test và debug
+     */
+    @PostMapping("/admin/lottery-results/check-bets/{date}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> manualCheckBets(@PathVariable String date) {
+        log.info("Admin manually triggering bet check for date: {}", date);
+        
+        try {
+            betService.checkBetResultsForDate(date);
+            return ResponseEntity.ok(ApiResponse.success("Manual bet check completed for date: " + date, null));
+        } catch (Exception e) {
+            log.error("Error during manual bet check for date: {}", date, e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Lỗi check bet: " + e.getMessage()));
         }
     }
 

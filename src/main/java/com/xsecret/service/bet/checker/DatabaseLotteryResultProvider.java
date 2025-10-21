@@ -52,16 +52,21 @@ public class DatabaseLotteryResultProvider implements LotteryResultProvider {
         String province = currentBet.getProvince();
         LocalDate drawDate = LocalDate.parse(currentBet.getResultDate(), DateTimeFormatter.ISO_LOCAL_DATE);
         
+        log.info("🔍 DEBUG Loading result for bet_id={}: region={}, province={}, drawDate={}", 
+                currentBet.getId(), region, province, drawDate);
+        
         cachedResult = lotteryResultService.getPublishedResultForBetCheck(region, province, drawDate);
         
         if (cachedResult == null) {
+            log.error("❌ DEBUG No result found for bet_id={}: region={}, province={}, drawDate={}", 
+                    currentBet.getId(), region, province, drawDate);
             throw new RuntimeException(String.format(
                 "Chưa có kết quả xổ số cho ngày %s (region=%s, province=%s). Vui lòng cập nhật kết quả trước khi check bet.", 
                 drawDate, region, province != null ? province : "N/A"));
         }
         
-        log.info("Loaded lottery result for bet_id={}: region={}, province={}, drawDate={}", 
-                currentBet.getId(), region, province, drawDate);
+        log.info("✅ DEBUG Loaded lottery result for bet_id={}: region={}, province={}, drawDate={}, result_id={}", 
+                currentBet.getId(), region, province, drawDate, cachedResult.getId());
     }
     
     @Override

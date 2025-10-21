@@ -258,6 +258,12 @@ public class BetService {
 
         log.info("📊 Found {} PENDING bets for specific date: {}", pendingBets.size(), targetDate);
         
+        // Debug: Log chi tiết từng bet
+        for (Bet bet : pendingBets) {
+            log.info("🔍 DEBUG Bet ID: {}, region: {}, province: {}, betType: {}, resultDate: {}, status: {}", 
+                    bet.getId(), bet.getRegion(), bet.getProvince(), bet.getBetType(), bet.getResultDate(), bet.getStatus());
+        }
+        
         if (pendingBets.isEmpty()) {
             log.info("✅ No pending bets to check for date: {}", targetDate);
             return;

@@ -7,14 +7,11 @@ import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 
 /**
  * Service để tự động check bet sau khi admin publish kết quả mới
- * DEPRECATED: Logic cũ, đã được thay thế bởi triggerBetCheckAfterPublish() trong LotteryResultController
  */
-// @Service // Disabled - logic cũ
+@Service
 @RequiredArgsConstructor
 @Slf4j
 public class AutoBetCheckService {
@@ -23,16 +20,18 @@ public class AutoBetCheckService {
     
     /**
      * Event listener để tự động check bet khi admin publish kết quả mới
-     * DISABLED: Không còn check bet tự động sau khi admin publish
      */
-    // @EventListener // Disabled - logic cũ
-    // @Async // Disabled - logic cũ
+    @EventListener
+    @Async
     public void handleLotteryResultPublished(LotteryResultPublishedEvent event) {
         log.info("========================================");
         log.info("📢 EVENT RECEIVED: Lottery Result Published!");
         log.info("   ID={}, region={}, province={}, drawDate={}", 
                 event.getLotteryResultId(), event.getRegion(), event.getProvince(), event.getDrawDate());
         log.info("========================================");
+        
+        // Debug: Log thread info
+        log.info("🔍 DEBUG Event listener running on thread: {}", Thread.currentThread().getName());
         
         try {
             log.info("⏰ Waiting 10 seconds before checking bets...");

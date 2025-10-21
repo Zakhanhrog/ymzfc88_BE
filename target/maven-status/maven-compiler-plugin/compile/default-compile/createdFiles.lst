@@ -18,9 +18,12 @@ com/xsecret/repository/NotificationRepository.class
 com/xsecret/dto/request/BettingOddsRequest$BettingOddsRequestBuilder.class
 com/xsecret/repository/SystemSettingsRepository.class
 com/xsecret/entity/BettingOdds$BettingOddsBuilder.class
+com/xsecret/service/PromotionService.class
+com/xsecret/dto/response/PromotionResponse$PromotionResponseBuilder.class
 com/xsecret/dto/response/NotificationResponse.class
 com/xsecret/entity/Transaction$TransactionType.class
 com/xsecret/service/bet/checker/LotteryResultProviderFactory.class
+com/xsecret/controller/PromotionController.class
 com/xsecret/service/bet/checker/Loto2sResultChecker.class
 com/xsecret/dto/request/UpdateUserRequestDto.class
 com/xsecret/repository/LotteryResultRepository.class
@@ -31,9 +34,11 @@ com/xsecret/dto/response/BetResponse$BetResponseBuilder.class
 com/xsecret/dto/request/ProcessTransactionRequestDto.class
 com/xsecret/dto/request/LotteryResultRequest.class
 com/xsecret/dto/request/ProcessTransactionRequestDto$Action.class
+com/xsecret/dto/request/PromotionRequest.class
 com/xsecret/service/BetService.class
 com/xsecret/mapper/UserMapper.class
 com/xsecret/service/lottery/LotteryResultAutoImportService$1.class
+com/xsecret/entity/Promotion.class
 com/xsecret/dto/request/UpdateUserRequestDto$UpdateUserRequestDtoBuilder.class
 com/xsecret/controller/BetController.class
 com/xsecret/entity/Bet$BetBuilder.class
@@ -72,6 +77,7 @@ com/xsecret/dto/UserPaymentMethodResponseDto.class
 com/xsecret/dto/request/DepositRequestDto.class
 com/xsecret/service/ScheduledTaskService.class
 com/xsecret/event/LotteryResultPublishedEvent.class
+com/xsecret/controller/AdminPromotionController.class
 com/xsecret/repository/BetRepository.class
 com/xsecret/entity/PaymentMethod$PaymentMethodBuilder.class
 com/xsecret/entity/KycVerification$KycStatus.class
@@ -83,6 +89,7 @@ com/xsecret/dto/response/PaymentMethodResponseDto.class
 com/xsecret/dto/vnlottery/VnLotteryProvinceResponse$ProvinceData.class
 com/xsecret/dto/request/RegisterRequest.class
 com/xsecret/dto/UserPaymentMethodResponseDto$UserPaymentMethodResponseDtoBuilder.class
+com/xsecret/controller/PublicController.class
 com/xsecret/dto/vnlottery/VnLotteryMienBacResponse$TData.class
 com/xsecret/dto/KycResponse$KycResponseBuilder.class
 com/xsecret/controller/PublicBettingOddsController.class
@@ -132,6 +139,8 @@ com/xsecret/dto/request/NotificationRequest.class
 com/xsecret/entity/Notification$NotificationPriority.class
 com/xsecret/dto/KycResponse.class
 com/xsecret/dto/response/PointTransactionResponse.class
+com/xsecret/dto/response/PromotionResponse.class
+com/xsecret/repository/PromotionRepository.class
 com/xsecret/entity/UserWallet.class
 com/xsecret/service/bet/checker/Loto3sResultChecker.class
 com/xsecret/dto/request/SystemSettingsRequest.class
@@ -141,6 +150,7 @@ com/xsecret/entity/User$Role.class
 com/xsecret/entity/Notification$NotificationType.class
 com/xsecret/dto/UserPaymentMethodResponseDto$1.class
 com/xsecret/dto/request/LoginRequest.class
+com/xsecret/entity/Promotion$PromotionBuilder.class
 com/xsecret/entity/User$UserBuilder.class
 com/xsecret/dto/response/UserPointResponse.class
 com/xsecret/exception/UserAlreadyExistsException.class
@@ -170,6 +180,7 @@ com/xsecret/config/DataInitializer.class
 com/xsecret/service/bet/checker/DatabaseLotteryResultProvider.class
 com/xsecret/service/lottery/LotteryResultAutoImportService.class
 com/xsecret/dto/UserPaymentMethodRequestDto.class
+com/xsecret/dto/request/PromotionRequest$PromotionRequestBuilder.class
 com/xsecret/exception/TokenRefreshException.class
 com/xsecret/entity/LotteryResult.class
 com/xsecret/service/bet/checker/XienResultChecker.class
