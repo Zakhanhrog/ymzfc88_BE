@@ -67,12 +67,12 @@ public class SpecialResultChecker {
             if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
                 throw e; // Propagate exception để BetService có thể skip bet
             }
-            // Các lỗi khác thì log và return false
-            log.error("Error checking 3s đặc biệt result: {}", e.getMessage());
-            return false;
+            // Các lỗi khác thì log và throw lại
+            log.error("❌ [DEBUG] Error checking 3s đặc biệt result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw e; // Throw lại để BetService handle
         } catch (Exception e) {
-            log.error("Error checking 3s đặc biệt result: {}", e.getMessage());
-            return false;
+            log.error("❌ [DEBUG] Unexpected error checking 3s đặc biệt result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw new RuntimeException("Unexpected error checking 3s đặc biệt result: " + e.getMessage(), e);
         }
     }
     
@@ -114,9 +114,17 @@ public class SpecialResultChecker {
             log.info("4s đặc biệt WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
             return true;
             
+        } catch (RuntimeException e) {
+            // Nếu lỗi do chưa có kết quả xổ số thì propagate lên BetService để skip
+            if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
+                throw e; // Propagate exception để BetService có thể skip bet
+            }
+            // Các lỗi khác thì log và throw lại
+            log.error("❌ [DEBUG] Error checking 4s đặc biệt result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw e; // Throw lại để BetService handle
         } catch (Exception e) {
-            log.error("Error checking 4s đặc biệt result: {}", e.getMessage());
-            return false;
+            log.error("❌ [DEBUG] Unexpected error checking 4s đặc biệt result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw new RuntimeException("Unexpected error checking 4s đặc biệt result: " + e.getMessage(), e);
         }
     }
     
@@ -161,12 +169,12 @@ public class SpecialResultChecker {
             if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
                 throw e; // Propagate exception để BetService có thể skip bet
             }
-            // Các lỗi khác thì log và return false
-            log.error("Error checking giai-nhat result: {}", e.getMessage());
-            return false;
+            // Các lỗi khác thì log và throw lại
+            log.error("❌ [DEBUG] Error checking giai-nhat result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw e; // Throw lại để BetService handle
         } catch (Exception e) {
-            log.error("Error checking giai-nhat result: {}", e.getMessage());
-            return false;
+            log.error("❌ [DEBUG] Unexpected error checking giai-nhat result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw new RuntimeException("Unexpected error checking giai-nhat result: " + e.getMessage(), e);
         }
     }
     
@@ -206,9 +214,17 @@ public class SpecialResultChecker {
             log.info("3s-giai-nhat WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
             return true;
             
+        } catch (RuntimeException e) {
+            // Nếu lỗi do chưa có kết quả xổ số thì propagate lên BetService để skip
+            if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
+                throw e; // Propagate exception để BetService có thể skip bet
+            }
+            // Các lỗi khác thì log và throw lại
+            log.error("❌ [DEBUG] Error checking 3s-giai-nhat result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw e; // Throw lại để BetService handle
         } catch (Exception e) {
-            log.error("Error checking 3s-giai-nhat result: {}", e.getMessage());
-            return false;
+            log.error("❌ [DEBUG] Unexpected error checking 3s-giai-nhat result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw new RuntimeException("Unexpected error checking 3s-giai-nhat result: " + e.getMessage(), e);
         }
     }
     
@@ -224,33 +240,48 @@ public class SpecialResultChecker {
             String dacBietNumber = resultProvider.getDacBietNumber();
             
             if (dacBietNumber == null || dacBietNumber.length() < 2) {
-                log.error("Không tìm thấy giải đặc biệt hoặc giải đặc biệt không hợp lệ");
-                return false;
+                log.error("❌ [DEBUG] Đặc biệt: Không tìm thấy giải đặc biệt hoặc giải đặc biệt không hợp lệ cho bet_id={}. DacBietNumber: {}", bet.getId(), dacBietNumber);
+                throw new RuntimeException("Không tìm thấy giải đặc biệt hoặc giải đặc biệt không hợp lệ");
             }
             
             String lastTwoDigits = dacBietNumber.substring(dacBietNumber.length() - 2);
+            log.info("🔍 [DEBUG] Đặc biệt bet_id={}: Giải đặc biệt = {}, 2 số cuối = {}, Selected numbers: {}", 
+                    bet.getId(), dacBietNumber, lastTwoDigits, selectedNumbers);
             
             List<String> winningNumbers = new ArrayList<>();
             for (String selectedNumber : selectedNumbers) {
                 if (selectedNumber.equals(lastTwoDigits)) {
                     winningNumbers.add(selectedNumber);
-                    log.info("Dac-biet WIN: Selected {} matches last 2 digits of Dac biet {}", selectedNumber, dacBietNumber);
+                    log.info("✅ [DEBUG] Đặc biệt WIN bet_id={}: Selected {} matches last 2 digits of Dac biet {}", 
+                            bet.getId(), selectedNumber, dacBietNumber);
+                } else {
+                    log.info("❌ [DEBUG] Đặc biệt LOSE bet_id={}: Selected {} does not match last 2 digits of Dac biet {}", 
+                            bet.getId(), selectedNumber, dacBietNumber);
                 }
             }
             
             if (winningNumbers.isEmpty()) {
-                log.info("Dac-biet LOSE: No matches found. Selected: {}, Dac biet last 2 digits: {}", 
-                        selectedNumbers, lastTwoDigits);
+                log.info("❌ [DEBUG] Đặc biệt LOSE bet_id={}: No matches found. Selected: {}, Dac biet last 2 digits: {}", 
+                        bet.getId(), selectedNumbers, lastTwoDigits);
                 return false;
             }
             
             bet.setWinningNumbers(convertToJsonString(winningNumbers));
-            log.info("Dac-biet WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
+            log.info("✅ [DEBUG] Đặc biệt WIN bet_id={}: {} winning numbers: {}", 
+                    bet.getId(), winningNumbers.size(), winningNumbers);
             return true;
             
+        } catch (RuntimeException e) {
+            // Nếu lỗi do chưa có kết quả xổ số thì propagate lên BetService để skip
+            if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
+                throw e; // Propagate exception để BetService có thể skip bet
+            }
+            // Các lỗi khác thì log và return false
+            log.error("❌ [DEBUG] Error checking dac-biet result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw e; // Throw lại để BetService handle
         } catch (Exception e) {
-            log.error("Error checking dac-biet result: {}", e.getMessage());
-            return false;
+            log.error("❌ [DEBUG] Unexpected error checking dac-biet result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw new RuntimeException("Unexpected error checking dac-biet result: " + e.getMessage(), e);
         }
     }
     
@@ -291,9 +322,17 @@ public class SpecialResultChecker {
             log.info("Dau-dac-biet WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
             return true;
             
+        } catch (RuntimeException e) {
+            // Nếu lỗi do chưa có kết quả xổ số thì propagate lên BetService để skip
+            if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
+                throw e; // Propagate exception để BetService có thể skip bet
+            }
+            // Các lỗi khác thì log và throw lại
+            log.error("❌ [DEBUG] Error checking dau-dac-biet result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw e; // Throw lại để BetService handle
         } catch (Exception e) {
-            log.error("Error checking dau-dac-biet result: {}", e.getMessage());
-            return false;
+            log.error("❌ [DEBUG] Unexpected error checking dau-dac-biet result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw new RuntimeException("Unexpected error checking dau-dac-biet result: " + e.getMessage(), e);
         }
     }
     
@@ -356,9 +395,17 @@ public class SpecialResultChecker {
             log.info("Dau-duoi WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
             return true;
             
+        } catch (RuntimeException e) {
+            // Nếu lỗi do chưa có kết quả xổ số thì propagate lên BetService để skip
+            if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
+                throw e; // Propagate exception để BetService có thể skip bet
+            }
+            // Các lỗi khác thì log và throw lại
+            log.error("❌ [DEBUG] Error checking dau-duoi result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw e; // Throw lại để BetService handle
         } catch (Exception e) {
-            log.error("Error checking dau-duoi result: {}", e.getMessage());
-            return false;
+            log.error("❌ [DEBUG] Unexpected error checking dau-duoi result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw new RuntimeException("Unexpected error checking dau-duoi result: " + e.getMessage(), e);
         }
     }
     
@@ -421,9 +468,17 @@ public class SpecialResultChecker {
             log.info("dau-duoi-mien-trung-nam WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
             return true;
             
+        } catch (RuntimeException e) {
+            // Nếu lỗi do chưa có kết quả xổ số thì propagate lên BetService để skip
+            if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
+                throw e; // Propagate exception để BetService có thể skip bet
+            }
+            // Các lỗi khác thì log và throw lại
+            log.error("❌ [DEBUG] Error checking dau-duoi-mien-trung-nam result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw e; // Throw lại để BetService handle
         } catch (Exception e) {
-            log.error("Error checking dau-duoi-mien-trung-nam result: {}", e.getMessage());
-            return false;
+            log.error("❌ [DEBUG] Unexpected error checking dau-duoi-mien-trung-nam result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw new RuntimeException("Unexpected error checking dau-duoi-mien-trung-nam result: " + e.getMessage(), e);
         }
     }
     
@@ -486,9 +541,17 @@ public class SpecialResultChecker {
             log.info("3s-dau-duoi WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
             return true;
             
+        } catch (RuntimeException e) {
+            // Nếu lỗi do chưa có kết quả xổ số thì propagate lên BetService để skip
+            if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
+                throw e; // Propagate exception để BetService có thể skip bet
+            }
+            // Các lỗi khác thì log và throw lại
+            log.error("❌ [DEBUG] Error checking 3s-dau-duoi result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw e; // Throw lại để BetService handle
         } catch (Exception e) {
-            log.error("Error checking 3s-dau-duoi result: {}", e.getMessage());
-            return false;
+            log.error("❌ [DEBUG] Unexpected error checking 3s-dau-duoi result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw new RuntimeException("Unexpected error checking 3s-dau-duoi result: " + e.getMessage(), e);
         }
     }
     
@@ -544,9 +607,17 @@ public class SpecialResultChecker {
             log.info("3s-giai-6 WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
             return true;
             
+        } catch (RuntimeException e) {
+            // Nếu lỗi do chưa có kết quả xổ số thì propagate lên BetService để skip
+            if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
+                throw e; // Propagate exception để BetService có thể skip bet
+            }
+            // Các lỗi khác thì log và throw lại
+            log.error("❌ [DEBUG] Error checking 3s-giai-6 result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw e; // Throw lại để BetService handle
         } catch (Exception e) {
-            log.error("Error checking 3s-giai-6 result: {}", e.getMessage());
-            return false;
+            log.error("❌ [DEBUG] Unexpected error checking 3s-giai-6 result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw new RuntimeException("Unexpected error checking 3s-giai-6 result: " + e.getMessage(), e);
         }
     }
     
@@ -590,9 +661,17 @@ public class SpecialResultChecker {
             log.info("De-giai-8 WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
             return true;
             
+        } catch (RuntimeException e) {
+            // Nếu lỗi do chưa có kết quả xổ số thì propagate lên BetService để skip
+            if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
+                throw e; // Propagate exception để BetService có thể skip bet
+            }
+            // Các lỗi khác thì log và throw lại
+            log.error("❌ [DEBUG] Error checking de-giai-8 result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw e; // Throw lại để BetService handle
         } catch (Exception e) {
-            log.error("Error checking de-giai-8 result: {}", e.getMessage());
-            return false;
+            log.error("❌ [DEBUG] Unexpected error checking de-giai-8 result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw new RuntimeException("Unexpected error checking de-giai-8 result: " + e.getMessage(), e);
         }
     }
     
@@ -648,9 +727,17 @@ public class SpecialResultChecker {
             log.info("De-giai-7 WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
             return true;
             
+        } catch (RuntimeException e) {
+            // Nếu lỗi do chưa có kết quả xổ số thì propagate lên BetService để skip
+            if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
+                throw e; // Propagate exception để BetService có thể skip bet
+            }
+            // Các lỗi khác thì log và throw lại
+            log.error("❌ [DEBUG] Error checking de-giai-7 result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw e; // Throw lại để BetService handle
         } catch (Exception e) {
-            log.error("Error checking de-giai-7 result: {}", e.getMessage());
-            return false;
+            log.error("❌ [DEBUG] Unexpected error checking de-giai-7 result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw new RuntimeException("Unexpected error checking de-giai-7 result: " + e.getMessage(), e);
         }
     }
     
@@ -713,9 +800,17 @@ public class SpecialResultChecker {
             log.info("3s-dau-duoi-mien-trung-nam WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
             return true;
             
+        } catch (RuntimeException e) {
+            // Nếu lỗi do chưa có kết quả xổ số thì propagate lên BetService để skip
+            if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
+                throw e; // Propagate exception để BetService có thể skip bet
+            }
+            // Các lỗi khác thì log và throw lại
+            log.error("❌ [DEBUG] Error checking 3s-dau-duoi-mien-trung-nam result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw e; // Throw lại để BetService handle
         } catch (Exception e) {
-            log.error("Error checking 3s-dau-duoi-mien-trung-nam result: {}", e.getMessage());
-            return false;
+            log.error("❌ [DEBUG] Unexpected error checking 3s-dau-duoi-mien-trung-nam result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw new RuntimeException("Unexpected error checking 3s-dau-duoi-mien-trung-nam result: " + e.getMessage(), e);
         }
     }
     
@@ -759,9 +854,17 @@ public class SpecialResultChecker {
             log.info("3s-giai-7 WIN: {} winning numbers: {}", winningNumbers.size(), winningNumbers);
             return true;
             
+        } catch (RuntimeException e) {
+            // Nếu lỗi do chưa có kết quả xổ số thì propagate lên BetService để skip
+            if (e.getMessage() != null && e.getMessage().contains("Chưa có kết quả xổ số")) {
+                throw e; // Propagate exception để BetService có thể skip bet
+            }
+            // Các lỗi khác thì log và throw lại
+            log.error("❌ [DEBUG] Error checking 3s-giai-7 result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw e; // Throw lại để BetService handle
         } catch (Exception e) {
-            log.error("Error checking 3s-giai-7 result: {}", e.getMessage());
-            return false;
+            log.error("❌ [DEBUG] Unexpected error checking 3s-giai-7 result for bet_id={}: {}", bet.getId(), e.getMessage());
+            throw new RuntimeException("Unexpected error checking 3s-giai-7 result: " + e.getMessage(), e);
         }
     }
     

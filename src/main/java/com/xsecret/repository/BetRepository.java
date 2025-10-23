@@ -49,6 +49,14 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
     List<Bet> findPendingBetsToCheck(@Param("currentDate") String currentDate);
     
     /**
+     * Tìm bet chưa được kiểm tra kết quả cho ngày cụ thể
+     * Dùng khi admin publish kết quả cho ngày cụ thể
+     * JOIN FETCH user để tránh LazyInitializationException
+     */
+    @Query("SELECT b FROM Bet b JOIN FETCH b.user WHERE b.status = 'PENDING' AND b.resultDate = :targetDate ORDER BY b.createdAt ASC")
+    List<Bet> findPendingBetsToCheckForDate(@Param("targetDate") String targetDate);
+    
+    /**
      * Tìm bet theo ID và eager fetch user
      * Dùng trong checkBetResult() để tránh LazyInitializationException khi access user.points
      */

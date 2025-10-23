@@ -49,8 +49,18 @@ public class ScheduledTaskService {
     public void checkBetResultsAt1900() {
         try {
             log.info("🔄 Scheduled task [19:00]: Starting backup automatic bet result check...");
-            betService.checkBetResults();
-            log.info("✅ Scheduled task [19:00]: Backup bet result check completed successfully");
+            
+            // Kiểm tra có kết quả hôm nay trước khi check bet
+            String today = LocalDate.now(VN_ZONE).toString();
+            boolean hasMienBacResult = lotteryResultService.hasPublishedResult("mienBac", null, today);
+            boolean hasProvinceResult = lotteryResultService.hasPublishedResult("mienTrungNam", null, today);
+            
+            if (hasMienBacResult || hasProvinceResult) {
+                betService.checkBetResults();
+                log.info("✅ Scheduled task [19:00]: Backup bet result check completed successfully");
+            } else {
+                log.warn("⚠️ Scheduled task [19:00]: No lottery results available, skipping bet check");
+            }
         } catch (Exception e) {
             log.error("❌ Scheduled task [19:00]: Error during backup automatic bet result check", e);
         }
@@ -88,8 +98,15 @@ public class ScheduledTaskService {
             if (now.isAfter(LocalTime.of(18, 29))) {
                 log.info("🚀 Miền Bắc import thành công, đang check bet ngay lập tức...");
                 try {
-                    betService.checkBetResults();
-                    log.info("✅ Bet check completed immediately after Miền Bắc import");
+                    // Kiểm tra có kết quả hôm nay trước khi check bet
+                    String todayResult = LocalDate.now(VN_ZONE).toString();
+                    boolean hasTodayResult = lotteryResultService.hasPublishedResult("mienBac", null, todayResult);
+                    if (hasTodayResult) {
+                        betService.checkBetResults();
+                        log.info("✅ Bet check completed immediately after Miền Bắc import");
+                    } else {
+                        log.warn("⚠️ Miền Bắc import thành công nhưng chưa có kết quả PUBLISHED, skip check bet");
+                    }
                 } catch (Exception betError) {
                     log.error("❌ Error checking bets after Miền Bắc import: {}", betError.getMessage());
                 }
@@ -139,8 +156,15 @@ public class ScheduledTaskService {
             if (now.isAfter(LocalTime.of(17, 29))) {
                 log.info("🚀 Provinces import thành công, đang check bet ngay lập tức...");
                 try {
-                    betService.checkBetResults();
-                    log.info("✅ Bet check completed immediately after provinces import");
+                    // Kiểm tra có kết quả hôm nay trước khi check bet
+                    String todayResult = LocalDate.now(VN_ZONE).toString();
+                    boolean hasTodayResult = lotteryResultService.hasPublishedResult("mienTrungNam", null, todayResult);
+                    if (hasTodayResult) {
+                        betService.checkBetResults();
+                        log.info("✅ Bet check completed immediately after provinces import");
+                    } else {
+                        log.warn("⚠️ Provinces import thành công nhưng chưa có kết quả PUBLISHED, skip check bet");
+                    }
                 } catch (Exception betError) {
                     log.error("❌ Error checking bets after provinces import: {}", betError.getMessage());
                 }

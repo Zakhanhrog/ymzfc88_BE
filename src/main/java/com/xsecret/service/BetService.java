@@ -133,11 +133,15 @@ public class BetService {
         
         log.info("Deducted {} points from user {}. Before: {}, After: {}", pointsToDeductLong, userId, pointsBefore, pointsAfter);
 
+        // Normalize province name để đồng bộ với format kết quả
+        String normalizedProvince = normalizeProvinceName(request.getProvince());
+        log.info("🔧 Normalizing province: {} -> {}", request.getProvince(), normalizedProvince);
+        
         // Tạo bet record
         Bet bet = Bet.builder()
                 .user(user)
                 .region(request.getRegion())
-                .province(request.getProvince())
+                .province(normalizedProvince) // Sử dụng province đã normalize
                 .betType(request.getBetType())
                 .selectedNumbers(convertToJsonString(request.getSelectedNumbers()))
                 .betAmount(betPoints) // Tổng số điểm cược (chia đều cho các số)
@@ -146,7 +150,7 @@ public class BetService {
                 .odds(request.getOdds())
                 .potentialWin(potentialWin) // Tổng tiền có thể nhận (gốc + lãi)
                 .status(Bet.BetStatus.PENDING)
-                .resultDate(getBetResultDate(request.getRegion(), request.getProvince()))
+                .resultDate(getBetResultDate(request.getRegion(), normalizedProvince)) // Sử dụng normalized province
                 .build();
 
         Bet savedBet = betRepository.save(bet);
@@ -259,7 +263,7 @@ public class BetService {
         log.info("🎯 ADMIN TRIGGERED CHECK - Target date: {}", targetDate);
         log.info("========================================");
         
-        List<Bet> pendingBets = betRepository.findPendingBetsToCheck(targetDate);
+        List<Bet> pendingBets = betRepository.findPendingBetsToCheckForDate(targetDate);
 
         log.info("📊 Found {} PENDING bets for specific date: {}", pendingBets.size(), targetDate);
         
@@ -307,6 +311,50 @@ public class BetService {
         log.info("📈 Bet check for date {} COMPLETED: ✅ {} successful, ⏭️ {} skipped (no result), ❌ {} errors out of {} total", 
                 targetDate, successCount, skippedCount, errorCount, pendingBets.size());
         log.info("========================================");
+    }
+
+    /**
+     * DEBUG: Kiểm tra logic xác định result date cho miền trung nam
+     */
+    public void debugMienTrungNamResultDate(String province, String testDate) {
+        log.info("🔍 [DEBUG] Testing result date logic for province: {}, testDate: {}", province, testDate);
+        
+        try {
+            LocalDate date = LocalDate.parse(testDate);
+            boolean isTodayDrawDay = isProvinceDrawDay(province, date);
+            log.info("📅 [DEBUG] Is {} draw day for {}: {}", testDate, province, isTodayDrawDay);
+            
+            if (!isTodayDrawDay) {
+                LocalDate nextDrawDate = getNextProvinceDrawDate(province, date);
+                log.info("📅 [DEBUG] {} không quay {}. Next draw date: {}", province, testDate, nextDrawDate);
+            } else {
+                log.info("📅 [DEBUG] {} quay vào {}", province, testDate);
+            }
+            
+            // Test với giờ khác nhau
+            LocalTime[] testTimes = {
+                LocalTime.of(15, 0),  // Trước 18:45
+                LocalTime.of(18, 30), // Trước 18:45
+                LocalTime.of(18, 45), // Đúng 18:45
+                LocalTime.of(19, 0)   // Sau 18:45
+            };
+            
+            for (LocalTime testTime : testTimes) {
+                log.info("🕐 [DEBUG] Testing with time: {}", testTime);
+                
+                if (isTodayDrawDay) {
+                    if (testTime.isBefore(LocalTime.of(18, 45))) {
+                        log.info("📅 [DEBUG] Before 18:45 → Result date = {}", date);
+                    } else {
+                        LocalDate nextDrawDate = getNextProvinceDrawDate(province, date);
+                        log.info("📅 [DEBUG] After 18:45 → Result date = {}", nextDrawDate);
+                    }
+                }
+            }
+            
+        } catch (Exception e) {
+            log.error("❌ [DEBUG] Error testing result date logic: {}", e.getMessage(), e);
+        }
     }
 
     /**
@@ -1026,12 +1074,15 @@ public class BetService {
             return fromDate.plusDays(1);
         }
         
+        log.info("🔍 [DEBUG] Finding next draw date for province: {} from date: {}", province, fromDate);
+        
         // Tìm tất cả các ngày trong tuần mà tỉnh này quay
         List<java.time.DayOfWeek> drawDays = new ArrayList<>();
         for (java.time.DayOfWeek day : java.time.DayOfWeek.values()) {
             List<String> provinces = getProvincesForDayOfWeek(day);
             if (provinces.contains(province.toLowerCase())) {
                 drawDays.add(day);
+                log.info("📅 [DEBUG] Province {} draws on: {}", province, day);
             }
         }
         
@@ -1044,13 +1095,16 @@ public class BetService {
         // Tìm ngày quay gần nhất trong tương lai (từ ngày mai trở đi)
         LocalDate currentDate = fromDate.plusDays(1);
         for (int i = 0; i < 7; i++) {
+            log.info("🔍 [DEBUG] Checking date: {} (day: {})", currentDate, currentDate.getDayOfWeek());
             if (drawDays.contains(currentDate.getDayOfWeek())) {
+                log.info("✅ [DEBUG] Found next draw date for {}: {}", province, currentDate);
                 return currentDate;
             }
             currentDate = currentDate.plusDays(1);
         }
         
         // Fallback: nếu không tìm được trong 7 ngày thì trả về 7 ngày sau
+        log.warn("⚠️ Không tìm được ngày quay trong 7 ngày tới cho province: {}", province);
         return fromDate.plusDays(7);
     }
     
@@ -1245,6 +1299,92 @@ public class BetService {
         Bet bet = betRepository.findById(betId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy bet với ID: " + betId));
         return BetResponse.fromEntity(bet);
+    }
+    
+    /**
+     * Normalize province name để đồng bộ với format kết quả
+     * Chuyển từ "xổsốninhthuận" thành "ninhthuan"
+     * Đảm bảo tất cả tỉnh miền Trung Nam được chuẩn hóa đúng
+     */
+    private String normalizeProvinceName(String province) {
+        if (province == null) {
+            return null;
+        }
+        
+        // Remove "xổsố" prefix and normalize
+        String normalized = province.toLowerCase()
+                .replace("xổsố", "")
+                .replace("xổ số", "")
+                .replace(" ", "")
+                .replace("á", "a")
+                .replace("à", "a")
+                .replace("ả", "a")
+                .replace("ã", "a")
+                .replace("ạ", "a")
+                .replace("ă", "a")
+                .replace("ắ", "a")
+                .replace("ằ", "a")
+                .replace("ẳ", "a")
+                .replace("ẵ", "a")
+                .replace("ặ", "a")
+                .replace("â", "a")
+                .replace("ấ", "a")
+                .replace("ầ", "a")
+                .replace("ẩ", "a")
+                .replace("ẫ", "a")
+                .replace("ậ", "a")
+                .replace("é", "e")
+                .replace("è", "e")
+                .replace("ẻ", "e")
+                .replace("ẽ", "e")
+                .replace("ẹ", "e")
+                .replace("ê", "e")
+                .replace("ế", "e")
+                .replace("ề", "e")
+                .replace("ể", "e")
+                .replace("ễ", "e")
+                .replace("ệ", "e")
+                .replace("í", "i")
+                .replace("ì", "i")
+                .replace("ỉ", "i")
+                .replace("ĩ", "i")
+                .replace("ị", "i")
+                .replace("ó", "o")
+                .replace("ò", "o")
+                .replace("ỏ", "o")
+                .replace("õ", "o")
+                .replace("ọ", "o")
+                .replace("ô", "o")
+                .replace("ố", "o")
+                .replace("ồ", "o")
+                .replace("ổ", "o")
+                .replace("ỗ", "o")
+                .replace("ộ", "o")
+                .replace("ơ", "o")
+                .replace("ớ", "o")
+                .replace("ờ", "o")
+                .replace("ở", "o")
+                .replace("ỡ", "o")
+                .replace("ợ", "o")
+                .replace("ú", "u")
+                .replace("ù", "u")
+                .replace("ủ", "u")
+                .replace("ũ", "u")
+                .replace("ụ", "u")
+                .replace("ư", "u")
+                .replace("ứ", "u")
+                .replace("ừ", "u")
+                .replace("ử", "u")
+                .replace("ữ", "u")
+                .replace("ự", "u")
+                .replace("ý", "y")
+                .replace("ỳ", "y")
+                .replace("ỷ", "y")
+                .replace("ỹ", "y")
+                .replace("ỵ", "y")
+                .replace("đ", "d");
+        
+        return normalized;
     }
 }
 

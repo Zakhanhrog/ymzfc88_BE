@@ -6,6 +6,8 @@ import com.xsecret.dto.response.LotteryResultResponse;
 import com.xsecret.entity.LotteryResult;
 import com.xsecret.repository.LotteryResultRepository;
 import com.xsecret.service.LotteryResultService;
+import com.xsecret.service.BetService;
+import com.xsecret.service.lottery.LotteryResultAutoImportService;
 import com.xsecret.entity.Bet;
 import com.xsecret.repository.BetRepository;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +41,8 @@ public class LotteryResultController {
     private final LotteryResultService lotteryResultService;
     private final LotteryResultRepository lotteryResultRepository;
     private final BetRepository betRepository;
+    private final LotteryResultAutoImportService lotteryResultAutoImportService;
+    private final BetService betService;
 
     // ==================== ADMIN ENDPOINTS ====================
 
@@ -144,6 +148,16 @@ public class LotteryResultController {
         log.info("🔧 ADMIN MANUAL TRIGGER - Check bet for date: {}", date);
         
         try {
+            // 🔒 GUARD: Kiểm tra có kết quả trước khi check bet
+            boolean hasMienBacResult = lotteryResultService.hasPublishedResult("mienBac", null, date);
+            boolean hasProvinceResult = lotteryResultService.hasPublishedResult("mienTrungNam", null, date);
+            
+            if (!hasMienBacResult && !hasProvinceResult) {
+                log.warn("⚠️ ADMIN MANUAL TRIGGER: No lottery results available for date: {}", date);
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Chưa có kết quả xổ số cho ngày " + date + ". Vui lòng import kết quả trước khi check bet."));
+            }
+            
             log.info("🔍 DEBUG: Starting manual bet check for date: {}", date);
             betService.checkBetResultsForDate(date);
             log.info("✅ DEBUG: Manual bet check completed successfully");
@@ -166,6 +180,16 @@ public class LotteryResultController {
         log.info("🔧 FORCE CHECK TODAY - Date: {}", today);
         
         try {
+            // 🔒 GUARD: Kiểm tra có kết quả trước khi check bet
+            boolean hasMienBacResult = lotteryResultService.hasPublishedResult("mienBac", null, today);
+            boolean hasProvinceResult = lotteryResultService.hasPublishedResult("mienTrungNam", null, today);
+            
+            if (!hasMienBacResult && !hasProvinceResult) {
+                log.warn("⚠️ FORCE CHECK TODAY: No lottery results available for date: {}", today);
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Chưa có kết quả xổ số cho ngày " + today + ". Vui lòng import kết quả trước khi check bet."));
+            }
+            
             betService.checkBetResultsForDate(today);
             return ResponseEntity.ok(ApiResponse.success("Force check today completed: " + today, null));
         } catch (Exception e) {
@@ -185,12 +209,232 @@ public class LotteryResultController {
         log.info("🔧 FORCE CHECK 2025-10-21 - Date: {}", date);
         
         try {
+            // 🔒 GUARD: Kiểm tra có kết quả trước khi check bet
+            boolean hasMienBacResult = lotteryResultService.hasPublishedResult("mienBac", null, date);
+            boolean hasProvinceResult = lotteryResultService.hasPublishedResult("mienTrungNam", null, date);
+            
+            if (!hasMienBacResult && !hasProvinceResult) {
+                log.warn("⚠️ FORCE CHECK 2025-10-21: No lottery results available for date: {}", date);
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Chưa có kết quả xổ số cho ngày " + date + ". Vui lòng import kết quả trước khi check bet."));
+            }
+            
             betService.checkBetResultsForDate(date);
             return ResponseEntity.ok(ApiResponse.success("Force check 2025-10-21 completed: " + date, null));
         } catch (Exception e) {
             log.error("❌ Force check 2025-10-21 failed: {}", e.getMessage(), e);
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("Lỗi force check: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * Admin: Debug logic result date cho miền trung nam
+     */
+    @PostMapping("/admin/lottery-results/debug-mien-trung-nam")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> debugMienTrungNam(
+            @RequestParam String province,
+            @RequestParam String testDate) {
+        log.info("🔧 DEBUG MIỀN TRUNG NAM - Province: {}, TestDate: {}", province, testDate);
+        
+        try {
+            betService.debugMienTrungNamResultDate(province, testDate);
+            return ResponseEntity.ok(ApiResponse.success("Debug completed. Check logs for details.", null));
+        } catch (Exception e) {
+            log.error("❌ Debug failed: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Lỗi debug: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * Admin: Test check bet cho ngày cụ thể (không cần kết quả)
+     */
+    @PostMapping("/admin/lottery-results/test-check-bets/{date}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> testCheckBetsForDate(@PathVariable String date) {
+        log.info("🔧 TEST CHECK BETS - Date: {}", date);
+        
+        try {
+            log.info("🚀 Starting test bet check for date: {}", date);
+            betService.checkBetResultsForDate(date);
+            log.info("✅ Test bet check completed for date: {}", date);
+            return ResponseEntity.ok(ApiResponse.success("Test bet check completed for date: " + date, null));
+        } catch (Exception e) {
+            log.error("❌ Test bet check failed for date {}: {}", date, e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Lỗi test bet check: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * Admin: Debug toàn bộ flow cho miền trung nam
+     */
+    @PostMapping("/admin/lottery-results/debug-full-flow")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> debugFullFlow(
+            @RequestParam String province,
+            @RequestParam String testDate) {
+        log.info("🔧 DEBUG FULL FLOW - Province: {}, TestDate: {}", province, testDate);
+        
+        try {
+            Map<String, Object> result = new HashMap<>();
+            
+            // 1. Test logic result date
+            log.info("🔍 Step 1: Testing result date logic");
+            betService.debugMienTrungNamResultDate(province, testDate);
+            
+            // 2. Check bets for the date
+            log.info("🔍 Step 2: Checking bets for date: {}", testDate);
+            List<Bet> bets = betRepository.findPendingBetsToCheckForDate(testDate);
+            result.put("betsFound", bets.size());
+            result.put("bets", bets.stream().map(bet -> {
+                Map<String, Object> betInfo = new HashMap<>();
+                betInfo.put("id", bet.getId());
+                betInfo.put("region", bet.getRegion());
+                betInfo.put("province", bet.getProvince());
+                betInfo.put("betType", bet.getBetType());
+                betInfo.put("resultDate", bet.getResultDate());
+                betInfo.put("status", bet.getStatus());
+                return betInfo;
+            }).collect(java.util.stream.Collectors.toList()));
+            
+            // 3. Check lottery results for the date
+            log.info("🔍 Step 3: Checking lottery results for date: {}", testDate);
+            java.time.LocalDate targetDate = java.time.LocalDate.parse(testDate);
+            List<LotteryResult> lotteryResults = lotteryResultRepository.findByDrawDateBetween(targetDate, targetDate);
+            result.put("lotteryResultsFound", lotteryResults.size());
+            result.put("lotteryResults", lotteryResults.stream().map(lr -> {
+                Map<String, Object> lrInfo = new HashMap<>();
+                lrInfo.put("id", lr.getId());
+                lrInfo.put("region", lr.getRegion());
+                lrInfo.put("province", lr.getProvince());
+                lrInfo.put("drawDate", lr.getDrawDate());
+                lrInfo.put("status", lr.getStatus());
+                lrInfo.put("hasResults", lr.getResults() != null && !lr.getResults().trim().isEmpty());
+                return lrInfo;
+            }).collect(java.util.stream.Collectors.toList()));
+            
+            // 4. Test check bet
+            if (!bets.isEmpty()) {
+                log.info("🔍 Step 4: Testing bet check for {} bets", bets.size());
+                betService.checkBetResultsForDate(testDate);
+                result.put("betCheckResult", "SUCCESS");
+            } else {
+                result.put("betCheckResult", "NO_BETS_TO_CHECK");
+            }
+            
+            return ResponseEntity.ok(ApiResponse.success("Debug completed. Check logs for details.", result));
+        } catch (Exception e) {
+            log.error("❌ Debug failed: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Lỗi debug: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * Admin: Kiểm tra kết quả xổ số trong database
+     */
+    @GetMapping("/admin/lottery-results/check-lottery-results/{date}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> checkLotteryResultsForDate(@PathVariable String date) {
+        log.info("🔍 DEBUG: Checking lottery results for date: {}", date);
+        
+        try {
+            java.time.LocalDate targetDate = java.time.LocalDate.parse(date);
+            List<LotteryResult> lotteryResults = lotteryResultRepository.findByDrawDateBetween(targetDate, targetDate);
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("date", date);
+            result.put("totalResults", lotteryResults.size());
+            
+            List<Map<String, Object>> resultDetails = new ArrayList<>();
+            for (LotteryResult lr : lotteryResults) {
+                Map<String, Object> lrInfo = new HashMap<>();
+                lrInfo.put("id", lr.getId());
+                lrInfo.put("region", lr.getRegion());
+                lrInfo.put("province", lr.getProvince());
+                lrInfo.put("drawDate", lr.getDrawDate());
+                lrInfo.put("status", lr.getStatus());
+                lrInfo.put("hasResults", lr.getResults() != null && !lr.getResults().trim().isEmpty());
+                lrInfo.put("resultsLength", lr.getResults() != null ? lr.getResults().length() : 0);
+                resultDetails.add(lrInfo);
+            }
+            result.put("results", resultDetails);
+            
+            return ResponseEntity.ok(ApiResponse.success("Lottery results retrieved", result));
+        } catch (Exception e) {
+            log.error("❌ Error checking lottery results: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Lỗi kiểm tra kết quả: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * Admin: Kiểm tra bet của ngày cụ thể
+     */
+    @GetMapping("/admin/lottery-results/check-bets-for-date/{date}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> checkBetsForDate(@PathVariable String date) {
+        log.info("🔍 DEBUG: Checking bets for date: {}", date);
+        
+        try {
+            // Tìm bet có resultDate = date
+            List<Bet> bets = betRepository.findPendingBetsToCheckForDate(date);
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("date", date);
+            result.put("totalBets", bets.size());
+            
+            List<Map<String, Object>> betDetails = new ArrayList<>();
+            for (Bet bet : bets) {
+                Map<String, Object> betInfo = new HashMap<>();
+                betInfo.put("id", bet.getId());
+                betInfo.put("status", bet.getStatus());
+                betInfo.put("region", bet.getRegion());
+                betInfo.put("province", bet.getProvince());
+                betInfo.put("betType", bet.getBetType());
+                betInfo.put("selectedNumbers", bet.getSelectedNumbers());
+                betInfo.put("resultDate", bet.getResultDate());
+                betInfo.put("createdAt", bet.getCreatedAt());
+                betDetails.add(betInfo);
+            }
+            result.put("bets", betDetails);
+            
+            return ResponseEntity.ok(ApiResponse.success("Bet details retrieved", result));
+        } catch (Exception e) {
+            log.error("❌ Error checking bets for date: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Lỗi kiểm tra bet: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * Admin: Test fix cho đánh đặc biệt - Check bet với logging chi tiết
+     */
+    @PostMapping("/admin/lottery-results/test-fix-dac-biet")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> testFixDacBiet() {
+        String today = java.time.LocalDate.now().toString();
+        log.info("🔧 TEST FIX ĐÁNH ĐẶC BIỆT - Date: {}", today);
+        
+        try {
+            // 🔒 GUARD: Kiểm tra có kết quả trước khi check bet
+            boolean hasMienBacResult = lotteryResultService.hasPublishedResult("mienBac", null, today);
+            boolean hasProvinceResult = lotteryResultService.hasPublishedResult("mienTrungNam", null, today);
+            
+            if (!hasMienBacResult && !hasProvinceResult) {
+                log.warn("⚠️ TEST FIX: No lottery results available for date: {}", today);
+                return ResponseEntity.ok(ApiResponse.success("Chưa có kết quả xổ số cho ngày " + today + ". Fix đã hoạt động - bet sẽ được skip thay vì set LOST.", null));
+            }
+            
+            betService.checkBetResultsForDate(today);
+            return ResponseEntity.ok(ApiResponse.success("Test fix hoàn thành cho ngày " + today + ". Check logs để xem chi tiết.", null));
+        } catch (Exception e) {
+            log.error("❌ Test fix failed: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Lỗi test fix: " + e.getMessage()));
         }
     }
     
@@ -422,7 +666,7 @@ public class LotteryResultController {
      */
     @PostMapping("/admin/lottery-results/auto-import")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> triggerAutoImport() {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> autoImportLotteryResults() {
         log.info("Admin triggering auto-import lottery results...");
 
         try {
@@ -725,7 +969,6 @@ public class LotteryResultController {
     // ==================== TEST/DEBUG ENDPOINTS ====================
     
     private final com.xsecret.service.lottery.LotteryResultAutoImportService autoImportService;
-    private final com.xsecret.service.BetService betService;
     
     /**
      * Admin: Test import Miền Bắc manually
@@ -830,6 +1073,163 @@ public class LotteryResultController {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("Lỗi auto-import hôm nay: " + e.getMessage()));
         }
+    }
+    
+    /**
+     * Admin: Test normalize tất cả tỉnh miền Trung Nam
+     */
+    @GetMapping("/admin/lottery-results/test-normalize-provinces")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> testNormalizeProvinces() {
+        log.info("🔧 TEST NORMALIZE ALL PROVINCES");
+        
+        try {
+            // Danh sách tất cả tỉnh miền Trung Nam với format gốc (có dấu, có prefix)
+            Map<String, String> testProvinces = new HashMap<>();
+            testProvinces.put("xổsốninhthuận", "ninhthuan");
+            testProvinces.put("xổsốquảngtrị", "quangtri");
+            testProvinces.put("xổsốquảngbình", "quangbinh");
+            testProvinces.put("xổsốbìnhđịnh", "binhdinh");
+            testProvinces.put("xổsốgialai", "gialai");
+            testProvinces.put("xổsốtiềngiang", "tiengiang");
+            testProvinces.put("xổsốcầnthơ", "cantho");
+            testProvinces.put("xổsốđồngnai", "dongnai");
+            testProvinces.put("xổsốsóctrăng", "soctrang");
+            testProvinces.put("xổsốđànẵng", "danang");
+            testProvinces.put("xổsốkhánhhòa", "khanhhoa");
+            testProvinces.put("xổsốangiảng", "angiang");
+            testProvinces.put("xổsốbìnhthuận", "binhthuan");
+            testProvinces.put("xổsốbìnhdương", "binhduong");
+            testProvinces.put("xổsốtây ninh", "tayninh");
+            testProvinces.put("xổsốlongan", "longan");
+            testProvinces.put("xổsốtiền giang", "tiengiang");
+            testProvinces.put("xổsốbến tre", "bentre");
+            testProvinces.put("xổsốvĩnh long", "vinhlong");
+            testProvinces.put("xổsốtrà vinh", "travinh");
+            testProvinces.put("xổsốkiên giang", "kiengiang");
+            testProvinces.put("xổsốcà mau", "camau");
+            testProvinces.put("xổsốbạc liêu", "baclieu");
+            testProvinces.put("xổsốhậu giang", "haugiang");
+            testProvinces.put("xổsốvũng tàu", "vungtau");
+            testProvinces.put("xổsốđồng tháp", "dongthap");
+            testProvinces.put("xổsốan giang", "angiang");
+            
+            Map<String, Object> result = new HashMap<>();
+            Map<String, String> normalizedResults = new HashMap<>();
+            Map<String, String> errors = new HashMap<>();
+            
+            for (Map.Entry<String, String> entry : testProvinces.entrySet()) {
+                String originalProvince = entry.getKey();
+                String expectedNormalized = entry.getValue();
+                
+                try {
+                    // Test normalize function (simulate the logic)
+                    String normalized = normalizeProvinceName(originalProvince);
+                    normalizedResults.put(originalProvince, normalized);
+                    
+                    if (!expectedNormalized.equals(normalized)) {
+                        errors.put(originalProvince, "Expected: " + expectedNormalized + ", Got: " + normalized);
+                    }
+                } catch (Exception e) {
+                    errors.put(originalProvince, "Error: " + e.getMessage());
+                }
+            }
+            
+            result.put("totalProvinces", testProvinces.size());
+            result.put("normalizedResults", normalizedResults);
+            result.put("errors", errors);
+            result.put("errorCount", errors.size());
+            
+            return ResponseEntity.ok(ApiResponse.success("Province normalization test completed", result));
+        } catch (Exception e) {
+            log.error("❌ Test failed: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Lỗi test: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * Helper method to normalize province name (same logic as BetService)
+     */
+    private String normalizeProvinceName(String province) {
+        if (province == null) {
+            return null;
+        }
+        
+        // Remove "xổsố" prefix and normalize
+        String normalized = province.toLowerCase()
+                .replace("xổsố", "")
+                .replace("xổ số", "")
+                .replace(" ", "")
+                .replace("á", "a")
+                .replace("à", "a")
+                .replace("ả", "a")
+                .replace("ã", "a")
+                .replace("ạ", "a")
+                .replace("ă", "a")
+                .replace("ắ", "a")
+                .replace("ằ", "a")
+                .replace("ẳ", "a")
+                .replace("ẵ", "a")
+                .replace("ặ", "a")
+                .replace("â", "a")
+                .replace("ấ", "a")
+                .replace("ầ", "a")
+                .replace("ẩ", "a")
+                .replace("ẫ", "a")
+                .replace("ậ", "a")
+                .replace("é", "e")
+                .replace("è", "e")
+                .replace("ẻ", "e")
+                .replace("ẽ", "e")
+                .replace("ẹ", "e")
+                .replace("ê", "e")
+                .replace("ế", "e")
+                .replace("ề", "e")
+                .replace("ể", "e")
+                .replace("ễ", "e")
+                .replace("ệ", "e")
+                .replace("í", "i")
+                .replace("ì", "i")
+                .replace("ỉ", "i")
+                .replace("ĩ", "i")
+                .replace("ị", "i")
+                .replace("ó", "o")
+                .replace("ò", "o")
+                .replace("ỏ", "o")
+                .replace("õ", "o")
+                .replace("ọ", "o")
+                .replace("ô", "o")
+                .replace("ố", "o")
+                .replace("ồ", "o")
+                .replace("ổ", "o")
+                .replace("ỗ", "o")
+                .replace("ộ", "o")
+                .replace("ơ", "o")
+                .replace("ớ", "o")
+                .replace("ờ", "o")
+                .replace("ở", "o")
+                .replace("ỡ", "o")
+                .replace("ợ", "o")
+                .replace("ú", "u")
+                .replace("ù", "u")
+                .replace("ủ", "u")
+                .replace("ũ", "u")
+                .replace("ụ", "u")
+                .replace("ư", "u")
+                .replace("ứ", "u")
+                .replace("ừ", "u")
+                .replace("ử", "u")
+                .replace("ữ", "u")
+                .replace("ự", "u")
+                .replace("ý", "y")
+                .replace("ỳ", "y")
+                .replace("ỷ", "y")
+                .replace("ỹ", "y")
+                .replace("ỵ", "y")
+                .replace("đ", "d");
+        
+        return normalized;
     }
 }
 
