@@ -64,10 +64,13 @@ public class SecurityConfig {
                     .requestMatchers("/files/**").permitAll()
                     .requestMatchers("/betting-odds/**").permitAll() // Public betting odds for users
                     .requestMatchers("/public/**").permitAll() // Public endpoints (lottery results, etc.)
+                    .requestMatchers("/marquee-notifications/public/**").permitAll() // Public marquee notifications
+                    .requestMatchers("/banners/public/**").permitAll() // Public banners
                     .requestMatchers("/bets/**").hasAnyRole("USER", "ADMIN") // Betting endpoints for authenticated users
                     .requestMatchers("/test/**").permitAll() // Test endpoints
                     // Admin endpoints
                     .requestMatchers("/admin/**").hasRole("ADMIN")
+                    .requestMatchers("/banners/admin/**").hasRole("ADMIN")
                     .requestMatchers("/kyc/admin/**").hasRole("ADMIN")
                     // User endpoints
                     .requestMatchers("/user/**").hasAnyRole("USER", "ADMIN")

@@ -5,6 +5,7 @@ import com.xsecret.entity.User;
 import com.xsecret.repository.PaymentMethodRepository;
 import com.xsecret.repository.UserRepository;
 import com.xsecret.service.SystemSettingsService;
+import org.springframework.jdbc.core.JdbcTemplate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,6 +24,7 @@ public class DataInitializer implements CommandLineRunner {
     private final PaymentMethodRepository paymentMethodRepository;
     private final PasswordEncoder passwordEncoder;
     private final SystemSettingsService systemSettingsService;
+    private final JdbcTemplate jdbcTemplate;
 
     @Value("${app.admin.default-username}")
     private String defaultAdminUsername;
@@ -35,6 +37,7 @@ public class DataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
+        updateDatabaseCharset();
         initializeAdminUser();
         initializePaymentMethods();
         initializeSystemSettings();
@@ -116,6 +119,28 @@ public class DataInitializer implements CommandLineRunner {
             log.info("Default payment methods created: MoMo, Bank Transfer, USDT");
         } else {
             log.info("Payment methods already exist, count: {}", paymentMethodRepository.count());
+        }
+    }
+
+    private void updateDatabaseCharset() {
+        try {
+            log.info("Updating database charset to UTF8 for emoji support...");
+            
+            // Cập nhật database charset
+            jdbcTemplate.execute("ALTER DATABASE loto79_db CHARACTER SET utf8 COLLATE utf8_unicode_ci");
+            log.info("Database charset updated to UTF8");
+            
+            // Kiểm tra và cập nhật bảng marquee_notifications nếu tồn tại
+            try {
+                jdbcTemplate.execute("ALTER TABLE marquee_notifications CONVERT TO CHARACTER SET utf8 COLLATE utf8_unicode_ci");
+                jdbcTemplate.execute("ALTER TABLE marquee_notifications MODIFY COLUMN content TEXT CHARACTER SET utf8 COLLATE utf8_unicode_ci");
+                log.info("Marquee notifications table charset updated to UTF8");
+            } catch (Exception e) {
+                log.info("Marquee notifications table not found yet, will be created with UTF8 charset");
+            }
+            
+        } catch (Exception e) {
+            log.warn("Failed to update database charset: {}", e.getMessage());
         }
     }
 

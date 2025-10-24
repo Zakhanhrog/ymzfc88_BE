@@ -3,6 +3,7 @@ package com.xsecret.service;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -172,6 +173,40 @@ public class FileStorageService {
             return imageBytes.length > 0 && imageBytes.length <= 5 * 1024 * 1024; // Max 5MB
         } catch (IllegalArgumentException e) {
             return false;
+        }
+    }
+    
+    /**
+     * Lưu file upload và trả về URL
+     */
+    public String storeFile(MultipartFile file, String folder) {
+        try {
+            if (file.isEmpty()) {
+                throw new RuntimeException("File is empty");
+            }
+            
+            // Tạo thư mục nếu chưa có
+            Path uploadPath = Paths.get(uploadDir, folder);
+            if (!Files.exists(uploadPath)) {
+                Files.createDirectories(uploadPath);
+            }
+            
+            // Tạo tên file duy nhất
+            String fileName = generateUniqueFileName(file.getOriginalFilename());
+            Path filePath = uploadPath.resolve(fileName);
+            
+            // Lưu file
+            Files.copy(file.getInputStream(), filePath);
+            
+            // Trả về URL tương đối
+            String imageUrl = "/uploads/" + folder + "/" + fileName;
+            log.info("Saved file: {}", imageUrl);
+            
+            return imageUrl;
+            
+        } catch (IOException e) {
+            log.error("Error saving file", e);
+            throw new RuntimeException("Failed to save file: " + e.getMessage());
         }
     }
 }
