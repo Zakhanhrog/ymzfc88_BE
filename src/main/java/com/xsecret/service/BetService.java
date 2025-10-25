@@ -940,11 +940,17 @@ public class BetService {
     private void checkBettingTimeLimit(String region, String province) {
         LocalTime now = LocalTime.now();
         
+        log.info("🚨 [BETTING LOCK DEBUG] Starting checkBettingTimeLimit - region: {}, province: {}, current time: {}", 
+                region, province, now);
+        
         if ("mienBac".equals(region)) {
             // Miền Bắc: Khóa cố định từ 18:10 đến 18:45 (quay hàng ngày)
+            log.info("🚨 [BETTING LOCK DEBUG] Miền Bắc - checking lock time 18:10-18:45");
             if (isInLockTimeRange(now, 18, 10, 18, 45)) {
+                log.error("🚨 [BETTING LOCK DEBUG] Miền Bắc LOCKED at {}", now);
                 throw new RuntimeException("Miền Bắc đang khóa cược từ 18:10 đến 18:45. Vui lòng đợi đến 18:45.");
             }
+            log.info("🚨 [BETTING LOCK DEBUG] Miền Bắc NOT LOCKED at {}", now);
         } else if ("mienTrungNam".equals(region) && province != null) {
             // Miền Trung Nam: Kiểm tra ĐỘNG theo lịch tỉnh
             
@@ -956,6 +962,7 @@ public class BetService {
             if (!isTodayDrawDay) {
                 // Hôm nay không quay → KHÔNG khóa giờ
                 log.info("✅ [DEBUG] Province {} không quay hôm nay, cho phép đặt cược mọi giờ", province);
+                log.info("🚨 [BETTING LOCK DEBUG] Province {} NOT LOCKED - not draw day", province);
                 return;
             }
             
@@ -969,13 +976,22 @@ public class BetService {
             log.info("🕐 [DEBUG] Current time: {}, isInLockRange: {}", now, 
                 isInLockTimeRange(now, lockStart.getHour(), lockStart.getMinute(), lockEnd.getHour(), lockEnd.getMinute()));
             
-            if (isInLockTimeRange(now, lockStart.getHour(), lockStart.getMinute(), lockEnd.getHour(), lockEnd.getMinute())) {
+            boolean shouldLock = isInLockTimeRange(now, lockStart.getHour(), lockStart.getMinute(), lockEnd.getHour(), lockEnd.getMinute());
+            log.info("🚨 [BETTING LOCK DEBUG] Province {} - shouldLock: {}, lockStart: {}, current: {}", 
+                    province, shouldLock, lockStart, now);
+            
+            if (shouldLock) {
                 String regionName = isMienTrungProvince ? "Miền Trung" : "Miền Nam";
+                log.error("🚨 [BETTING LOCK DEBUG] Province {} LOCKED at {} - throwing exception", province, now);
                 throw new RuntimeException(String.format(
                     "%s (%s) đang khóa cược từ %s đến 18:45 (hôm nay là ngày quay). Vui lòng đợi đến 18:45.",
                     regionName, province, lockStart
                 ));
+            } else {
+                log.info("🚨 [BETTING LOCK DEBUG] Province {} NOT LOCKED at {}", province, now);
             }
+        } else {
+            log.warn("🚨 [BETTING LOCK DEBUG] Unknown region or null province - region: {}, province: {}", region, province);
         }
     }
     
@@ -1012,15 +1028,16 @@ public class BetService {
     
     /**
      * Kiểm tra xem thời gian hiện tại có nằm trong khoảng khóa cược không
+     * FIX: Bao gồm cả startTime và endTime (khóa từ 17:00 đến 18:45 có nghĩa là cả 17:00 và 18:45 đều bị khóa)
      */
     private boolean isInLockTimeRange(LocalTime now, int startHour, int startMinute, int endHour, int endMinute) {
         LocalTime startTime = LocalTime.of(startHour, startMinute);
         LocalTime endTime = LocalTime.of(endHour, endMinute);
         
-        // Nếu khoảng thời gian không vượt qua nửa đêm (VD: 18:10 - 18:45)
+        // Nếu khoảng thời gian không vượt qua nửa đêm (VD: 17:00 - 18:45)
         if (startTime.isBefore(endTime)) {
-            // Khóa từ startTime đến endTime (bao gồm cả startTime, không bao gồm endTime)
-            return !now.isBefore(startTime) && now.isBefore(endTime);
+            // Khóa từ startTime đến endTime (bao gồm CẢ startTime VÀ endTime)
+            return !now.isBefore(startTime) && !now.isAfter(endTime);
         } 
         // Nếu khoảng thời gian vượt qua nửa đêm (VD: 23:30 - 00:30) - trường hợp này không áp dụng
         else {
@@ -1030,7 +1047,7 @@ public class BetService {
     
     /**
      * Kiểm tra xem tỉnh có thuộc Miền Trung không
-     * Dựa trên danh sách đầy đủ 31 tỉnh
+     * Dựa trên danh sách đầy đủ 31 tỉnh - FIX: Thêm "dalat" (Đà Lạt)
      */
     private boolean isMienTrung(String province) {
         if (province == null) {
@@ -1040,7 +1057,7 @@ public class BetService {
         List<String> mienTrungProvinces = Arrays.asList(
             "phuyen", "thuathienhue", "daklak", "quangnam", "danang",
             "khanhhoa", "binhdinh", "quangbinh", "quangtri",
-            "gialai", "ninhthuan", "daknong", "quangngai", "kontum"
+            "gialai", "ninhthuan", "daknong", "quangngai", "kontum", "dalat"
         );
         
         return mienTrungProvinces.contains(province.toLowerCase());

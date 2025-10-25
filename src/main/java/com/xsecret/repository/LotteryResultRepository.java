@@ -37,9 +37,11 @@ public interface LotteryResultRepository extends JpaRepository<LotteryResult, Lo
      * Tìm kết quả mới nhất đã published theo region và province
      */
     @Query("SELECT lr FROM LotteryResult lr WHERE lr.region = :region AND " +
-           "((:province IS NULL AND lr.province IS NULL) OR lr.province = :province) AND " +
-           "lr.status = 'PUBLISHED' ORDER BY lr.drawDate DESC")
-    Optional<LotteryResult> findLatestPublishedResult(
+           "lr.status = 'PUBLISHED' AND " +
+           "((:province IS NULL AND lr.province IS NULL) OR " +
+           "(:province IS NOT NULL AND lr.province = :province)) " +
+           "ORDER BY lr.drawDate DESC, lr.id DESC")
+    List<LotteryResult> findLatestPublishedResults(
         @Param("region") String region, 
         @Param("province") String province
     );

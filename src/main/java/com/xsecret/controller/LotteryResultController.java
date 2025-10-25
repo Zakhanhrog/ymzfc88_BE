@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Controller quản lý kết quả xổ số
@@ -955,8 +956,12 @@ public class LotteryResultController {
             LotteryResult result = lotteryResultService.getLatestPublishedResult(region, province);
             
             if (result == null) {
+                log.info("No published result found for region: {}, province: {}", region, province);
                 return ResponseEntity.ok(ApiResponse.error("Chưa có kết quả"));
             }
+            
+            log.info("Found latest published result: ID={}, region={}, province={}, drawDate={}", 
+                    result.getId(), result.getRegion(), result.getProvince(), result.getDrawDate());
             
             return ResponseEntity.ok(ApiResponse.success(LotteryResultResponse.fromEntity(result)));
         } catch (Exception e) {
@@ -967,6 +972,85 @@ public class LotteryResultController {
     }
     
     // ==================== TEST/DEBUG ENDPOINTS ====================
+    
+    /**
+     * Debug endpoint để kiểm tra tất cả kết quả trong database
+     */
+    @GetMapping("/public/debug/lottery-results")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> debugAllResults() {
+        log.info("Debug: Getting all lottery results");
+        
+        try {
+            List<LotteryResult> allResults = lotteryResultRepository.findAll();
+            List<Map<String, Object>> debugData = allResults.stream()
+                    .map(result -> {
+                        Map<String, Object> data = new HashMap<>();
+                        data.put("id", result.getId());
+                        data.put("region", result.getRegion());
+                        data.put("province", result.getProvince());
+                        data.put("drawDate", result.getDrawDate());
+                        data.put("status", result.getStatus());
+                        data.put("hasResults", result.getResults() != null);
+                        return data;
+                    })
+                    .collect(Collectors.toList());
+            
+            return ResponseEntity.ok(ApiResponse.success("Debug data", debugData));
+        } catch (Exception e) {
+            log.error("Error in debug endpoint", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Lỗi debug: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * Debug endpoint để tạo kết quả mẫu cho test
+     */
+    @PostMapping("/public/debug/create-sample-result")
+    public ResponseEntity<ApiResponse<String>> createSampleResult() {
+        log.info("Debug: Creating sample lottery results");
+        
+        try {
+            // Tạo kết quả mẫu cho Miền Bắc
+            LotteryResult mienBacResult = LotteryResult.builder()
+                    .region("mienBac")
+                    .province(null)
+                    .drawDate(LocalDate.now().minusDays(1)) // Hôm qua
+                    .results("{\"dac-biet\":\"12345\",\"giai-nhat\":[\"12345\"],\"giai-nhi\":[\"12345\",\"67890\"],\"giai-ba\":[\"12345\",\"67890\",\"11111\"],\"giai-tu\":[\"12345\",\"67890\",\"11111\",\"22222\"],\"giai-nam\":[\"12345\",\"67890\",\"11111\",\"22222\",\"33333\"],\"giai-sau\":[\"12345\",\"67890\",\"11111\",\"22222\",\"33333\",\"44444\"],\"giai-bay\":[\"12345\",\"67890\",\"11111\",\"22222\",\"33333\",\"44444\",\"55555\"]}")
+                    .status(LotteryResult.ResultStatus.PUBLISHED)
+                    .build();
+            
+            lotteryResultRepository.save(mienBacResult);
+            
+            // Tạo kết quả mẫu cho Miền Trung Nam - Gia Lai
+            LotteryResult gialaiResult = LotteryResult.builder()
+                    .region("mienTrungNam")
+                    .province("gialai")
+                    .drawDate(LocalDate.now().minusDays(2)) // 2 ngày trước
+                    .results("{\"dac-biet\":\"67890\",\"giai-nhat\":[\"67890\"],\"giai-nhi\":[\"67890\",\"11111\"],\"giai-ba\":[\"67890\",\"11111\",\"22222\"],\"giai-tu\":[\"67890\",\"11111\",\"22222\",\"33333\"],\"giai-nam\":[\"67890\",\"11111\",\"22222\",\"33333\",\"44444\"],\"giai-sau\":[\"67890\",\"11111\",\"22222\",\"33333\",\"44444\",\"55555\"],\"giai-bay\":[\"67890\",\"11111\",\"22222\",\"33333\",\"44444\",\"55555\",\"66666\"],\"giai-tam\":[\"67890\",\"11111\",\"22222\",\"33333\",\"44444\",\"55555\",\"66666\",\"77777\"]}")
+                    .status(LotteryResult.ResultStatus.PUBLISHED)
+                    .build();
+            
+            lotteryResultRepository.save(gialaiResult);
+            
+            // Tạo kết quả mẫu cho Miền Trung Nam - Bình Dương
+            LotteryResult binhduongResult = LotteryResult.builder()
+                    .region("mienTrungNam")
+                    .province("binhduong")
+                    .drawDate(LocalDate.now().minusDays(3)) // 3 ngày trước
+                    .results("{\"dac-biet\":\"98765\",\"giai-nhat\":[\"98765\"],\"giai-nhi\":[\"98765\",\"54321\"],\"giai-ba\":[\"98765\",\"54321\",\"11111\"],\"giai-tu\":[\"98765\",\"54321\",\"11111\",\"22222\"],\"giai-nam\":[\"98765\",\"54321\",\"11111\",\"22222\",\"33333\"],\"giai-sau\":[\"98765\",\"54321\",\"11111\",\"22222\",\"33333\",\"44444\"],\"giai-bay\":[\"98765\",\"54321\",\"11111\",\"22222\",\"33333\",\"44444\",\"55555\"],\"giai-tam\":[\"98765\",\"54321\",\"11111\",\"22222\",\"33333\",\"44444\",\"55555\",\"66666\"]}")
+                    .status(LotteryResult.ResultStatus.PUBLISHED)
+                    .build();
+            
+            lotteryResultRepository.save(binhduongResult);
+            
+            return ResponseEntity.ok(ApiResponse.success("Sample results created successfully for all regions"));
+        } catch (Exception e) {
+            log.error("Error creating sample results", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Lỗi tạo kết quả mẫu: " + e.getMessage()));
+        }
+    }
     
     private final com.xsecret.service.lottery.LotteryResultAutoImportService autoImportService;
     
@@ -1141,6 +1225,46 @@ public class LotteryResultController {
             result.put("errorCount", errors.size());
             
             return ResponseEntity.ok(ApiResponse.success("Province normalization test completed", result));
+        } catch (Exception e) {
+            log.error("❌ Test failed: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Lỗi test: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * Admin: Test logic cấm đặt bet (đơn giản)
+     */
+    @GetMapping("/admin/lottery-results/test-betting-lock-simple")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> testBettingLockSimple(
+            @RequestParam String region,
+            @RequestParam String province) {
+        log.info("🔧 TEST BETTING LOCK SIMPLE - Region: {}, Province: {}", region, province);
+        
+        try {
+            Map<String, Object> result = new HashMap<>();
+            
+            // Test current time
+            java.time.LocalTime now = java.time.LocalTime.now();
+            java.time.LocalDate today = java.time.LocalDate.now();
+            result.put("currentTime", now.toString());
+            result.put("currentDate", today.toString());
+            
+            // Test betting lock logic
+            try {
+                // Sử dụng reflection để gọi private method
+                java.lang.reflect.Method method = betService.getClass().getDeclaredMethod("checkBettingTimeLimit", String.class, String.class);
+                method.setAccessible(true);
+                method.invoke(betService, region, province);
+                result.put("bettingAllowed", true);
+                result.put("lockMessage", "Được phép đặt cược");
+            } catch (Exception e) {
+                result.put("bettingAllowed", false);
+                result.put("lockMessage", e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
+            }
+            
+            return ResponseEntity.ok(ApiResponse.success("Betting lock test completed", result));
         } catch (Exception e) {
             log.error("❌ Test failed: {}", e.getMessage(), e);
             return ResponseEntity.badRequest()

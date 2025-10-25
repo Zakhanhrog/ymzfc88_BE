@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.xsecret.event.LotteryResultPublishedEvent;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -269,8 +270,8 @@ public class LotteryResultService {
      */
     @Transactional(readOnly = true)
     public LotteryResult getLatestPublishedResult(String region, String province) {
-        return lotteryResultRepository.findLatestPublishedResult(region, province)
-                .orElse(null);
+        List<LotteryResult> results = lotteryResultRepository.findLatestPublishedResults(region, province);
+        return results.isEmpty() ? null : results.get(0);
     }
 
     /**
