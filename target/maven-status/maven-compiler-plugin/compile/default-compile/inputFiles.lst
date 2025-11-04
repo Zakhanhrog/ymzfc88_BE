@@ -17,6 +17,7 @@
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/controller/PublicController.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/dto/response/MarqueeNotificationResponse.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/controller/TransactionController.java
+/Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/entity/TelegramConfig.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/entity/Promotion.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/mapper/UserMapper.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/dto/response/UserPointResponse.java
@@ -45,14 +46,17 @@
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/repository/BetRepository.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/event/LotteryResultPublishedEvent.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/dto/request/WithdrawalLockRequest.java
+/Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/dto/response/TelegramConfigResponse.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/entity/KycVerification.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/service/BannerService.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/service/bet/checker/MockLotteryResultProviderMienTrungNam.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/repository/RefreshTokenRepository.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/repository/UserWalletRepository.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/service/bet/checker/Loto4sResultChecker.java
+/Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/dto/ContactLinkDto.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/controller/TestController.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/service/bet/checker/LotteryResultProviderFactory.java
+/Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/dto/request/TelegramConfigRequest.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/dto/request/LotteryResultRequest.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/service/FileStorageService.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/service/BettingOddsService.java
@@ -90,6 +94,7 @@
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/service/AutoBetCheckService.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/repository/UserPaymentMethodRepository.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/service/SystemSettingsService.java
+/Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/repository/TelegramConfigRepository.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/service/lottery/VnLotteryApiService.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/entity/PointTransaction.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/exception/TokenRefreshException.java
@@ -108,6 +113,8 @@
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/XSecretBackendApplication.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/dto/request/PromotionRequest.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/controller/KycController.java
+/Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/service/TelegramConfigService.java
+/Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/service/TelegramNotificationService.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/dto/response/PaymentMethodResponseDto.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/entity/Notification.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/dto/request/SystemSettingsRequest.java
@@ -126,6 +133,7 @@
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/repository/PromotionRepository.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/repository/PointTransactionRepository.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/dto/vnlottery/VnLotteryProvinceResponse.java
+/Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/controller/admin/AdminTelegramController.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/config/DataInitializer.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/service/bet/checker/XienResultChecker.java
 /Users/ngogiakhanh/Documents/Coder - Zakyn/Dự án XSecret/zcsnae.888/ymzfc88/ymzfc88_BE/src/main/java/com/xsecret/config/AsyncConfig.java

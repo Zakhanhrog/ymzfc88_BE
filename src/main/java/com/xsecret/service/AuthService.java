@@ -35,6 +35,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
     private final RefreshTokenService refreshTokenService;
+    private final TelegramNotificationService telegramNotificationService;
     private final UserMapper userMapper;
 
     public JwtResponse login(LoginRequest loginRequest) {
@@ -102,6 +103,16 @@ public class AuthService {
 
         User savedUser = userRepository.save(user);
         log.info("Đăng ký thành công cho user: {}", savedUser.getUsername());
+        
+        // Send Telegram notification
+        try {
+            log.info("Attempting to send Telegram notification for user registration: {}", savedUser.getUsername());
+            String message = "Người dùng " + telegramNotificationService.formatBoldText(savedUser.getUsername()) + " đã đăng ký tài khoản thành công.";
+            telegramNotificationService.sendMessage(message);
+            log.info("Telegram notification sent successfully for user: {}", savedUser.getUsername());
+        } catch (Exception e) {
+            log.error("Failed to send Telegram notification for user registration: {}", e.getMessage(), e);
+        }
 
         // Auto login after registration
         Authentication authentication = authenticationManager.authenticate(

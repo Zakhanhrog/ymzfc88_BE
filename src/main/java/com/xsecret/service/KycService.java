@@ -29,6 +29,7 @@ public class KycService {
 
     private final KycVerificationRepository kycVerificationRepository;
     private final UserRepository userRepository;
+    private final TelegramNotificationService telegramNotificationService;
     private final String UPLOAD_DIR = "uploads/kyc/";
 
     @Transactional
@@ -73,6 +74,11 @@ public class KycService {
         kyc.setSubmittedAt(LocalDateTime.now());
 
         KycVerification savedKyc = kycVerificationRepository.save(kyc);
+           try {
+               String message = "Yêu cầu " + telegramNotificationService.formatBoldText("XÁC MINH") + " từ khách hàng " + 
+                              telegramNotificationService.formatBoldText(user.getUsername());
+               telegramNotificationService.sendMessage(message);
+           } catch (Exception ignore) {}
         
         return KycResponse.fromEntity(savedKyc);
     }
@@ -132,6 +138,10 @@ public class KycService {
             User user = kyc.getUser();
             user.setKycVerified(true);
             userRepository.save(user);
+            try {
+                String message = "Khách hàng " + telegramNotificationService.formatBoldText(user.getUsername()) + " đã được duyệt KYC.";
+                telegramNotificationService.sendMessage(message);
+            } catch (Exception ignore) {}
             
         } else if ("reject".equalsIgnoreCase(request.getAction())) {
             kyc.setStatus(KycVerification.KycStatus.REJECTED);

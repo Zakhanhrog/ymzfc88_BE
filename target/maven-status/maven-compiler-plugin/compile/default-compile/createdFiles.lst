@@ -1,3 +1,4 @@
+com/xsecret/dto/response/TelegramConfigResponse.class
 com/xsecret/entity/SystemSettings.class
 com/xsecret/dto/request/WithdrawalLockRequest.class
 com/xsecret/dto/KycSubmissionRequest.class
@@ -41,6 +42,8 @@ com/xsecret/dto/request/ProcessTransactionRequestDto$Action.class
 com/xsecret/dto/request/PromotionRequest.class
 com/xsecret/service/BetService.class
 com/xsecret/mapper/UserMapper.class
+com/xsecret/entity/TelegramConfig$TelegramConfigBuilder.class
+com/xsecret/controller/admin/AdminTelegramController.class
 com/xsecret/service/lottery/LotteryResultAutoImportService$1.class
 com/xsecret/entity/Promotion.class
 com/xsecret/dto/request/UpdateUserRequestDto$UpdateUserRequestDtoBuilder.class
@@ -57,6 +60,7 @@ com/xsecret/dto/response/TransactionResponseDto$TransactionResponseDtoBuilder.cl
 com/xsecret/dto/response/SystemSettingsResponse.class
 com/xsecret/entity/UserPaymentMethod.class
 com/xsecret/dto/response/PointTransactionResponse$PointTransactionResponseBuilder.class
+com/xsecret/dto/request/TelegramConfigRequest.class
 com/xsecret/XSecretBackendApplication.class
 com/xsecret/entity/SystemSettings$SystemSettingsBuilder.class
 com/xsecret/service/lottery/VnLotteryApiService.class
@@ -86,6 +90,7 @@ com/xsecret/dto/response/NotificationResponse$NotificationResponseBuilder.class
 com/xsecret/dto/UserPaymentMethodResponseDto.class
 com/xsecret/dto/request/DepositRequestDto.class
 com/xsecret/service/ScheduledTaskService.class
+com/xsecret/entity/TelegramConfig.class
 com/xsecret/event/LotteryResultPublishedEvent.class
 com/xsecret/controller/AdminPromotionController.class
 com/xsecret/repository/BetRepository.class
@@ -103,6 +108,7 @@ com/xsecret/dto/request/RegisterRequest.class
 com/xsecret/dto/UserPaymentMethodResponseDto$UserPaymentMethodResponseDtoBuilder.class
 com/xsecret/controller/PublicController.class
 com/xsecret/dto/vnlottery/VnLotteryMienBacResponse$TData.class
+com/xsecret/dto/request/TelegramConfigRequest$TelegramConfigRequestBuilder.class
 com/xsecret/dto/KycResponse$KycResponseBuilder.class
 com/xsecret/controller/PublicBettingOddsController.class
 com/xsecret/dto/request/BetRequest.class
@@ -119,6 +125,7 @@ com/xsecret/entity/Notification$NotificationBuilder.class
 com/xsecret/entity/PointTransaction$PointTransactionBuilder.class
 com/xsecret/dto/request/UserFilterRequestDto$UserFilterRequestDtoBuilder.class
 com/xsecret/config/SecurityConfig.class
+com/xsecret/dto/response/TelegramConfigResponse$TelegramConfigResponseBuilder.class
 com/xsecret/repository/BettingOddsRepository.class
 com/xsecret/repository/PaymentMethodRepository.class
 com/xsecret/controller/KycController.class
@@ -167,6 +174,7 @@ com/xsecret/dto/UserPaymentMethodResponseDto$1.class
 com/xsecret/dto/request/LoginRequest.class
 com/xsecret/entity/Promotion$PromotionBuilder.class
 com/xsecret/entity/User$UserBuilder.class
+com/xsecret/service/TelegramConfigService.class
 com/xsecret/dto/response/UserPointResponse.class
 com/xsecret/exception/UserAlreadyExistsException.class
 com/xsecret/service/NotificationService.class
@@ -191,6 +199,7 @@ com/xsecret/config/RestTemplateConfig.class
 com/xsecret/repository/BannerRepository.class
 com/xsecret/dto/request/CreateUserRequestDto.class
 com/xsecret/controller/BettingOddsController.class
+com/xsecret/service/TelegramNotificationService.class
 com/xsecret/service/bet/checker/SpecialResultChecker.class
 com/xsecret/dto/response/UserResponse.class
 com/xsecret/config/DataInitializer.class
@@ -198,6 +207,7 @@ com/xsecret/service/bet/checker/DatabaseLotteryResultProvider.class
 com/xsecret/service/lottery/LotteryResultAutoImportService.class
 com/xsecret/dto/UserPaymentMethodRequestDto.class
 com/xsecret/dto/request/PromotionRequest$PromotionRequestBuilder.class
+com/xsecret/repository/TelegramConfigRepository.class
 com/xsecret/entity/MarqueeNotification.class
 com/xsecret/exception/TokenRefreshException.class
 com/xsecret/entity/LotteryResult.class

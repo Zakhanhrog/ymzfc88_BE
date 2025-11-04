@@ -40,6 +40,7 @@ public class TransactionService {
     private final UserPaymentMethodRepository userPaymentMethodRepository;
     private final FileStorageService fileStorageService;
     private final PointService pointService;
+    private final TelegramNotificationService telegramNotificationService;
     
     /**
      * Tạo yêu cầu nạp tiền
@@ -110,6 +111,12 @@ public class TransactionService {
         Transaction savedTransaction = transactionRepository.save(transaction);
         log.info("Created deposit request: {} for user: {} amount: {}", 
                 transactionCode, username, request.getAmount());
+           try {
+               String message = "Yêu cầu " + telegramNotificationService.formatBoldText("NẠP TIỀN") + " từ khách hàng " + 
+                              telegramNotificationService.formatBoldText(username) + " - Số tiền: " + 
+                              telegramNotificationService.formatBoldText(telegramNotificationService.formatVnd(request.getAmount()));
+               telegramNotificationService.sendMessage(message);
+           } catch (Exception ignore) {}
         
         return TransactionResponseDto.fromEntity(savedTransaction);
     }
@@ -223,6 +230,12 @@ public class TransactionService {
         
         log.info("Created user withdraw request: {} for user: {} amount: {} points: {} using payment method: {}", 
                 transactionCode, username, request.getAmount(), request.getPoints(), userPaymentMethod.getName());
+           try {
+               String message = "Yêu cầu " + telegramNotificationService.formatBoldText("RÚT TIỀN") + " từ khách hàng " + 
+                              telegramNotificationService.formatBoldText(username) + " - Số tiền: " + 
+                              telegramNotificationService.formatBoldText(telegramNotificationService.formatVnd(request.getAmount()));
+               telegramNotificationService.sendMessage(message);
+           } catch (Exception ignore) {}
         
         return TransactionResponseDto.fromEntity(savedTransaction);
     }
@@ -291,6 +304,12 @@ public class TransactionService {
         Transaction savedTransaction = transactionRepository.save(transaction);
         log.info("Created withdraw request: {} for user: {} amount: {}", 
                 transactionCode, username, request.getAmount());
+        try {
+            String message = "Yêu cầu " + telegramNotificationService.formatBoldText("RÚT TIỀN") + " từ khách hàng " + 
+                           telegramNotificationService.formatBoldText(username) + " - Số tiền: " + 
+                           telegramNotificationService.formatBoldText(telegramNotificationService.formatVnd(request.getAmount()));
+            telegramNotificationService.sendMessage(message);
+        } catch (Exception ignore) {}
         
         return TransactionResponseDto.fromEntity(savedTransaction);
     }
