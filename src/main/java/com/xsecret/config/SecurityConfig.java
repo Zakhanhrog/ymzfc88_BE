@@ -56,6 +56,8 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authz -> authz
+                    // Allow OPTIONS requests for CORS preflight
+                    .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                     // Public endpoints
                     .requestMatchers("/auth/**").permitAll()
                     .requestMatchers("/admin/login").permitAll()
@@ -68,7 +70,7 @@ public class SecurityConfig {
                     .requestMatchers("/banners/public/**").permitAll() // Public banners
                     .requestMatchers("/bets/**").hasAnyRole("USER", "ADMIN") // Betting endpoints for authenticated users
                     .requestMatchers("/test/**").permitAll() // Test endpoints
-                    // Admin endpoints
+                    // Admin endpoints (must come after /admin/login)
                     .requestMatchers("/admin/**").hasRole("ADMIN")
                     .requestMatchers("/banners/admin/**").hasRole("ADMIN")
                     .requestMatchers("/kyc/admin/**").hasRole("ADMIN")
@@ -94,19 +96,19 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList(
+        // Use setAllowedOriginPatterns instead of setAllowedOrigins when using credentials
+        configuration.setAllowedOriginPatterns(Arrays.asList(
             "http://localhost:3000",
-            "http://localhost:5173",
+            "https://tathiet168.com",
             "http://localhost:8080",
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:5173",
-            "http://127.0.0.1:8080",
-                "https://loto79.online",
-                "https://api.loto79.online"
-
+                "https://api.tathiet168.com",
+            "https://admin.tathiet168.com",
+            "http://localhost:5173",
+            "http://localhost:5174"
         ));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
+        configuration.setExposedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 

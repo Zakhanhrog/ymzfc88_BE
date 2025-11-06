@@ -21,7 +21,6 @@ import java.time.LocalDateTime;
 @RestController
 @RequestMapping("/points")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*", maxAge = 3600)
 public class PointController {
 
     private final PointService pointService;

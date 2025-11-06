@@ -13,7 +13,6 @@ import java.util.Map;
 @RequestMapping("/public")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*", maxAge = 3600)
 public class PublicController {
 
     private final SystemSettingsService systemSettingsService;

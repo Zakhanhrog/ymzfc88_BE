@@ -23,7 +23,6 @@ import java.util.List;
 @RequestMapping("/marquee-notifications")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*", maxAge = 3600)
 public class MarqueeNotificationController {
 
     private final MarqueeNotificationService marqueeNotificationService;

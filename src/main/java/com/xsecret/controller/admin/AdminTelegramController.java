@@ -16,7 +16,6 @@ import java.util.List;
 @RequestMapping("/admin/telegram")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*", maxAge = 3600)
 public class AdminTelegramController {
 
     private final TelegramConfigService telegramConfigService;

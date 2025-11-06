@@ -233,8 +233,29 @@ public class UserPaymentMethodService {
         } else if (PaymentMethod.PaymentType.MOMO.equals(requestDto.getType()) || 
                    PaymentMethod.PaymentType.ZALO_PAY.equals(requestDto.getType())) {
             // Mobile wallet: phone number format
-            if (!accountNumber.matches("^(0|\\+84)[3-9]\\d{8}$")) {
-                throw new RuntimeException("Số điện thoại không đúng định dạng");
+            // Normalize: remove spaces, dashes, and other non-digit characters except + at the start
+            String normalizedNumber = accountNumber.replaceAll("[\\s\\-\\.]", "");
+            
+            // Check if it's a valid Vietnamese phone number
+            // Format: 0xxxxxxxxx (10 digits) or +84xxxxxxxxx or 84xxxxxxxxx (11-12 digits)
+            boolean isValid = false;
+            
+            if (normalizedNumber.matches("^0[3-9]\\d{8}$")) {
+                // Format: 0xxxxxxxxx (10 digits starting with 0)
+                isValid = true;
+            } else if (normalizedNumber.matches("^\\+84[3-9]\\d{8}$")) {
+                // Format: +84xxxxxxxxx (international format)
+                isValid = true;
+            } else if (normalizedNumber.matches("^84[3-9]\\d{8}$")) {
+                // Format: 84xxxxxxxxx (without +)
+                isValid = true;
+            } else if (normalizedNumber.matches("^[3-9]\\d{8}$")) {
+                // Format: xxxxxxxxx (9 digits without leading 0)
+                isValid = true;
+            }
+            
+            if (!isValid) {
+                throw new RuntimeException("Số điện thoại không đúng định dạng. Vui lòng nhập số điện thoại Việt Nam (10 số bắt đầu bằng 0, hoặc 9 số không có số 0 đầu)");
             }
         }
     }

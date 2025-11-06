@@ -36,7 +36,6 @@ import java.util.stream.Collectors;
 @RequestMapping
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*", maxAge = 3600)
 public class LotteryResultController {
 
     private final LotteryResultService lotteryResultService;

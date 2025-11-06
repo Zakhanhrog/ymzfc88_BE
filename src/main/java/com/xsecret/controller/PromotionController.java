@@ -19,7 +19,6 @@ import java.util.List;
 @RequestMapping("/promotions")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*", maxAge = 3600)
 public class PromotionController {
     
     private final PromotionService promotionService;
@@ -80,7 +79,6 @@ public class PromotionController {
 @RequestMapping("/admin/promotions")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*", maxAge = 3600)
 @PreAuthorize("hasRole('ADMIN')")
 class AdminPromotionController {
     

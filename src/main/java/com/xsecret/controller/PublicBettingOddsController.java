@@ -17,7 +17,6 @@ import java.util.List;
 @RequestMapping("/betting-odds")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*", maxAge = 3600)
 public class PublicBettingOddsController {
 
     private final BettingOddsService bettingOddsService;

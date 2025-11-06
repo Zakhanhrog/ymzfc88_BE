@@ -16,7 +16,6 @@ import java.util.List;
 @RequestMapping("/admin/system-settings")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*", maxAge = 3600)
 @PreAuthorize("hasRole('ADMIN')")
 public class SystemSettingsController {
 

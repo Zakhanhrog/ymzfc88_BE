@@ -18,7 +18,6 @@ import java.util.List;
 @RequestMapping("/banners")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*", maxAge = 3600)
 public class BannerController {
 
     private final BannerService bannerService;

@@ -20,7 +20,6 @@ import java.util.List;
 @RequestMapping("/admin/betting-odds")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*", maxAge = 3600)
 @PreAuthorize("hasRole('ADMIN')")
 public class BettingOddsController {
 

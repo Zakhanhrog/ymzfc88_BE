@@ -13,7 +13,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/test")
 @Slf4j
-@CrossOrigin(origins = "*", maxAge = 3600)
 public class TestController {
 
     private final TelegramNotificationService telegramNotificationService;
