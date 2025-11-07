@@ -9,6 +9,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -65,12 +66,15 @@ public class SecurityConfig {
                     .requestMatchers("/uploads/**").permitAll()
                     .requestMatchers("/files/**").permitAll()
                     .requestMatchers("/betting-odds/**").permitAll() // Public betting odds for users
+                    .requestMatchers("/xoc-dia/quick-bets/**").permitAll() // Public quick bets for Xóc Đĩa
                     .requestMatchers("/public/**").permitAll() // Public endpoints (lottery results, etc.)
                     .requestMatchers("/marquee-notifications/public/**").permitAll() // Public marquee notifications
                     .requestMatchers("/banners/public/**").permitAll() // Public banners
+                    .requestMatchers(HttpMethod.GET, "/promotions/**").permitAll() // Public promotions (GET endpoints only)
                     .requestMatchers("/bets/**").hasAnyRole("USER", "ADMIN") // Betting endpoints for authenticated users
                     .requestMatchers("/test/**").permitAll() // Test endpoints
-                    // Admin endpoints (must come after /admin/login)
+                    // Admin endpoints (must come after /admin/login and public endpoints)
+                    // Note: /admin/promotions will override /promotions/** for admin routes
                     .requestMatchers("/admin/**").hasRole("ADMIN")
                     .requestMatchers("/banners/admin/**").hasRole("ADMIN")
                     .requestMatchers("/kyc/admin/**").hasRole("ADMIN")
