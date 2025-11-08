@@ -36,6 +36,16 @@ ON DUPLICATE KEY UPDATE
     display_order = VALUES(display_order),
     is_active = TRUE;
 
+INSERT INTO xoc_dia_quick_bet_config (code, name, payout_multiplier, pattern, layout_group, display_order)
+VALUES ('four-white-or-four-red', '4 Trắng & 4 Đỏ', 7.00, 'white,white,white,white,red,red,red,red', 'BOTTOM', 8)
+ON DUPLICATE KEY UPDATE
+    name = VALUES(name),
+    payout_multiplier = VALUES(payout_multiplier),
+    pattern = VALUES(pattern),
+    layout_group = VALUES(layout_group),
+    display_order = VALUES(display_order),
+    is_active = TRUE;
+
 SELECT * FROM xoc_dia_quick_bet_config;
 
 

@@ -16,6 +16,8 @@ public interface XocDiaQuickBetConfigRepository extends JpaRepository<XocDiaQuic
 
     List<XocDiaQuickBetConfig> findAllByIsActiveTrueOrderByDisplayOrderAsc();
 
+    List<XocDiaQuickBetConfig> findAllByCodeIn(Iterable<String> codes);
+
     List<XocDiaQuickBetConfig> findAllByOrderByDisplayOrderAsc();
 }
 
