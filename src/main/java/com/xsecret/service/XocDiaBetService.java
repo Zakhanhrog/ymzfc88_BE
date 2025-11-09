@@ -1,6 +1,8 @@
 package com.xsecret.service;
 
 import com.xsecret.dto.request.XocDiaBetRequest;
+import com.xsecret.dto.response.XocDiaBetHistoryItemResponse;
+import com.xsecret.dto.response.XocDiaBetHistoryPageResponse;
 import com.xsecret.dto.response.XocDiaBetPlacementResponse;
 import com.xsecret.entity.PointTransaction;
 import com.xsecret.entity.User;
@@ -13,6 +15,9 @@ import com.xsecret.repository.XocDiaQuickBetConfigRepository;
 import com.xsecret.repository.XocDiaResultHistoryRepository;
 import com.xsecret.repository.XocDiaSessionRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -253,8 +258,9 @@ public class XocDiaBetService {
     public void settleBets(XocDiaSession session, String resultCode) {
         List<XocDiaBet> pendingBets = betRepository.findBySessionAndStatus(session, XocDiaBet.Status.PENDING);
 
+        String normalizedResultCode = normalizeCode(resultCode);
         Set<String> winningCodes = RESULT_CODE_TO_WINNERS.getOrDefault(
-                normalizeCode(resultCode), Collections.emptySet()
+                normalizedResultCode, Collections.emptySet()
         );
 
         Instant now = Instant.now();
@@ -268,7 +274,10 @@ public class XocDiaBetService {
             totalStake = totalStake.add(bet.getStake());
 
             if (winningCodes.contains(bet.getBetCode())) {
-                BigDecimal winAmount = bet.getStake().multiply(bet.getPayoutMultiplier());
+                BigDecimal multiplier = bet.getPayoutMultiplier() != null
+                        ? bet.getPayoutMultiplier().add(BigDecimal.ONE)
+                        : BigDecimal.ONE;
+                BigDecimal winAmount = bet.getStake().multiply(multiplier);
                 pointService.addPoints(
                         bet.getUser(),
                         winAmount,
@@ -282,6 +291,20 @@ public class XocDiaBetService {
                 bet.setStatus(XocDiaBet.Status.WON);
                 totalWinAmount = totalWinAmount.add(winAmount);
                 winningBets++;
+            } else if ("two-two".equals(normalizedResultCode)
+                    && ("tai".equals(bet.getBetCode()) || "xiu".equals(bet.getBetCode()))) {
+                pointService.addPoints(
+                        bet.getUser(),
+                        bet.getStake(),
+                        PointTransaction.PointTransactionType.BET_REFUND,
+                        "Hoàn điểm do kết quả Hòa (2 Đỏ 2 Trắng) phiên #" + session.getId(),
+                        "XOC_DIA",
+                        session.getId(),
+                        null
+                );
+                bet.setWinAmount(bet.getStake());
+                bet.setStatus(XocDiaBet.Status.REFUNDED);
+                totalWinAmount = totalWinAmount.add(bet.getStake());
             } else {
                 bet.setWinAmount(BigDecimal.ZERO);
                 bet.setStatus(XocDiaBet.Status.LOST);
@@ -289,7 +312,7 @@ public class XocDiaBetService {
         }
 
         if (!pendingBets.isEmpty()) {
-            betRepository.saveAll(pendingBets);
+        betRepository.saveAll(pendingBets);
         }
 
         recordResultHistory(session, resultCode, now, pendingBets.size(), winningBets, totalStake, totalWinAmount);
@@ -357,6 +380,26 @@ public class XocDiaBetService {
                 .replaceAll("[\\s_]+", "-");
     }
 
+    @Transactional(readOnly = true)
+    public XocDiaBetHistoryPageResponse getUserBetHistory(User user, int page, int size) {
+        int sanitizedPage = Math.max(page, 0);
+        int sanitizedSize = Math.min(Math.max(size, 1), 50);
+
+        Pageable pageable = PageRequest.of(sanitizedPage, sanitizedSize);
+        Page<XocDiaBet> betPage = betRepository.findByUserOrderByCreatedAtDesc(user, pageable);
+
+        List<XocDiaBetHistoryItemResponse> items = betPage.getContent().stream()
+                .map(XocDiaBetHistoryItemResponse::fromEntity)
+                .collect(Collectors.toList());
+
+        return XocDiaBetHistoryPageResponse.builder()
+                .items(items)
+                .page(betPage.getNumber())
+                .size(betPage.getSize())
+                .totalItems(betPage.getTotalElements())
+                .hasMore(betPage.hasNext())
+                .build();
 }
 
+}
 
