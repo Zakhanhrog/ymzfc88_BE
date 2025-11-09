@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -38,13 +39,92 @@ public class XocDiaBetService {
             XocDiaSession.Phase.INVITE_BET
     );
 
-    private static final Map<String, Set<String>> RESULT_CODE_TO_WINNERS = Map.of(
-            "four-white", Set.of("four-white", "four-white-or-four-red"),
-            "four-red", Set.of("four-red", "four-white-or-four-red"),
-            "three-white-one-red", Set.of("three-white-one-red"),
-            "three-red-one-white", Set.of("three-red-one-white"),
-            "two-two", Set.of("two-two")
-    );
+    private static final Map<String, Set<String>> RESULT_CODE_TO_WINNERS;
+    private static final Map<String, XocDiaQuickBetConfig> FALLBACK_CONFIGS;
+
+    static {
+        Map<String, Set<String>> mapping = new HashMap<>();
+
+        mapping.put("four-white", Set.of(
+                "four-white",
+                "four-white-or-four-red",
+                "xiu",
+                "chan",
+                "even"
+        ));
+
+        mapping.put("four-red", Set.of(
+                "four-red",
+                "four-white-or-four-red",
+                "tai",
+                "chan",
+                "even"
+        ));
+
+        mapping.put("three-white-one-red", Set.of(
+                "three-white-one-red",
+                "xiu",
+                "le",
+                "odd"
+        ));
+
+        mapping.put("three-red-one-white", Set.of(
+                "three-red-one-white",
+                "tai",
+                "le",
+                "odd"
+        ));
+
+        mapping.put("two-two", Set.of(
+                "two-two",
+                "chan",
+                "even"
+        ));
+
+        RESULT_CODE_TO_WINNERS = Collections.unmodifiableMap(mapping);
+
+        Map<String, XocDiaQuickBetConfig> fallback = new HashMap<>();
+        fallback.put("chan", XocDiaQuickBetConfig.builder()
+                .code("chan")
+                .name("Chẵn")
+                .payoutMultiplier(BigDecimal.valueOf(1.96))
+                .pattern(null)
+                .layoutGroup(XocDiaQuickBetConfig.GROUP_TOP)
+                .displayOrder(1)
+                .isActive(true)
+                .build());
+        fallback.put("tai", XocDiaQuickBetConfig.builder()
+                .code("tai")
+                .name("Tài")
+                .payoutMultiplier(BigDecimal.valueOf(1.95))
+                .pattern(null)
+                .layoutGroup(XocDiaQuickBetConfig.GROUP_TOP)
+                .displayOrder(2)
+                .isActive(true)
+                .build());
+        fallback.put("xiu", XocDiaQuickBetConfig.builder()
+                .code("xiu")
+                .name("Xỉu")
+                .payoutMultiplier(BigDecimal.valueOf(1.95))
+                .pattern(null)
+                .layoutGroup(XocDiaQuickBetConfig.GROUP_TOP)
+                .displayOrder(3)
+                .isActive(true)
+                .build());
+        fallback.put("le", XocDiaQuickBetConfig.builder()
+                .code("le")
+                .name("Lẻ")
+                .payoutMultiplier(BigDecimal.valueOf(1.96))
+                .pattern(null)
+                .layoutGroup(XocDiaQuickBetConfig.GROUP_TOP)
+                .displayOrder(4)
+                .isActive(true)
+                .build());
+        fallback.put("even", fallback.get("chan"));
+        fallback.put("odd", fallback.get("le"));
+
+        FALLBACK_CONFIGS = Collections.unmodifiableMap(fallback);
+    }
 
     private final XocDiaBetRepository betRepository;
     private final XocDiaSessionRepository sessionRepository;
@@ -85,8 +165,12 @@ public class XocDiaBetService {
                         config -> config
                 ));
 
-        if (configMap.isEmpty()) {
-            throw new IllegalStateException("Không tìm thấy cấu hình cược hợp lệ");
+        Set<String> missingCodes = requestedCodes.stream()
+                .filter(code -> !configMap.containsKey(code) && !FALLBACK_CONFIGS.containsKey(code))
+                .collect(Collectors.toSet());
+
+        if (!missingCodes.isEmpty()) {
+            throw new IllegalStateException("Không tìm thấy cấu hình cược hợp lệ cho: " + String.join(", ", missingCodes));
         }
 
         BigDecimal totalStake = BigDecimal.ZERO;
@@ -95,15 +179,13 @@ public class XocDiaBetService {
 
         for (XocDiaBetRequest.BetItem item : request.getBets()) {
             String normalizedCode = normalizeCode(item.getCode());
-            if (!configMap.containsKey(normalizedCode)) {
-                throw new IllegalStateException("Loại cược " + item.getCode() + " hiện không hỗ trợ");
-            }
-
             XocDiaQuickBetConfig config = configMap.get(normalizedCode);
-            if (!hasPattern(config.getPattern())) {
-                throw new IllegalStateException("Loại cược " + config.getName() + " chưa khả dụng");
+            if (config == null) {
+                config = FALLBACK_CONFIGS.get(normalizedCode);
+                if (config == null) {
+                    throw new IllegalStateException("Loại cược " + item.getCode() + " hiện không hỗ trợ");
+                }
             }
-
             long amount = Optional.ofNullable(item.getAmount()).orElse(0L);
             if (amount <= 0) {
                 throw new IllegalArgumentException("Giá trị cược phải lớn hơn 0");
@@ -138,7 +220,7 @@ public class XocDiaBetService {
 
         long currentPoints = Optional.ofNullable(user.getPoints()).orElse(0L);
         if (BigDecimal.valueOf(currentPoints).compareTo(totalStake) < 0) {
-            throw new IllegalStateException("Số điểm không đủ để đặt cược");
+            throw new IllegalStateException("Số điểm không đủ, vui lòng nạp thêm để đặt cược");
         }
 
         pointService.subtractPoints(
@@ -234,12 +316,11 @@ public class XocDiaBetService {
         if (code == null) {
             return "";
         }
-        return code.trim().toLowerCase(Locale.ROOT);
+        return code.trim()
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[\\s_]+", "-");
     }
 
-    private boolean hasPattern(String pattern) {
-        return pattern != null && !pattern.trim().isEmpty();
-    }
 }
 
 

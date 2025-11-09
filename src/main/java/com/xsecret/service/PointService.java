@@ -200,35 +200,36 @@ public class PointService {
     }
 
     @Transactional
-    protected void subtractPoints(User user, BigDecimal points, PointTransaction.PointTransactionType type, 
+     protected void subtractPoints(User user, BigDecimal points, PointTransaction.PointTransactionType type,
                                 String description, String referenceType, Long referenceId, User createdBy) {
         UserPoint userPoint = userPointRepository.findByUser(user)
-                .orElseThrow(() -> new RuntimeException("User points not found"));
+                .orElseGet(() -> userPointRepository.save(UserPoint.builder()
+                        .user(user)
+                        .totalPoints(BigDecimal.ZERO)
+                        .lifetimeEarned(BigDecimal.ZERO)
+                        .lifetimeSpent(BigDecimal.ZERO)
+                        .build()));
 
-        // Sử dụng user.points làm chuẩn để tránh không đồng bộ
         BigDecimal balanceBefore = BigDecimal.valueOf(user.getPoints() != null ? user.getPoints() : 0L);
-        
+
         if (balanceBefore.compareTo(points) < 0) {
             throw new RuntimeException("Insufficient points");
         }
 
         BigDecimal balanceAfter = balanceBefore.subtract(points);
 
-        // Update user points first (chuẩn)
         user.setPoints(balanceAfter.longValue());
         userRepository.save(user);
 
-        // Sync userPoint với user.points
         userPoint.setTotalPoints(balanceAfter);
         userPoint.setLifetimeSpent(userPoint.getLifetimeSpent().add(points));
         userPointRepository.save(userPoint);
 
-        // Create transaction record
         PointTransaction transaction = PointTransaction.builder()
                 .user(user)
                 .transactionCode(generateTransactionCode())
                 .type(type)
-                .points(points.negate()) // Negative for subtract
+                .points(points.negate())
                 .balanceBefore(balanceBefore)
                 .balanceAfter(balanceAfter)
                 .description(description)
