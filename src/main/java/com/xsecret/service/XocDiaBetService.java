@@ -6,9 +6,11 @@ import com.xsecret.entity.PointTransaction;
 import com.xsecret.entity.User;
 import com.xsecret.entity.XocDiaBet;
 import com.xsecret.entity.XocDiaQuickBetConfig;
+import com.xsecret.entity.XocDiaResultHistory;
 import com.xsecret.entity.XocDiaSession;
 import com.xsecret.repository.XocDiaBetRepository;
 import com.xsecret.repository.XocDiaQuickBetConfigRepository;
+import com.xsecret.repository.XocDiaResultHistoryRepository;
 import com.xsecret.repository.XocDiaSessionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -129,6 +131,7 @@ public class XocDiaBetService {
     private final XocDiaBetRepository betRepository;
     private final XocDiaSessionRepository sessionRepository;
     private final XocDiaQuickBetConfigRepository quickBetConfigRepository;
+    private final XocDiaResultHistoryRepository resultHistoryRepository;
     private final PointService pointService;
 
     @Transactional
@@ -249,19 +252,20 @@ public class XocDiaBetService {
     @Transactional
     public void settleBets(XocDiaSession session, String resultCode) {
         List<XocDiaBet> pendingBets = betRepository.findBySessionAndStatus(session, XocDiaBet.Status.PENDING);
-        if (pendingBets.isEmpty()) {
-            return;
-        }
 
         Set<String> winningCodes = RESULT_CODE_TO_WINNERS.getOrDefault(
                 normalizeCode(resultCode), Collections.emptySet()
         );
 
         Instant now = Instant.now();
+        BigDecimal totalStake = BigDecimal.ZERO;
+        BigDecimal totalWinAmount = BigDecimal.ZERO;
+        int winningBets = 0;
 
         for (XocDiaBet bet : pendingBets) {
             bet.setResultCode(resultCode);
             bet.setSettledAt(now);
+            totalStake = totalStake.add(bet.getStake());
 
             if (winningCodes.contains(bet.getBetCode())) {
                 BigDecimal winAmount = bet.getStake().multiply(bet.getPayoutMultiplier());
@@ -276,13 +280,19 @@ public class XocDiaBetService {
                 );
                 bet.setWinAmount(winAmount);
                 bet.setStatus(XocDiaBet.Status.WON);
+                totalWinAmount = totalWinAmount.add(winAmount);
+                winningBets++;
             } else {
                 bet.setWinAmount(BigDecimal.ZERO);
                 bet.setStatus(XocDiaBet.Status.LOST);
             }
         }
 
-        betRepository.saveAll(pendingBets);
+        if (!pendingBets.isEmpty()) {
+            betRepository.saveAll(pendingBets);
+        }
+
+        recordResultHistory(session, resultCode, now, pendingBets.size(), winningBets, totalStake, totalWinAmount);
     }
 
     @Transactional
@@ -310,6 +320,32 @@ public class XocDiaBetService {
         }
 
         betRepository.saveAll(pendingBets);
+    }
+
+    private void recordResultHistory(
+            XocDiaSession session,
+            String resultCode,
+            Instant recordedAt,
+            int totalBets,
+            int winningBets,
+            BigDecimal totalStake,
+            BigDecimal totalWinAmount
+    ) {
+        String normalizedCode = normalizeCode(resultCode);
+
+        XocDiaResultHistory history = XocDiaResultHistory.builder()
+                .session(session)
+                .resultCode(resultCode)
+                .normalizedResultCode(normalizedCode)
+                .recordedAt(recordedAt != null ? recordedAt : Instant.now())
+                .totalBets(totalBets)
+                .winningBets(winningBets)
+                .losingBets(Math.max(0, totalBets - winningBets))
+                .totalStake(totalStake != null ? totalStake : BigDecimal.ZERO)
+                .totalPayout(totalWinAmount != null ? totalWinAmount : BigDecimal.ZERO)
+                .build();
+
+        resultHistoryRepository.save(history);
     }
 
     private String normalizeCode(String code) {

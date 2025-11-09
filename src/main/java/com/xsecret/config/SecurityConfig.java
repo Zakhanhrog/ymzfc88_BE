@@ -68,6 +68,7 @@ public class SecurityConfig {
                     .requestMatchers("/betting-odds/**").permitAll() // Public betting odds for users
                     .requestMatchers("/xoc-dia/quick-bets/**").permitAll() // Public quick bets for Xóc Đĩa
                     .requestMatchers("/xoc-dia/session/**").permitAll() // Public session state for Xóc Đĩa
+                    .requestMatchers("/xoc-dia/result-history/**").permitAll() // Public result history for stats
                     .requestMatchers("/xoc-dia/bets/**").hasAnyRole("USER", "ADMIN") // Đặt cược Xóc Đĩa cần đăng nhập
                     .requestMatchers("/public/**").permitAll() // Public endpoints (lottery results, etc.)
                     .requestMatchers("/marquee-notifications/public/**").permitAll() // Public marquee notifications
