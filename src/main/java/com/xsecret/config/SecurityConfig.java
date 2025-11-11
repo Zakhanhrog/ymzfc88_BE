@@ -69,8 +69,10 @@ public class SecurityConfig {
                     .requestMatchers("/xoc-dia/quick-bets/**").permitAll() // Public quick bets for Xóc Đĩa
                     .requestMatchers("/sicbo/quick-bets/**").permitAll() // Public quick bets for Sicbo
                     .requestMatchers("/xoc-dia/session/**").permitAll() // Public session state for Xóc Đĩa
+                    .requestMatchers("/sicbo/session/**").permitAll() // Public session state for Sicbo
                     .requestMatchers("/xoc-dia/result-history/**").permitAll() // Public result history for stats
                     .requestMatchers("/xoc-dia/bets/**").hasAnyRole("USER", "ADMIN") // Đặt cược Xóc Đĩa cần đăng nhập
+                    .requestMatchers("/sicbo/bets/**").hasAnyRole("USER", "ADMIN") // Đặt cược Sicbo cần đăng nhập
                     .requestMatchers("/public/**").permitAll() // Public endpoints (lottery results, etc.)
                     .requestMatchers("/marquee-notifications/public/**").permitAll() // Public marquee notifications
                     .requestMatchers("/banners/public/**").permitAll() // Public banners

@@ -16,6 +16,8 @@ public interface SicboQuickBetConfigRepository extends JpaRepository<SicboQuickB
 
     List<SicboQuickBetConfig> findAllByIsActiveTrueOrderByDisplayOrderAsc();
 
+    List<SicboQuickBetConfig> findAllByCodeIn(Iterable<String> codes);
+
     List<SicboQuickBetConfig> findAllByOrderByDisplayOrderAsc();
 }
 
