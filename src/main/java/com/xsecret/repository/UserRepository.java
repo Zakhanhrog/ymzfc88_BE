@@ -101,6 +101,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByReferralCode(String referralCode);
 
+    long countByInvitedByCodeIgnoreCase(String invitedByCode);
+
+    List<User> findTop20ByInvitedByCodeIgnoreCaseOrderByCreatedAtDesc(String invitedByCode);
+
+    long countByInvitedByCodeIgnoreCaseAndStatus(String invitedByCode, User.UserStatus status);
+
+    List<User> findByInvitedByCodeIgnoreCase(String invitedByCode);
+
     @Query("""
         SELECT u FROM User u
         WHERE UPPER(u.invitedByCode) = UPPER(:referralCode)

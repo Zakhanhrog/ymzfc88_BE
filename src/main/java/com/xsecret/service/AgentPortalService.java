@@ -1,10 +1,19 @@
 package com.xsecret.service;
 
+import com.xsecret.dto.response.AgentCommissionChartPointResponse;
+import com.xsecret.dto.response.AgentCommissionCustomerSummaryResponse;
+import com.xsecret.dto.response.AgentCommissionPayoutResponse;
+import com.xsecret.dto.response.AgentCommissionSummaryResponse;
 import com.xsecret.dto.response.AgentCustomerBetHistoryItemResponse;
 import com.xsecret.dto.response.AgentCustomerBetHistoryResponse;
 import com.xsecret.dto.response.AgentCustomerListResponse;
 import com.xsecret.dto.response.AgentCustomerSummaryResponse;
+import com.xsecret.dto.response.AgentDashboardSummaryResponse;
+import com.xsecret.dto.response.AgentInviteInfoResponse;
+import com.xsecret.dto.response.AgentInviteReferralResponse;
+import com.xsecret.entity.AgentCommissionPayout;
 import com.xsecret.entity.User;
+import com.xsecret.repository.AgentCommissionPayoutRepository;
 import com.xsecret.repository.BetRepository;
 import com.xsecret.repository.SicboBetRepository;
 import com.xsecret.repository.UserRepository;
@@ -20,13 +29,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
-import java.time.Instant;
-import java.util.ArrayList;
+import java.time.YearMonth;
 import java.util.Comparator;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +52,7 @@ public class AgentPortalService {
     private final BetRepository betRepository;
     private final XocDiaBetRepository xocDiaBetRepository;
     private final SicboBetRepository sicboBetRepository;
+    private final AgentCommissionPayoutRepository agentCommissionPayoutRepository;
     private final SystemSettingsService systemSettingsService;
 
     @Transactional(readOnly = true)
@@ -87,33 +98,25 @@ public class AgentPortalService {
             List<Object[]> betAggregates = betRepository.aggregateTotalsByUsers(userIds, startDateTime, endDateTime);
             for (Object[] row : betAggregates) {
                 Long userId = (Long) row[0];
-                BigDecimal totalBet = toBigDecimal(row[1]);
-                BigDecimal totalLost = toBigDecimal(row[2]);
-                accumulate(totalBetMap, userId, totalBet);
-                accumulate(totalLostMap, userId, totalLost);
+                accumulate(totalBetMap, userId, toBigDecimal(row[1]));
+                accumulate(totalLostMap, userId, toBigDecimal(row[2]));
             }
 
-            // Xoc Dia bets
             Instant startInstant = startDateTime != null ? startDateTime.atZone(ZoneId.systemDefault()).toInstant() : null;
             Instant endInstant = endDateTime != null ? endDateTime.atZone(ZoneId.systemDefault()).toInstant() : null;
 
             List<Object[]> xocDiaAggregates = xocDiaBetRepository.aggregateTotalsByUsers(userIds, startInstant, endInstant);
             for (Object[] row : xocDiaAggregates) {
                 Long userId = (Long) row[0];
-                BigDecimal totalBet = toBigDecimal(row[1]);
-                BigDecimal totalLost = toBigDecimal(row[2]);
-                accumulate(totalBetMap, userId, totalBet);
-                accumulate(totalLostMap, userId, totalLost);
+                accumulate(totalBetMap, userId, toBigDecimal(row[1]));
+                accumulate(totalLostMap, userId, toBigDecimal(row[2]));
             }
 
-            // Sicbo bets
             List<Object[]> sicboAggregates = sicboBetRepository.aggregateTotalsByUsers(userIds, startInstant, endInstant);
             for (Object[] row : sicboAggregates) {
                 Long userId = (Long) row[0];
-                BigDecimal totalBet = toBigDecimal(row[1]);
-                BigDecimal totalLost = toBigDecimal(row[2]);
-                accumulate(totalBetMap, userId, totalBet);
-                accumulate(totalLostMap, userId, totalLost);
+                accumulate(totalBetMap, userId, toBigDecimal(row[1]));
+                accumulate(totalLostMap, userId, toBigDecimal(row[2]));
             }
         }
 
@@ -261,7 +264,6 @@ public class AgentPortalService {
             });
         }
 
-        // Sort by placedAt desc
         items.sort(Comparator.comparing(AgentCustomerBetHistoryItemResponse::getPlacedAt,
                 Comparator.nullsLast(Comparator.naturalOrder())).reversed());
 
@@ -286,6 +288,274 @@ public class AgentPortalService {
         response.setTotalLostAmount(totalLost);
         response.setTotalNetResult(totalNet);
         return response;
+    }
+
+    @Transactional(readOnly = true)
+    public AgentInviteInfoResponse getAgentInviteInfo(Long agentId) {
+        User agent = userService.getUserById(agentId);
+        if (agent.getStaffRole() != User.StaffRole.AGENT) {
+            throw new AccessDeniedException("Chỉ đại lý mới được phép truy cập thông tin mã mời.");
+        }
+
+        String referralCode = agent.getReferralCode();
+        if (referralCode == null || referralCode.isBlank()) {
+            throw new IllegalStateException("Đại lý chưa được cấp mã mời. Vui lòng liên hệ quản trị viên.");
+        }
+
+        long totalReferrals = userRepository.countByInvitedByCodeIgnoreCase(referralCode);
+        long activeReferrals = userRepository.countByInvitedByCodeIgnoreCaseAndStatus(referralCode, User.UserStatus.ACTIVE);
+
+        List<User> recentUsers = userRepository
+                .findTop20ByInvitedByCodeIgnoreCaseOrderByCreatedAtDesc(referralCode);
+
+        List<AgentInviteReferralResponse> recentReferrals = recentUsers.stream()
+                .map(user -> new AgentInviteReferralResponse(
+                        user.getId(),
+                        user.getUsername(),
+                        user.getEmail(),
+                        user.getStatus(),
+                        user.getCreatedAt()
+                ))
+                .collect(Collectors.toList());
+
+        AgentInviteInfoResponse response = new AgentInviteInfoResponse();
+        response.setReferralCode(referralCode);
+        response.setInvitePath("/?inviteCode=" + referralCode + "&register=1");
+        response.setTotalReferrals(totalReferrals);
+        response.setActiveReferrals(activeReferrals);
+        response.setRecentReferrals(recentReferrals);
+        return response;
+    }
+
+    @Transactional(readOnly = true)
+    private List<AgentCommissionCustomerSummaryResponse> computeCustomerSummaries(
+            List<User> customers,
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime,
+            double commissionRate
+    ) {
+        List<Long> customerIds = customers.stream().map(User::getId).toList();
+
+        Map<Long, BigDecimal> totalBetMap = new HashMap<>();
+        Map<Long, BigDecimal> totalLostMap = new HashMap<>();
+
+        if (!customerIds.isEmpty()) {
+            List<Object[]> betAggregates = betRepository.aggregateTotalsByUsers(customerIds, startDateTime, endDateTime);
+            for (Object[] row : betAggregates) {
+                Long userId = (Long) row[0];
+                accumulate(totalBetMap, userId, toBigDecimal(row[1]));
+                accumulate(totalLostMap, userId, toBigDecimal(row[2]));
+            }
+
+            Instant startInstant = startDateTime != null ? startDateTime.atZone(ZoneId.systemDefault()).toInstant() : null;
+            Instant endInstant = endDateTime != null ? endDateTime.atZone(ZoneId.systemDefault()).toInstant() : null;
+
+            List<Object[]> xocDiaAggregates = xocDiaBetRepository.aggregateTotalsByUsers(customerIds, startInstant, endInstant);
+            for (Object[] row : xocDiaAggregates) {
+                Long userId = (Long) row[0];
+                accumulate(totalBetMap, userId, toBigDecimal(row[1]));
+                accumulate(totalLostMap, userId, toBigDecimal(row[2]));
+            }
+
+            List<Object[]> sicboAggregates = sicboBetRepository.aggregateTotalsByUsers(customerIds, startInstant, endInstant);
+            for (Object[] row : sicboAggregates) {
+                Long userId = (Long) row[0];
+                accumulate(totalBetMap, userId, toBigDecimal(row[1]));
+                accumulate(totalLostMap, userId, toBigDecimal(row[2]));
+            }
+        }
+
+        BigDecimal commissionMultiplier = BigDecimal.valueOf(commissionRate)
+                .divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
+
+        return customers.stream()
+                .map(customer -> {
+                    BigDecimal totalBet = totalBetMap.getOrDefault(customer.getId(), BigDecimal.ZERO);
+                    BigDecimal totalLost = totalLostMap.getOrDefault(customer.getId(), BigDecimal.ZERO);
+                    BigDecimal commission = totalLost.multiply(commissionMultiplier).setScale(0, RoundingMode.HALF_UP);
+                    return new AgentCommissionCustomerSummaryResponse(
+                            customer.getId(),
+                            customer.getUsername(),
+                            customer.getStatus(),
+                            totalBet,
+                            totalLost,
+                            commission
+                    );
+                })
+                .collect(Collectors.toList());
+    }
+
+    private AgentDashboardSummaryResponse buildSummary(
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime,
+            List<User> customers
+    ) {
+        double commissionRate = systemSettingsService.getAgentCommissionPercentage();
+        List<AgentCommissionCustomerSummaryResponse> allCustomers = computeCustomerSummaries(
+                customers,
+                startDateTime,
+                endDateTime,
+                commissionRate
+        );
+
+        BigDecimal totalBetAmount = allCustomers.stream()
+                .map(AgentCommissionCustomerSummaryResponse::getTotalBetAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalLostAmount = allCustomers.stream()
+                .map(AgentCommissionCustomerSummaryResponse::getTotalLostAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalCommissionAmount = allCustomers.stream()
+                .map(AgentCommissionCustomerSummaryResponse::getCommissionAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        List<AgentCommissionCustomerSummaryResponse> topCustomers = allCustomers.stream()
+                .sorted(Comparator.comparing(AgentCommissionCustomerSummaryResponse::getCommissionAmount).reversed())
+                .limit(10)
+                .collect(Collectors.toList());
+
+        return new AgentDashboardSummaryResponse(
+                customers.size(),
+                totalBetAmount,
+                totalLostAmount,
+                totalCommissionAmount,
+                commissionRate,
+                topCustomers
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public AgentDashboardSummaryResponse getAgentDashboardSummary(
+            Long agentId,
+            LocalDate startDate,
+            LocalDate endDate
+    ) {
+        User agent = userService.getUserById(agentId);
+        if (agent.getStaffRole() != User.StaffRole.AGENT) {
+            throw new AccessDeniedException("Chỉ đại lý mới được phép xem báo cáo hoa hồng.");
+        }
+
+        String referralCode = agent.getReferralCode();
+        if (referralCode == null || referralCode.isBlank()) {
+            throw new IllegalStateException("Đại lý chưa được cấp mã mời. Vui lòng liên hệ quản trị viên.");
+        }
+
+        LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : LocalDate.now().minusDays(30).atStartOfDay();
+        LocalDateTime endDateTime = endDate != null ? endDate.atTime(LocalTime.MAX) : LocalDate.now().atTime(LocalTime.MAX);
+
+        List<User> customers = userRepository.findByInvitedByCodeIgnoreCase(referralCode);
+
+        return buildSummary(startDateTime, endDateTime, customers);
+    }
+
+    @Transactional(readOnly = true)
+    public List<AgentCommissionChartPointResponse> getAgentCommissionChart(
+            Long agentId,
+            LocalDate startDate,
+            LocalDate endDate
+    ) {
+        User agent = userService.getUserById(agentId);
+        if (agent.getStaffRole() != User.StaffRole.AGENT) {
+            throw new AccessDeniedException("Chỉ đại lý mới được phép xem biểu đồ hoa hồng.");
+        }
+
+        String referralCode = agent.getReferralCode();
+        if (referralCode == null || referralCode.isBlank()) {
+            throw new IllegalStateException("Đại lý chưa được cấp mã mời. Vui lòng liên hệ quản trị viên.");
+        }
+
+        List<User> customers = userRepository.findByInvitedByCodeIgnoreCase(referralCode);
+
+        LocalDate start = startDate != null ? startDate : LocalDate.now().minusDays(29);
+        LocalDate end = endDate != null ? endDate : LocalDate.now();
+
+        List<AgentCommissionChartPointResponse> chart = new ArrayList<>();
+        LocalDate cursor = start;
+        while (!cursor.isAfter(end)) {
+            LocalDateTime dayStart = cursor.atStartOfDay();
+            LocalDateTime dayEnd = cursor.atTime(LocalTime.MAX);
+
+            AgentDashboardSummaryResponse daySummary = buildSummary(
+                    dayStart,
+                    dayEnd,
+                    customers
+            );
+
+            chart.add(new AgentCommissionChartPointResponse(
+                    cursor,
+                    daySummary.getTotalBetAmount(),
+                    daySummary.getTotalLostAmount(),
+                    daySummary.getTotalCommissionAmount()
+            ));
+
+            cursor = cursor.plusDays(1);
+        }
+
+        return chart;
+    }
+
+    @Transactional(readOnly = true)
+    public AgentCommissionSummaryResponse getCommissionSummary(Long agentId, YearMonth period) {
+        User agent = userService.getUserById(agentId);
+        if (agent.getStaffRole() != User.StaffRole.AGENT) {
+            throw new AccessDeniedException("Chỉ đại lý mới được phép xem báo cáo hoa hồng.");
+        }
+
+        String referralCode = agent.getReferralCode();
+        if (referralCode == null || referralCode.isBlank()) {
+            throw new IllegalStateException("Đại lý chưa được cấp mã mời. Vui lòng liên hệ quản trị viên.");
+        }
+
+        LocalDate periodStart = period.atDay(1);
+        LocalDate periodEnd = period.atEndOfMonth();
+        LocalDateTime startDateTime = periodStart.atStartOfDay();
+        LocalDateTime endDateTime = periodEnd.atTime(LocalTime.MAX);
+
+        List<User> customers = userRepository.findByInvitedByCodeIgnoreCase(referralCode);
+        AgentDashboardSummaryResponse summary = buildSummary(startDateTime, endDateTime, customers);
+        List<AgentCommissionCustomerSummaryResponse> allCustomers = computeCustomerSummaries(
+                customers,
+                startDateTime,
+                endDateTime,
+                summary.getCommissionRate()
+        );
+
+        return new AgentCommissionSummaryResponse(
+                period.toString(),
+                summary.getCommissionRate(),
+                summary.getTotalBetAmount(),
+                summary.getTotalLostAmount(),
+                summary.getTotalCommissionAmount(),
+                allCustomers.size(),
+                allCustomers
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public Page<AgentCommissionPayoutResponse> getCommissionPayoutHistory(
+            Long agentId,
+            AgentCommissionPayout.Status status,
+            Pageable pageable
+    ) {
+        User agent = userService.getUserById(agentId);
+        if (agent.getStaffRole() != User.StaffRole.AGENT) {
+            throw new AccessDeniedException("Chỉ đại lý mới được phép xem lịch sử thanh toán hoa hồng.");
+        }
+
+        Page<AgentCommissionPayout> payouts = status == null
+                ? agentCommissionPayoutRepository.findByAgentOrderByPeriodStartDesc(agent, pageable)
+                : agentCommissionPayoutRepository.findByAgentAndStatusOrderByPeriodStartDesc(agent, status, pageable);
+
+        return payouts.map(payout -> new AgentCommissionPayoutResponse(
+                payout.getId(),
+                payout.getPeriodMonth(),
+                payout.getPeriodStart(),
+                payout.getPeriodEnd(),
+                payout.getTotalLostAmount(),
+                payout.getCommissionAmount(),
+                payout.getStatus(),
+                payout.getPaidAt(),
+                payout.getNotes()
+        ));
     }
 
     private void accumulate(Map<Long, BigDecimal> map, Long userId, BigDecimal amount) {
