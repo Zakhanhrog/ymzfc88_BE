@@ -31,4 +31,6 @@ public class UserResponse {
     private LocalDateTime lastLogin;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String referralCode;
+    private String invitedByCode;
 }

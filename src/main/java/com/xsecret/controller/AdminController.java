@@ -34,6 +34,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -42,13 +43,14 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/admin")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_AGENT_PORTAL','ROLE_STAFF_PORTAL')")
 public class AdminController {
 
     private final AuthService authService;
@@ -65,16 +67,39 @@ public class AdminController {
     @PreAuthorize("permitAll()")
     public ResponseEntity<ApiResponse<JwtResponse>> adminLogin(@Valid @RequestBody LoginRequest loginRequest) {
         log.info("Admin login attempt for: {}", loginRequest.getUsernameOrEmail());
-        
-        JwtResponse jwtResponse = authService.login(loginRequest);
-        
-        // Verify user is admin
-        if (!jwtResponse.getUser().getRole().equals(User.Role.ADMIN)) {
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Bạn không có quyền truy cập admin"));
+
+        try {
+            JwtResponse jwtResponse = authService.login(loginRequest);
+
+            String requestedPortal = Optional.ofNullable(loginRequest.getPortal())
+                    .map(portal -> portal.trim().toUpperCase(Locale.ROOT))
+                    .orElse("ADMIN");
+
+            UserResponse user = jwtResponse.getUser();
+            boolean authorized = switch (requestedPortal) {
+                case "ADMIN" -> user.getRole() == User.Role.ADMIN;
+                case "AGENT" -> user.getStaffRole() == User.StaffRole.AGENT;
+                case "STAFF" -> user.getStaffRole() != null
+                        && user.getStaffRole() != User.StaffRole.AGENT;
+                default -> false;
+            };
+
+            if (!authorized) {
+                String message = switch (requestedPortal) {
+                    case "AGENT" -> "Bạn không có quyền truy cập cổng đại lý";
+                    case "STAFF" -> "Bạn không có quyền truy cập cổng nhân viên";
+                    default -> "Bạn không có quyền truy cập admin";
+                };
+                return ResponseEntity.status(403)
+                        .body(ApiResponse.error(message));
+            }
+
+            return ResponseEntity.ok(ApiResponse.success("Đăng nhập thành công", jwtResponse));
+        } catch (AuthenticationException authenticationException) {
+            log.warn("Portal login failed for {}: {}", loginRequest.getUsernameOrEmail(), authenticationException.getMessage());
+            return ResponseEntity.status(401)
+                    .body(ApiResponse.error("Sai thông tin đăng nhập"));
         }
-        
-        return ResponseEntity.ok(ApiResponse.success("Đăng nhập admin thành công", jwtResponse));
     }
 
     @GetMapping("/dashboard/stats")

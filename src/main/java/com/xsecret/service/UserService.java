@@ -19,7 +19,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @RequiredArgsConstructor
@@ -89,6 +91,9 @@ public class UserService {
             throw new UserAlreadyExistsException("Email đã tồn tại: " + request.getEmail());
         }
 
+        String normalizedReferral = prepareReferralCode(request.getReferralCode());
+        String normalizedInvitedBy = normalizeCode(request.getInvitedByCode());
+
         User user = User.builder()
                 .username(request.getUsername())
                 .email(request.getEmail())
@@ -96,6 +101,8 @@ public class UserService {
                 .fullName(request.getFullName())
                 .phoneNumber(request.getPhoneNumber())
                 .role(User.Role.valueOf(request.getRole()))
+                .invitedByCode(normalizedInvitedBy)
+                .referralCode(normalizedReferral)
                 .status(User.UserStatus.ACTIVE)
                 .build();
 
@@ -132,6 +139,52 @@ public class UserService {
         }
 
         return userRepository.save(user);
+    }
+
+    public String generateUniqueReferralCode() {
+        String code;
+        int maxAttempts = 10;
+        int attempts = 0;
+        do {
+            code = randomAlphanumeric(5);
+            attempts++;
+        } while (userRepository.findByReferralCode(code).isPresent() && attempts < maxAttempts);
+        if (userRepository.findByReferralCode(code).isPresent()) {
+            throw new RuntimeException("Không thể tạo mã mời duy nhất, vui lòng thử lại sau");
+        }
+        return code;
+    }
+
+    private String randomAlphanumeric(int length) {
+        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        StringBuilder builder = new StringBuilder(length);
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        for (int i = 0; i < length; i++) {
+            builder.append(chars.charAt(random.nextInt(chars.length())));
+        }
+        return builder.toString();
+    }
+
+    private String prepareReferralCode(String requestedCode) {
+        String normalized = normalizeCode(requestedCode);
+        if (normalized == null) {
+            return generateUniqueReferralCode();
+        }
+        if (userRepository.findByReferralCode(normalized).isPresent()) {
+            throw new RuntimeException("Mã mời đã tồn tại: " + normalized);
+        }
+        return normalized;
+    }
+
+    private String normalizeCode(String code) {
+        if (code == null) {
+            return null;
+        }
+        String trimmed = code.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        return trimmed.toUpperCase(Locale.ROOT);
     }
 
     /**

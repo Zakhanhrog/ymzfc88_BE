@@ -136,6 +136,20 @@ public class SystemSettingsService {
     }
 
     /**
+     * Lấy tỷ lệ hoa hồng mặc định cho đại lý
+     */
+    @Transactional(readOnly = true)
+    public double getAgentCommissionPercentage() {
+        String value = getSettingValue(SystemSettings.AGENT_COMMISSION_PERCENTAGE, "5");
+        try {
+            return Double.parseDouble(value);
+        } catch (NumberFormatException ex) {
+            log.warn("Invalid agent commission percentage value: {}. Falling back to default 5%", value);
+            return 5.0;
+        }
+    }
+
+    /**
      * Cập nhật contact link
      */
     @Transactional
@@ -237,6 +251,15 @@ public class SystemSettingsService {
                     .settingValue("100000000")
                     .description("Số tiền nạp tối đa")
                     .category("DEPOSIT")
+                    .build());
+        }
+
+        if (!systemSettingsRepository.existsBySettingKey(SystemSettings.AGENT_COMMISSION_PERCENTAGE)) {
+            createOrUpdateSetting(SystemSettingsRequest.builder()
+                    .settingKey(SystemSettings.AGENT_COMMISSION_PERCENTAGE)
+                    .settingValue("5")
+                    .description("Tỷ lệ hoa hồng mặc định cho đại lý (đơn vị %)")
+                    .category("COMMISSION")
                     .build());
         }
 

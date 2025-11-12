@@ -55,5 +55,35 @@ public interface XocDiaBetRepository extends JpaRepository<XocDiaBet, Long> {
     BigDecimal sumStakeByStatusesAndDate(@Param("statuses") Collection<XocDiaBet.Status> statuses,
                                          @Param("start") Instant start,
                                          @Param("end") Instant end);
+
+    @Query("""
+        SELECT b.user.id,
+               COALESCE(SUM(CASE WHEN b.status <> com.xsecret.entity.XocDiaBet$Status.REFUNDED THEN b.stake ELSE 0 END), 0),
+               COALESCE(SUM(CASE WHEN b.status = com.xsecret.entity.XocDiaBet$Status.LOST THEN b.stake ELSE 0 END), 0)
+        FROM XocDiaBet b
+        WHERE b.user.id IN :userIds
+          AND (:start IS NULL OR b.createdAt >= :start)
+          AND (:end IS NULL OR b.createdAt <= :end)
+        GROUP BY b.user.id
+    """)
+    List<Object[]> aggregateTotalsByUsers(
+            @Param("userIds") List<Long> userIds,
+            @Param("start") Instant start,
+            @Param("end") Instant end
+    );
+
+    @Query("""
+        SELECT b FROM XocDiaBet b
+        WHERE b.user.id = :userId
+          AND (:start IS NULL OR b.createdAt >= :start)
+          AND (:end IS NULL OR b.createdAt <= :end)
+        ORDER BY b.createdAt DESC
+    """)
+    List<XocDiaBet> findRecentBetsByUserIdAndDateRange(
+            @Param("userId") Long userId,
+            @Param("start") Instant start,
+            @Param("end") Instant end,
+            Pageable pageable
+    );
 }
 

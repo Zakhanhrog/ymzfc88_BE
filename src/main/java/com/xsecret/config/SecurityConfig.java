@@ -62,6 +62,7 @@ public class SecurityConfig {
                     // Public endpoints
                     .requestMatchers("/auth/**").permitAll()
                     .requestMatchers("/admin/login").permitAll()
+                    .requestMatchers("/api/admin/login").permitAll()
                     .requestMatchers("/h2-console/**").permitAll()
                     .requestMatchers("/uploads/**").permitAll()
                     .requestMatchers("/files/**").permitAll()
@@ -82,7 +83,16 @@ public class SecurityConfig {
                     .requestMatchers("/test/**").permitAll() // Test endpoints
                     // Admin endpoints (must come after /admin/login and public endpoints)
                     // Note: /admin/promotions will override /promotions/** for admin routes
-                    .requestMatchers("/admin/**").hasRole("ADMIN")
+                    .requestMatchers("/admin/**").hasAnyAuthority(
+                            "ROLE_ADMIN",
+                            "ROLE_AGENT_PORTAL",
+                            "ROLE_STAFF_PORTAL"
+                    )
+                    .requestMatchers("/api/admin/**").hasAnyAuthority(
+                            "ROLE_ADMIN",
+                            "ROLE_AGENT_PORTAL",
+                            "ROLE_STAFF_PORTAL"
+                    )
                     .requestMatchers("/banners/admin/**").hasRole("ADMIN")
                     .requestMatchers("/kyc/admin/**").hasRole("ADMIN")
                     // User endpoints

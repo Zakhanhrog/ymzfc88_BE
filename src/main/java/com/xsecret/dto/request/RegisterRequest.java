@@ -30,4 +30,7 @@ public class RegisterRequest {
 
     @Pattern(regexp = "^[0-9]{10,11}$", message = "Số điện thoại không hợp lệ")
     private String phoneNumber;
+
+    @Size(max = 10, message = "Mã mời không hợp lệ")
+    private String inviteCode;
 }

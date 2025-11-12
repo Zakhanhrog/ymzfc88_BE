@@ -30,6 +30,8 @@ public class UserMapper {
                 .lastLogin(user.getLastLogin())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
+                .referralCode(user.getReferralCode())
+                .invitedByCode(user.getInvitedByCode())
                 .build();
     }
 }

@@ -98,4 +98,20 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findByStaffRole(User.StaffRole staffRole);
 
     Page<User> findByStaffRoleIn(Collection<User.StaffRole> roles, Pageable pageable);
+
+    Optional<User> findByReferralCode(String referralCode);
+
+    @Query("""
+        SELECT u FROM User u
+        WHERE UPPER(u.invitedByCode) = UPPER(:referralCode)
+          AND (:status IS NULL OR u.status = :status)
+          AND (:searchTerm IS NULL OR LOWER(u.username) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
+        ORDER BY u.createdAt DESC
+    """)
+    Page<User> findAgentCustomers(
+            @Param("referralCode") String referralCode,
+            @Param("status") User.UserStatus status,
+            @Param("searchTerm") String searchTerm,
+            Pageable pageable
+    );
 }

@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +38,7 @@ public class AuthService {
     private final RefreshTokenService refreshTokenService;
     private final TelegramNotificationService telegramNotificationService;
     private final UserMapper userMapper;
+    private final UserService userService;
 
     public JwtResponse login(LoginRequest loginRequest) {
         // Authenticate user
@@ -90,6 +92,11 @@ public class AuthService {
             throw new UserAlreadyExistsException("Email đã được sử dụng");
         }
 
+        String normalizedInvite = normalizeCode(registerRequest.getInviteCode());
+        if (normalizedInvite != null && userRepository.findByReferralCode(normalizedInvite).isEmpty()) {
+            throw new IllegalArgumentException("Mã mời không hợp lệ");
+        }
+
         // Create new user
         User user = User.builder()
                 .username(registerRequest.getUsername())
@@ -98,6 +105,8 @@ public class AuthService {
                 .fullName(registerRequest.getFullName())
                 .phoneNumber(registerRequest.getPhoneNumber())
                 .role(User.Role.USER)
+                .invitedByCode(normalizedInvite)
+                .referralCode(userService.generateUniqueReferralCode())
                 .status(User.UserStatus.ACTIVE)
                 .build();
 
@@ -131,6 +140,17 @@ public class AuthService {
                 .expiresIn(jwtUtils.getJwtExpirationMs())
                 .user(userResponse)
                 .build();
+    }
+
+    private String normalizeCode(String code) {
+        if (code == null) {
+            return null;
+        }
+        String trimmed = code.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        return trimmed.toUpperCase(Locale.ROOT);
     }
 
     public JwtResponse refreshToken(RefreshTokenRequest request) {

@@ -196,4 +196,34 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
     BigDecimal sumTotalAmountByStatusAndDate(@Param("status") Bet.BetStatus status,
                                              @Param("start") LocalDateTime start,
                                              @Param("end") LocalDateTime end);
+
+    @Query("""
+        SELECT b.user.id,
+               COALESCE(SUM(CASE WHEN b.status <> com.xsecret.entity.Bet$BetStatus.CANCELLED THEN b.totalAmount ELSE 0 END), 0),
+               COALESCE(SUM(CASE WHEN b.status = com.xsecret.entity.Bet$BetStatus.LOST THEN b.totalAmount ELSE 0 END), 0)
+        FROM Bet b
+        WHERE b.user.id IN :userIds
+          AND (:startDate IS NULL OR b.createdAt >= :startDate)
+          AND (:endDate IS NULL OR b.createdAt <= :endDate)
+        GROUP BY b.user.id
+    """)
+    List<Object[]> aggregateTotalsByUsers(
+            @Param("userIds") List<Long> userIds,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+
+    @Query("""
+        SELECT b FROM Bet b
+        WHERE b.user.id = :userId
+          AND (:startDate IS NULL OR b.createdAt >= :startDate)
+          AND (:endDate IS NULL OR b.createdAt <= :endDate)
+        ORDER BY b.createdAt DESC
+    """)
+    List<Bet> findRecentBetsByUserIdAndDateRange(
+            @Param("userId") Long userId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            Pageable pageable
+    );
 }

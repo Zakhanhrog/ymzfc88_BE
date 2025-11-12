@@ -39,6 +39,12 @@ public class User {
     @Column(name = "phone_number")
     private String phoneNumber;
 
+    @Column(name = "referral_code", unique = true, length = 10)
+    private String referralCode;
+
+    @Column(name = "invited_by_code", length = 10)
+    private String invitedByCode;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default

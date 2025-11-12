@@ -8,7 +8,8 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 @AllArgsConstructor
@@ -19,6 +20,7 @@ public class UserPrincipal implements UserDetails {
     private String email;
     private String password;
     private User.Role role;
+    private User.StaffRole staffRole;
     private User.UserStatus status;
 
     public static UserPrincipal create(User user) {
@@ -28,13 +30,24 @@ public class UserPrincipal implements UserDetails {
                 user.getEmail(),
                 user.getPassword(),
                 user.getRole(),
+                user.getStaffRole(),
                 user.getStatus()
         );
     }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role.name()));
+        List<GrantedAuthority> authorities = new ArrayList<>();
+        authorities.add(new SimpleGrantedAuthority("ROLE_" + role.name()));
+        if (staffRole != null) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_" + staffRole.name()));
+            if (staffRole == User.StaffRole.AGENT) {
+                authorities.add(new SimpleGrantedAuthority("ROLE_AGENT_PORTAL"));
+            } else {
+                authorities.add(new SimpleGrantedAuthority("ROLE_STAFF_PORTAL"));
+            }
+        }
+        return authorities;
     }
 
     @Override

@@ -57,6 +57,36 @@ public interface SicboBetRepository extends JpaRepository<SicboBet, Long> {
     BigDecimal sumStakeByStatusesAndDate(@Param("statuses") Collection<SicboBet.Status> statuses,
                                          @Param("start") Instant start,
                                          @Param("end") Instant end);
+
+    @Query("""
+        SELECT b.user.id,
+               COALESCE(SUM(CASE WHEN b.status <> com.xsecret.entity.SicboBet$Status.REFUNDED THEN b.stake ELSE 0 END), 0),
+               COALESCE(SUM(CASE WHEN b.status = com.xsecret.entity.SicboBet$Status.LOST THEN b.stake ELSE 0 END), 0)
+        FROM SicboBet b
+        WHERE b.user.id IN :userIds
+          AND (:start IS NULL OR b.createdAt >= :start)
+          AND (:end IS NULL OR b.createdAt <= :end)
+        GROUP BY b.user.id
+    """)
+    List<Object[]> aggregateTotalsByUsers(
+            @Param("userIds") List<Long> userIds,
+            @Param("start") Instant start,
+            @Param("end") Instant end
+    );
+
+    @Query("""
+        SELECT b FROM SicboBet b
+        WHERE b.user.id = :userId
+          AND (:start IS NULL OR b.createdAt >= :start)
+          AND (:end IS NULL OR b.createdAt <= :end)
+        ORDER BY b.createdAt DESC
+    """)
+    List<SicboBet> findRecentBetsByUserIdAndDateRange(
+            @Param("userId") Long userId,
+            @Param("start") Instant start,
+            @Param("end") Instant end,
+            Pageable pageable
+    );
 }
 
 
