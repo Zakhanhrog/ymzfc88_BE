@@ -5,6 +5,7 @@ import com.xsecret.dto.response.SicboBetPlacementResponse;
 import com.xsecret.entity.PointTransaction;
 import com.xsecret.entity.SicboBet;
 import com.xsecret.entity.SicboQuickBetConfig;
+import com.xsecret.entity.SicboResultHistory;
 import com.xsecret.entity.SicboSession;
 import com.xsecret.entity.User;
 import com.xsecret.repository.SicboBetRepository;
@@ -84,6 +85,7 @@ public class SicboBetService {
     private final SicboSessionRepository sessionRepository;
     private final SicboQuickBetConfigRepository quickBetConfigRepository;
     private final PointService pointService;
+    private final SicboResultHistoryService resultHistoryService;
 
     @Transactional
     public SicboBetPlacementResponse placeBets(User user, SicboBetRequest request) {
@@ -202,51 +204,71 @@ public class SicboBetService {
 
     @Transactional
     public void settleBets(SicboSession session, String resultCode) {
-        List<SicboBet> pendingBets = betRepository.findBySessionAndStatus(session, SicboBet.Status.PENDING);
-        if (pendingBets.isEmpty()) {
-            return;
-        }
-
         Set<String> winningCodes = resolveWinningCodes(resultCode);
         Instant now = Instant.now();
 
-        for (SicboBet bet : pendingBets) {
-            bet.setResultCode(resultCode);
-            bet.setSettledAt(now);
-
-            if (winningCodes.contains(bet.getBetCode())) {
-                BigDecimal multiplier = bet.getPayoutMultiplier() != null
-                        ? bet.getPayoutMultiplier().add(BigDecimal.ONE)
-                        : BigDecimal.ONE;
-                BigDecimal winAmount = bet.getStake().multiply(multiplier);
-                if (session.getTableNumber() != null
-                        && session.getTableNumber() == 2
-                        && bet.getBetCode() != null
-                        && bet.getBetCode().startsWith("sicbo_combo_triple_")) {
-                    BigDecimal fee = winAmount.multiply(BigDecimal.valueOf(0.03));
-                    winAmount = winAmount.subtract(fee);
+        int resultSum = 0;
+        boolean isTripleSum = false;
+        SicboResultHistory.Category historyCategory = null;
+        List<Integer> faces = parseFaces(resultCode);
+        if (faces.size() == 3) {
+            resultSum = faces.stream().mapToInt(Integer::intValue).sum();
+            isTripleSum = (resultSum == 3 || resultSum == 18);
+            if (session.getTableNumber() != null) {
+                if (isTripleSum) {
+                    historyCategory = SicboResultHistory.Category.TRIPLE;
+                } else if (resultSum >= 11) {
+                    historyCategory = SicboResultHistory.Category.BIG;
+                } else {
+                    historyCategory = SicboResultHistory.Category.SMALL;
                 }
-
-                pointService.addPoints(
-                        bet.getUser(),
-                        winAmount,
-                        PointTransaction.PointTransactionType.BET_WIN,
-                        String.format("Thắng cược Sicbo bàn %d phiên #%d (%s)",
-                                session.getTableNumber(), session.getId(), bet.getBetCode()),
-                        "SICBO",
-                        session.getId(),
-                        null
-                );
-
-                bet.setWinAmount(winAmount);
-                bet.setStatus(SicboBet.Status.WON);
-            } else {
-                bet.setWinAmount(BigDecimal.ZERO);
-                bet.setStatus(SicboBet.Status.LOST);
             }
         }
 
-        betRepository.saveAll(pendingBets);
+        List<SicboBet> pendingBets = betRepository.findBySessionAndStatus(session, SicboBet.Status.PENDING);
+        if (!pendingBets.isEmpty()) {
+            for (SicboBet bet : pendingBets) {
+                bet.setResultCode(resultCode);
+                bet.setSettledAt(now);
+
+                if (winningCodes.contains(bet.getBetCode())) {
+                    BigDecimal multiplier = bet.getPayoutMultiplier() != null
+                            ? bet.getPayoutMultiplier().add(BigDecimal.ONE)
+                            : BigDecimal.ONE;
+                    BigDecimal winAmount = bet.getStake().multiply(multiplier);
+                    if (session.getTableNumber() != null
+                            && session.getTableNumber() == 2
+                            && bet.getBetCode() != null
+                            && bet.getBetCode().startsWith("sicbo_combo_triple_")) {
+                        BigDecimal fee = winAmount.multiply(BigDecimal.valueOf(0.03));
+                        winAmount = winAmount.subtract(fee);
+                    }
+
+                    pointService.addPoints(
+                            bet.getUser(),
+                            winAmount,
+                            PointTransaction.PointTransactionType.BET_WIN,
+                            String.format("Thắng cược Sicbo bàn %d phiên #%d (%s)",
+                                    session.getTableNumber(), session.getId(), bet.getBetCode()),
+                            "SICBO",
+                            session.getId(),
+                            null
+                    );
+
+                    bet.setWinAmount(winAmount);
+                    bet.setStatus(SicboBet.Status.WON);
+                } else {
+                    bet.setWinAmount(BigDecimal.ZERO);
+                    bet.setStatus(SicboBet.Status.LOST);
+                }
+            }
+
+            betRepository.saveAll(pendingBets);
+        }
+
+        if (resultSum > 0 && historyCategory != null) {
+            resultHistoryService.record(session, resultCode, resultSum, historyCategory, now);
+        }
     }
 
     @Transactional
@@ -303,26 +325,7 @@ public class SicboBetService {
     }
 
     private Set<String> resolveWinningCodes(String resultCode) {
-        if (resultCode == null || resultCode.isBlank()) {
-            return Collections.emptySet();
-        }
-
-        String[] rawParts = resultCode.split("[^0-9]+");
-        List<Integer> faces = new ArrayList<>(3);
-        for (String part : rawParts) {
-            if (part == null || part.isBlank()) {
-                continue;
-            }
-            try {
-                int value = Integer.parseInt(part.trim());
-                if (value >= 1 && value <= 6) {
-                    faces.add(value);
-                }
-            } catch (NumberFormatException ignored) {
-                // ignore invalid parts
-            }
-        }
-
+        List<Integer> faces = parseFaces(resultCode);
         if (faces.size() != 3) {
             log.warn("Không thể phân tích kết quả Sicbo [{}]", resultCode);
             return Collections.emptySet();
@@ -362,6 +365,28 @@ public class SicboBetService {
         });
 
         return winners;
+    }
+
+    private List<Integer> parseFaces(String resultCode) {
+        if (resultCode == null || resultCode.isBlank()) {
+            return Collections.emptyList();
+        }
+        String[] rawParts = resultCode.split("[^0-9]+");
+        List<Integer> faces = new ArrayList<>(3);
+        for (String part : rawParts) {
+            if (part == null || part.isBlank()) {
+                continue;
+            }
+            try {
+                int value = Integer.parseInt(part.trim());
+                if (value >= 1 && value <= 6) {
+                    faces.add(value);
+                }
+            } catch (NumberFormatException ignored) {
+                // ignore malformed tokens
+            }
+        }
+        return faces;
     }
 }
 
