@@ -4,22 +4,25 @@ import com.xsecret.dto.request.CreateUserRequestDto;
 import com.xsecret.dto.request.LoginRequest;
 import com.xsecret.dto.request.PaymentMethodRequestDto;
 import com.xsecret.dto.request.ProcessTransactionRequestDto;
+import com.xsecret.dto.request.UpdateStaffRoleRequest;
 import com.xsecret.dto.request.UpdateUserRequestDto;
 import com.xsecret.dto.request.UserFilterRequestDto;
 import com.xsecret.dto.response.ApiResponse;
+import com.xsecret.dto.response.BetAnalyticsResponse;
 import com.xsecret.dto.response.JwtResponse;
 import com.xsecret.dto.response.PaymentMethodResponseDto;
 import com.xsecret.dto.response.TransactionResponseDto;
+import com.xsecret.dto.response.TransactionAnalyticsResponse;
 import com.xsecret.dto.response.UserResponse;
 import com.xsecret.entity.Transaction;
 import com.xsecret.entity.User;
 import com.xsecret.mapper.UserMapper;
 import com.xsecret.security.UserPrincipal;
+import com.xsecret.service.AnalyticsService;
 import com.xsecret.service.AuthService;
+import com.xsecret.service.DashboardService;
 import com.xsecret.service.PaymentMethodService;
 import com.xsecret.service.SystemSettingsService;
-import java.util.HashMap;
-import java.util.Map;
 import com.xsecret.service.TransactionService;
 import com.xsecret.service.UserService;
 import jakarta.validation.Valid;
@@ -36,9 +39,10 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
-
-import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/admin")
@@ -54,6 +58,8 @@ public class AdminController {
     private final PaymentMethodService paymentMethodService;
     private final SystemSettingsService systemSettingsService;
     private final com.xsecret.service.BetService betService;
+    private final DashboardService dashboardService;
+    private final AnalyticsService analyticsService;
 
     @PostMapping("/login")
     @PreAuthorize("permitAll()")
@@ -75,9 +81,102 @@ public class AdminController {
     public ResponseEntity<ApiResponse<Object>> getDashboardStats() {
         log.info("Getting dashboard stats");
         
-        var stats = userService.getDashboardStats();
+        var stats = dashboardService.getOverview();
         
         return ResponseEntity.ok(ApiResponse.success(stats));
+    }
+
+    @GetMapping("/staff")
+    public ResponseEntity<ApiResponse<Object>> getStaffUsers(
+            @RequestParam(required = false) String staffRole,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        log.info("Fetching staff users with staffRole={}, page={}, size={}", staffRole, page, size);
+
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.max(1, Math.min(size, 200)));
+
+        String normalizedRole = staffRole == null || staffRole.isBlank()
+                ? "ALL"
+                : staffRole.trim().toUpperCase(Locale.ROOT);
+
+        Page<User> userPage;
+        switch (normalizedRole) {
+            case "ALL":
+                userPage = userService.getAllUsers(pageable);
+                break;
+            case "STAFF":
+                userPage = userService.getStaffMembers(pageable);
+                break;
+            case "AGENT":
+                userPage = userService.getUsersByStaffRole(User.StaffRole.AGENT, pageable);
+                break;
+            default:
+                User.StaffRole roleEnum = parseStaffRole(normalizedRole);
+                if (roleEnum == null) {
+                    userPage = Page.empty(pageable);
+                } else {
+                    userPage = userService.getUsersByStaffRole(roleEnum, pageable);
+                }
+                break;
+        }
+
+        Page<UserResponse> staffPage = userPage.map(userMapper::toUserResponse);
+        return ResponseEntity.ok(ApiResponse.success(buildPagedResponse(staffPage)));
+    }
+
+    @GetMapping("/agents")
+    public ResponseEntity<ApiResponse<Object>> getAgentUsers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        log.info("Fetching agent users page={}, size={}", page, size);
+
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.max(1, Math.min(size, 200)));
+        Page<UserResponse> agents = userService.getUsersByStaffRole(User.StaffRole.AGENT, pageable)
+                .map(userMapper::toUserResponse);
+
+        return ResponseEntity.ok(ApiResponse.success(buildPagedResponse(agents)));
+    }
+
+    @PutMapping("/users/{id}/staff-role")
+    public ResponseEntity<ApiResponse<UserResponse>> updateStaffRole(
+            @PathVariable Long id,
+            @RequestBody(required = false) UpdateStaffRoleRequest request) {
+        String rawRole = request != null ? request.getStaffRole() : null;
+        User.StaffRole staffRole = parseStaffRole(rawRole);
+        log.info("Updating staff role for user {} to {}", id, staffRole);
+
+        User updated = userService.updateStaffRole(id, staffRole);
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật phân quyền thành công", userMapper.toUserResponse(updated)));
+    }
+
+    @GetMapping("/analytics/bets")
+    public ResponseEntity<ApiResponse<BetAnalyticsResponse>> getBetAnalytics(
+            @RequestParam(defaultValue = "lottery") String gameType,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        log.info("Fetching bet analytics: gameType={}, status={}, start={}, end={}, page={}, size={}",
+                gameType, status, startDate, endDate, page, size);
+
+        BetAnalyticsResponse response = analyticsService.getBetAnalytics(gameType, status, startDate, endDate, page, size);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/analytics/transactions")
+    public ResponseEntity<ApiResponse<TransactionAnalyticsResponse>> getTransactionAnalytics(
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        log.info("Fetching transaction analytics: type={}, status={}, start={}, end={}, page={}, size={}",
+                type, status, startDate, endDate, page, size);
+
+        TransactionAnalyticsResponse response = analyticsService.getTransactionAnalytics(type, status, startDate, endDate, page, size);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @GetMapping("/users")
@@ -762,5 +861,27 @@ public class AdminController {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error(e.getMessage()));
         }
+    }
+
+    private User.StaffRole parseStaffRole(String rawRole) {
+        if (rawRole == null || rawRole.isBlank() || "all".equalsIgnoreCase(rawRole)) {
+            return null;
+        }
+        try {
+            return User.StaffRole.valueOf(rawRole.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            log.warn("Invalid staff role provided: {}", rawRole);
+            return null;
+        }
+    }
+
+    private Map<String, Object> buildPagedResponse(Page<?> page) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("items", page.getContent());
+        payload.put("totalItems", page.getTotalElements());
+        payload.put("totalPages", page.getTotalPages());
+        payload.put("page", page.getNumber());
+        payload.put("size", page.getSize());
+        return payload;
     }
 }

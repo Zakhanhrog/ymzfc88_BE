@@ -20,6 +20,7 @@ public class UserMapper {
                 .phoneNumber(user.getPhoneNumber())
                 .role(user.getRole())
                 .status(user.getStatus())
+                .staffRole(user.getStaffRole())
                 .points(user.getPoints())
                 .kycVerified(user.getKycVerified())
                 .withdrawalLocked(user.getWithdrawalLocked())

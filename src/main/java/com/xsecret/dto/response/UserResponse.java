@@ -21,6 +21,7 @@ public class UserResponse {
     private String phoneNumber;
     private User.Role role;
     private User.UserStatus status;
+    private User.StaffRole staffRole;
     private Long points;
     private Boolean kycVerified;
     private Boolean withdrawalLocked;

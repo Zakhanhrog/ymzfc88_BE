@@ -3,10 +3,8 @@ package com.xsecret.service;
 import com.xsecret.dto.request.CreateUserRequestDto;
 import com.xsecret.dto.request.UpdateUserRequestDto;
 import com.xsecret.dto.request.UserFilterRequestDto;
-import com.xsecret.dto.response.UserResponse;
 import com.xsecret.entity.User;
 import com.xsecret.exception.UserAlreadyExistsException;
-import com.xsecret.mapper.UserMapper;
 import com.xsecret.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,11 +28,21 @@ import java.util.Map;
 public class UserService {
 
     private final UserRepository userRepository;
-    private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
+    private static final List<User.StaffRole> STAFF_ONLY_ROLES = List.of(
+            User.StaffRole.STAFF_TX1,
+            User.StaffRole.STAFF_TX2,
+            User.StaffRole.STAFF_XD,
+            User.StaffRole.STAFF_MKT,
+            User.StaffRole.STAFF_XNK
+    );
 
     public List<User> getAllUsers() {
         return userRepository.findAll();
+    }
+
+    public Page<User> getAllUsers(Pageable pageable) {
+        return userRepository.findAll(pageable);
     }
 
     public User getUserById(Long id) {
@@ -60,27 +68,6 @@ public class UserService {
         User user = getUserById(userId);
         user.setStatus(status);
         return userRepository.save(user);
-    }
-
-    public Map<String, Object> getDashboardStats() {
-        Map<String, Object> stats = new HashMap<>();
-        
-        long totalUsers = userRepository.countUsers();
-        long totalAdmins = userRepository.countAdmins();
-        long activeUsers = userRepository.findByRoleAndStatus(User.Role.USER, User.UserStatus.ACTIVE).size();
-        
-        stats.put("totalUsers", totalUsers);
-        stats.put("totalAdmins", totalAdmins);
-        stats.put("activeUsers", activeUsers);
-        stats.put("totalPoints", calculateTotalPoints());
-        
-        return stats;
-    }
-
-    private Long calculateTotalPoints() {
-        return userRepository.findAll().stream()
-                .mapToLong(user -> user.getPoints() != null ? user.getPoints() : 0L)
-                .sum();
     }
 
     // ================ ADVANCED USER MANAGEMENT ================
@@ -211,6 +198,24 @@ public class UserService {
         User user = getUserById(userId);
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
+    }
+
+    public Page<User> getUsersByStaffRole(User.StaffRole staffRole, Pageable pageable) {
+        if (staffRole == null) {
+            return userRepository.findAll(pageable);
+        }
+        return userRepository.findByStaffRole(staffRole, pageable);
+    }
+
+    public Page<User> getStaffMembers(Pageable pageable) {
+        return userRepository.findByStaffRoleIn(STAFF_ONLY_ROLES, pageable);
+    }
+
+    @Transactional
+    public User updateStaffRole(Long userId, User.StaffRole staffRole) {
+        User user = getUserById(userId);
+        user.setStaffRole(staffRole);
+        return userRepository.save(user);
     }
 
     /**

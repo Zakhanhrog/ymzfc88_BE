@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -157,4 +158,42 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
      */
     @Query("SELECT COALESCE(SUM(b.winAmount), 0) FROM Bet b WHERE b.isWin = true")
     double getTotalWinAmount();
+
+    @Query("SELECT COALESCE(SUM(b.totalAmount), 0) FROM Bet b WHERE b.status = :status AND b.resultCheckedAt BETWEEN :start AND :end")
+    BigDecimal sumTotalAmountByStatusAndResultCheckedAtBetween(@Param("status") Bet.BetStatus status,
+                                                               @Param("start") LocalDateTime start,
+                                                               @Param("end") LocalDateTime end);
+
+    @Query("SELECT DATE(b.resultCheckedAt) AS day, " +
+           "SUM(CASE WHEN b.status = 'LOST' THEN b.totalAmount ELSE 0 END) AS lostAmount, " +
+           "COUNT(b) AS totalBets " +
+           "FROM Bet b " +
+           "WHERE b.resultCheckedAt BETWEEN :start AND :end " +
+           "GROUP BY DATE(b.resultCheckedAt) " +
+           "ORDER BY DATE(b.resultCheckedAt)")
+    List<Object[]> getDailyBetStats(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    @Query("SELECT b FROM Bet b JOIN FETCH b.user WHERE b.status IN :statuses AND b.resultCheckedAt IS NOT NULL ORDER BY b.resultCheckedAt DESC")
+    List<Bet> findRecentBetsByStatuses(@Param("statuses") List<Bet.BetStatus> statuses, Pageable pageable);
+
+    @Query("SELECT b FROM Bet b WHERE (:status IS NULL OR b.status = :status) AND (:start IS NULL OR b.createdAt >= :start) AND (:end IS NULL OR b.createdAt <= :end)")
+    Page<Bet> findForAnalytics(@Param("status") Bet.BetStatus status,
+                               @Param("start") LocalDateTime start,
+                               @Param("end") LocalDateTime end,
+                               Pageable pageable);
+
+    @Query("SELECT COALESCE(SUM(b.totalAmount), 0) FROM Bet b WHERE (:status IS NULL OR b.status = :status) AND (:start IS NULL OR b.createdAt >= :start) AND (:end IS NULL OR b.createdAt <= :end)")
+    BigDecimal sumTotalAmountByFilters(@Param("status") Bet.BetStatus status,
+                                       @Param("start") LocalDateTime start,
+                                       @Param("end") LocalDateTime end);
+
+    @Query("SELECT COALESCE(SUM(b.winAmount), 0) FROM Bet b WHERE (:status IS NULL OR b.status = :status) AND (:start IS NULL OR b.createdAt >= :start) AND (:end IS NULL OR b.createdAt <= :end)")
+    BigDecimal sumWinAmountByFilters(@Param("status") Bet.BetStatus status,
+                                     @Param("start") LocalDateTime start,
+                                     @Param("end") LocalDateTime end);
+
+    @Query("SELECT COALESCE(SUM(b.totalAmount), 0) FROM Bet b WHERE b.status = :status AND (:start IS NULL OR b.createdAt >= :start) AND (:end IS NULL OR b.createdAt <= :end)")
+    BigDecimal sumTotalAmountByStatusAndDate(@Param("status") Bet.BetStatus status,
+                                             @Param("start") LocalDateTime start,
+                                             @Param("end") LocalDateTime end);
 }

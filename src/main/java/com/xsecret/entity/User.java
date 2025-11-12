@@ -73,6 +73,10 @@ public class User {
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "staff_role")
+    private StaffRole staffRole;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -87,5 +91,14 @@ public class User {
 
     public enum UserStatus {
         ACTIVE, INACTIVE, SUSPENDED, BANNED
+    }
+
+    public enum StaffRole {
+        AGENT,
+        STAFF_TX1,
+        STAFF_TX2,
+        STAFF_XD,
+        STAFF_MKT,
+        STAFF_XNK
     }
 }

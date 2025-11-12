@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -67,6 +68,12 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     long countByCreatedAtAfter(LocalDateTime dateTime);
 
+    @Query("SELECT COUNT(u) FROM User u WHERE u.status = :status AND u.lastLogin IS NOT NULL AND u.lastLogin >= :since")
+    long countOnlineUsers(@Param("status") User.UserStatus status, @Param("since") LocalDateTime since);
+
+    @Query("SELECT DATE(u.createdAt) AS day, COUNT(u) FROM User u WHERE u.createdAt BETWEEN :start AND :end GROUP BY DATE(u.createdAt)")
+    List<Object[]> countNewUsersByDate(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
     // Top users by points
     @Query("SELECT u FROM User u WHERE u.points > 0 ORDER BY u.points DESC")
     List<User> findTop10ByOrderByPointsDesc();
@@ -85,4 +92,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     // Users by points range
     @Query("SELECT u FROM User u WHERE u.points BETWEEN :minPoints AND :maxPoints")
     List<User> findByPointsBetween(@Param("minPoints") Long minPoints, @Param("maxPoints") Long maxPoints);
+
+    Page<User> findByStaffRole(User.StaffRole staffRole, Pageable pageable);
+
+    List<User> findByStaffRole(User.StaffRole staffRole);
+
+    Page<User> findByStaffRoleIn(Collection<User.StaffRole> roles, Pageable pageable);
 }

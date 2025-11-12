@@ -76,4 +76,43 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
                                                           @Param("status") Transaction.TransactionStatus status,
                                                           @Param("startDate") LocalDateTime startDate,
                                                           @Param("endDate") LocalDateTime endDate);
+
+    long countByStatusInAndCreatedAtBetween(List<Transaction.TransactionStatus> statuses,
+                                            LocalDateTime startDate,
+                                            LocalDateTime endDate);
+
+    @Query("SELECT COALESCE(SUM(t.netAmount), 0) FROM Transaction t WHERE t.status IN :statuses AND t.createdAt BETWEEN :start AND :end")
+    BigDecimal sumNetAmountByStatusInAndCreatedAtBetween(@Param("statuses") List<Transaction.TransactionStatus> statuses,
+                                                         @Param("start") LocalDateTime start,
+                                                         @Param("end") LocalDateTime end);
+
+    @Query("SELECT DATE(t.createdAt) AS day, COUNT(t) AS txnCount, COALESCE(SUM(t.netAmount), 0) AS totalAmount " +
+           "FROM Transaction t WHERE t.status IN :statuses AND t.createdAt BETWEEN :start AND :end " +
+           "GROUP BY DATE(t.createdAt) ORDER BY DATE(t.createdAt)")
+    List<Object[]> getDailyTransactionStats(@Param("statuses") List<Transaction.TransactionStatus> statuses,
+                                            @Param("start") LocalDateTime start,
+                                            @Param("end") LocalDateTime end);
+
+    @Query("SELECT t FROM Transaction t JOIN FETCH t.user WHERE t.status IN :statuses ORDER BY t.createdAt DESC")
+    List<Transaction> findRecentTransactionsByStatuses(@Param("statuses") List<Transaction.TransactionStatus> statuses,
+                                                       Pageable pageable);
+
+    @Query("SELECT t FROM Transaction t WHERE (:type IS NULL OR t.type = :type) AND (:status IS NULL OR t.status = :status) AND (:start IS NULL OR t.createdAt >= :start) AND (:end IS NULL OR t.createdAt <= :end)")
+    Page<Transaction> findAnalytics(@Param("type") Transaction.TransactionType type,
+                                    @Param("status") Transaction.TransactionStatus status,
+                                    @Param("start") LocalDateTime start,
+                                    @Param("end") LocalDateTime end,
+                                    Pageable pageable);
+
+    @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t WHERE (:type IS NULL OR t.type = :type) AND (:status IS NULL OR t.status = :status) AND (:start IS NULL OR t.createdAt >= :start) AND (:end IS NULL OR t.createdAt <= :end)")
+    BigDecimal sumAmountByFilters(@Param("type") Transaction.TransactionType type,
+                                  @Param("status") Transaction.TransactionStatus status,
+                                  @Param("start") LocalDateTime start,
+                                  @Param("end") LocalDateTime end);
+
+    @Query("SELECT COALESCE(SUM(t.netAmount), 0) FROM Transaction t WHERE (:type IS NULL OR t.type = :type) AND (:status IS NULL OR t.status = :status) AND (:start IS NULL OR t.createdAt >= :start) AND (:end IS NULL OR t.createdAt <= :end)")
+    BigDecimal sumNetAmountByFilters(@Param("type") Transaction.TransactionType type,
+                                     @Param("status") Transaction.TransactionStatus status,
+                                     @Param("start") LocalDateTime start,
+                                     @Param("end") LocalDateTime end);
 }
