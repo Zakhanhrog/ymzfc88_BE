@@ -204,16 +204,23 @@ public class SicboBetService {
 
     @Transactional
     public void settleBets(SicboSession session, String resultCode) {
-        Set<String> winningCodes = resolveWinningCodes(resultCode);
         Instant now = Instant.now();
-
+        Set<String> winningCodes = resolveWinningCodes(resultCode);
         int resultSum = 0;
         boolean isTripleSum = false;
+        Integer tripleFace = null;
         SicboResultHistory.Category historyCategory = null;
         List<Integer> faces = parseFaces(resultCode);
         if (faces.size() == 3) {
             resultSum = faces.stream().mapToInt(Integer::intValue).sum();
             isTripleSum = (resultSum == 3 || resultSum == 18);
+            Map<Integer, Long> counts = faces.stream()
+                    .collect(Collectors.groupingBy(face -> face, Collectors.counting()));
+            tripleFace = counts.entrySet().stream()
+                    .filter(entry -> entry.getValue() == 3L)
+                    .map(Map.Entry::getKey)
+                    .findFirst()
+                    .orElse(null);
             if (session.getTableNumber() != null) {
                 if (isTripleSum) {
                     historyCategory = SicboResultHistory.Category.TRIPLE;
@@ -227,22 +234,102 @@ public class SicboBetService {
 
         List<SicboBet> pendingBets = betRepository.findBySessionAndStatus(session, SicboBet.Status.PENDING);
         if (!pendingBets.isEmpty()) {
+            boolean isTripleResult = tripleFace != null;
+            boolean isLowTriple = false;
+            boolean isHighTriple = false;
+            if (tripleFace != null) {
+                isLowTriple = tripleFace <= 3;
+                isHighTriple = tripleFace >= 4;
+            }
             for (SicboBet bet : pendingBets) {
                 bet.setResultCode(resultCode);
                 bet.setSettledAt(now);
 
-                if (winningCodes.contains(bet.getBetCode())) {
+                if (isTripleResult) {
+                    boolean handled = false;
+                    String betCode = bet.getBetCode();
+                    if (betCode != null && betCode.equals("sicbo_combo_triple_" + tripleFace)) {
+                        BigDecimal multiplier = bet.getPayoutMultiplier() != null
+                                ? bet.getPayoutMultiplier().add(BigDecimal.ONE)
+                                : BigDecimal.ONE;
+                        BigDecimal winAmount = bet.getStake().multiply(multiplier);
+
+                        pointService.addPoints(
+                                bet.getUser(),
+                                winAmount,
+                                PointTransaction.PointTransactionType.BET_WIN,
+                                String.format("Thắng cược Sicbo bàn %d phiên #%d (%s)",
+                                        session.getTableNumber(), session.getId(), bet.getBetCode()),
+                                "SICBO",
+                                session.getId(),
+                                null
+                        );
+
+                        bet.setWinAmount(winAmount);
+                        bet.setStatus(SicboBet.Status.WON);
+                        handled = true;
+                    } else if (betCode != null && betCode.equals("sicbo_single_" + tripleFace)) {
+                        BigDecimal baseMultiplier = Optional.ofNullable(bet.getPayoutMultiplier()).orElse(BigDecimal.ZERO);
+                        BigDecimal winAmount = bet.getStake()
+                                .add(bet.getStake().multiply(baseMultiplier).multiply(BigDecimal.valueOf(3)));
+
+                        pointService.addPoints(
+                                bet.getUser(),
+                                winAmount,
+                                PointTransaction.PointTransactionType.BET_WIN,
+                                String.format("Thắng cược Sicbo (x3) bàn %d phiên #%d (%s)",
+                                        session.getTableNumber(), session.getId(), bet.getBetCode()),
+                                "SICBO",
+                                session.getId(),
+                                null
+                        );
+
+                        bet.setWinAmount(winAmount);
+                        bet.setStatus(SicboBet.Status.WON);
+                        handled = true;
+                    } else if (session.getTableNumber() != null && session.getTableNumber() == 2) {
+                        if (isLowTriple && "sicbo_primary_small".equals(betCode)) {
+                            pointService.addPoints(
+                                    bet.getUser(),
+                                    bet.getStake(),
+                                    PointTransaction.PointTransactionType.BET_REFUND,
+                                    String.format("Hoàn cược Sicbo bàn %d phiên #%d (%s) do ra bộ ba nhỏ",
+                                            session.getTableNumber(), session.getId(), bet.getBetCode()),
+                                    "SICBO",
+                                    session.getId(),
+                                    null
+                            );
+
+                            bet.setWinAmount(bet.getStake());
+                            bet.setStatus(SicboBet.Status.REFUNDED);
+                            handled = true;
+                        } else if (isHighTriple && "sicbo_primary_big".equals(betCode)) {
+                            pointService.addPoints(
+                                    bet.getUser(),
+                                    bet.getStake(),
+                                    PointTransaction.PointTransactionType.BET_REFUND,
+                                    String.format("Hoàn cược Sicbo bàn %d phiên #%d (%s) do ra bộ ba lớn",
+                                            session.getTableNumber(), session.getId(), bet.getBetCode()),
+                                    "SICBO",
+                                    session.getId(),
+                                    null
+                            );
+
+                            bet.setWinAmount(bet.getStake());
+                            bet.setStatus(SicboBet.Status.REFUNDED);
+                            handled = true;
+                        }
+                    }
+
+                    if (!handled) {
+                        bet.setWinAmount(BigDecimal.ZERO);
+                        bet.setStatus(SicboBet.Status.LOST);
+                    }
+                } else if (winningCodes.contains(bet.getBetCode())) {
                     BigDecimal multiplier = bet.getPayoutMultiplier() != null
                             ? bet.getPayoutMultiplier().add(BigDecimal.ONE)
                             : BigDecimal.ONE;
                     BigDecimal winAmount = bet.getStake().multiply(multiplier);
-                    if (session.getTableNumber() != null
-                            && session.getTableNumber() == 2
-                            && bet.getBetCode() != null
-                            && bet.getBetCode().startsWith("sicbo_combo_triple_")) {
-                        BigDecimal fee = winAmount.multiply(BigDecimal.valueOf(0.03));
-                        winAmount = winAmount.subtract(fee);
-                    }
 
                     pointService.addPoints(
                             bet.getUser(),
