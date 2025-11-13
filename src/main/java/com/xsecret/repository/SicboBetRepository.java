@@ -87,6 +87,44 @@ public interface SicboBetRepository extends JpaRepository<SicboBet, Long> {
             @Param("end") Instant end,
             Pageable pageable
     );
+
+    @Query("""
+        SELECT b FROM SicboBet b
+        WHERE (:status IS NULL OR b.status = :status)
+          AND (:start IS NULL OR b.createdAt >= :start)
+          AND (:end IS NULL OR b.createdAt <= :end)
+        ORDER BY b.createdAt DESC
+    """)
+    Page<SicboBet> findAdminHistory(
+            @Param("status") SicboBet.Status status,
+            @Param("start") Instant start,
+            @Param("end") Instant end,
+            Pageable pageable
+    );
+
+    @Query("""
+        SELECT COALESCE(SUM(b.stake), 0) FROM SicboBet b
+        WHERE (:status IS NULL OR b.status = :status)
+          AND (:start IS NULL OR b.createdAt >= :start)
+          AND (:end IS NULL OR b.createdAt <= :end)
+    """)
+    BigDecimal sumStakeByCreatedAtFilters(
+            @Param("status") SicboBet.Status status,
+            @Param("start") Instant start,
+            @Param("end") Instant end
+    );
+
+    @Query("""
+        SELECT COALESCE(SUM(b.winAmount), 0) FROM SicboBet b
+        WHERE (:status IS NULL OR b.status = :status)
+          AND (:start IS NULL OR b.createdAt >= :start)
+          AND (:end IS NULL OR b.createdAt <= :end)
+    """)
+    BigDecimal sumWinAmountByCreatedAtFilters(
+            @Param("status") SicboBet.Status status,
+            @Param("start") Instant start,
+            @Param("end") Instant end
+    );
 }
 
 

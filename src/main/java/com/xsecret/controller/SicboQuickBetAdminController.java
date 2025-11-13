@@ -17,7 +17,7 @@ import java.util.List;
 @RequestMapping("/admin/sicbo/quick-bets")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN','STAFF_XNK')")
 public class SicboQuickBetAdminController {
 
     private final SicboQuickBetService quickBetService;

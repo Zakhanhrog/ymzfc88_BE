@@ -20,7 +20,7 @@ import java.util.List;
 @RequestMapping("/admin/betting-odds")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN','STAFF_XNK')")
 public class BettingOddsController {
 
     private final BettingOddsService bettingOddsService;

@@ -50,7 +50,7 @@ import java.util.Map;
 @RequestMapping("/admin")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_AGENT_PORTAL','ROLE_STAFF_PORTAL')")
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_STAFF_XNK')")
 public class AdminController {
 
     private final AuthService authService;

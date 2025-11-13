@@ -15,5 +15,9 @@ public interface AgentCommissionPayoutRepository extends JpaRepository<AgentComm
             AgentCommissionPayout.Status status,
             Pageable pageable
     );
+
+    java.util.Optional<AgentCommissionPayout> findByAgentAndPeriodMonth(User agent, String periodMonth);
+
+    java.util.List<AgentCommissionPayout> findByPeriodMonth(String periodMonth);
 }
 

@@ -85,5 +85,43 @@ public interface XocDiaBetRepository extends JpaRepository<XocDiaBet, Long> {
             @Param("end") Instant end,
             Pageable pageable
     );
+
+    @Query("""
+        SELECT b FROM XocDiaBet b
+        WHERE (:status IS NULL OR b.status = :status)
+          AND (:start IS NULL OR b.createdAt >= :start)
+          AND (:end IS NULL OR b.createdAt <= :end)
+        ORDER BY b.createdAt DESC
+    """)
+    Page<XocDiaBet> findAdminHistory(
+            @Param("status") XocDiaBet.Status status,
+            @Param("start") Instant start,
+            @Param("end") Instant end,
+            Pageable pageable
+    );
+
+    @Query("""
+        SELECT COALESCE(SUM(b.stake), 0) FROM XocDiaBet b
+        WHERE (:status IS NULL OR b.status = :status)
+          AND (:start IS NULL OR b.createdAt >= :start)
+          AND (:end IS NULL OR b.createdAt <= :end)
+    """)
+    BigDecimal sumStakeByCreatedAtFilters(
+            @Param("status") XocDiaBet.Status status,
+            @Param("start") Instant start,
+            @Param("end") Instant end
+    );
+
+    @Query("""
+        SELECT COALESCE(SUM(b.winAmount), 0) FROM XocDiaBet b
+        WHERE (:status IS NULL OR b.status = :status)
+          AND (:start IS NULL OR b.createdAt >= :start)
+          AND (:end IS NULL OR b.createdAt <= :end)
+    """)
+    BigDecimal sumWinAmountByCreatedAtFilters(
+            @Param("status") XocDiaBet.Status status,
+            @Param("start") Instant start,
+            @Param("end") Instant end
+    );
 }
 

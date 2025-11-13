@@ -28,8 +28,6 @@ public class PointService {
     private final PointTransactionRepository pointTransactionRepository;
     private final UserRepository userRepository;
 
-    private static final int POINTS_PER_1000_VND = 1;
-
     @Transactional
     public void initializeUserPoints(User user) {
         if (userPointRepository.findByUser(user).isEmpty()) {
@@ -152,6 +150,23 @@ public class PointService {
                 user.getUsername(), currentPoints, newPoints);
 
         return mapToResponse(transaction);
+    }
+
+    @Transactional
+    public void addCommissionToAgent(
+            User agent,
+            BigDecimal points,
+            String description,
+            String referenceType,
+            Long referenceId,
+            User createdBy,
+            PointTransaction.PointTransactionType type
+    ) {
+        if (points == null || points.compareTo(BigDecimal.ZERO) <= 0) {
+            log.info("Skip adding commission points for agent {} due to non-positive amount {}", agent.getUsername(), points);
+            return;
+        }
+        addPoints(agent, points, type, description, referenceType, referenceId, createdBy);
     }
 
     @Transactional

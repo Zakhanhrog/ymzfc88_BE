@@ -40,11 +40,11 @@ public class UserService {
     );
 
     public List<User> getAllUsers() {
-        return userRepository.findAll();
+        return userRepository.findByRoleNot(User.Role.ADMIN);
     }
 
     public Page<User> getAllUsers(Pageable pageable) {
-        return userRepository.findAll(pageable);
+        return userRepository.findByRoleNot(User.Role.ADMIN, pageable);
     }
 
     public User getUserById(Long id) {
@@ -215,6 +215,14 @@ public class UserService {
         int size = filters.getSize() != null ? filters.getSize() : 10;
         Pageable pageable = PageRequest.of(page, size, sort);
 
+        // Không hiển thị admin trong bất kỳ danh sách nào
+        if (filters.getRole() != null) {
+            User.Role requestedRole = User.Role.valueOf(filters.getRole());
+            if (requestedRole == User.Role.ADMIN) {
+                return Page.empty(pageable);
+            }
+        }
+
         // Nếu có search term, filter theo custom query
         if (filters.getSearchTerm() != null && !filters.getSearchTerm().trim().isEmpty()) {
             return userRepository.findBySearchTermWithFilters(
@@ -235,11 +243,15 @@ public class UserService {
         } else if (filters.getRole() != null) {
             return userRepository.findByRole(User.Role.valueOf(filters.getRole()), pageable);
         } else if (filters.getStatus() != null) {
-            return userRepository.findByStatus(User.UserStatus.valueOf(filters.getStatus()), pageable);
+            return userRepository.findByStatusAndRoleNot(
+                User.UserStatus.valueOf(filters.getStatus()),
+                User.Role.ADMIN,
+                pageable
+            );
         }
 
         // Trả về tất cả
-        return userRepository.findAll(pageable);
+        return userRepository.findByRoleNot(User.Role.ADMIN, pageable);
     }
 
     /**

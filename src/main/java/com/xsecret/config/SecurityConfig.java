@@ -124,6 +124,8 @@ public class SecurityConfig {
             "http://localhost:8080",
                 "https://api.tathiet168.com",
             "https://admin.tathiet168.com",
+                "https://agent.tathiet168.com",
+                "https://staff.tathiet168.com",
             "http://localhost:5173",
             "http://localhost:5174"
         ));

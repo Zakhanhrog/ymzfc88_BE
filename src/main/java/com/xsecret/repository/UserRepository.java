@@ -28,6 +28,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findByRole(User.Role role);
 
+    List<User> findByRoleNot(User.Role role);
+
     List<User> findByStatus(User.UserStatus status);
 
     @Query("SELECT u FROM User u WHERE u.role = :role AND u.status = :status")
@@ -46,6 +48,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Page<User> findByStatus(User.UserStatus status, Pageable pageable);
 
+    Page<User> findByRoleNot(User.Role role, Pageable pageable);
+
+    Page<User> findByStatusAndRoleNot(User.UserStatus status, User.Role role, Pageable pageable);
+
     @Query("SELECT u FROM User u WHERE u.role = :role AND u.status = :status")
     Page<User> findByRoleAndStatus(@Param("role") User.Role role, @Param("status") User.UserStatus status, Pageable pageable);
 
@@ -55,7 +61,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
            "LOWER(u.email) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
            "LOWER(u.fullName) LIKE LOWER(CONCAT('%', :searchTerm, '%'))) AND " +
            "(:role IS NULL OR u.role = :role) AND " +
-           "(:status IS NULL OR u.status = :status)")
+           "(:status IS NULL OR u.status = :status) AND " +
+           "u.role <> 'ADMIN'")
     Page<User> findBySearchTermWithFilters(@Param("searchTerm") String searchTerm,
                                          @Param("role") User.Role role,
                                          @Param("status") User.UserStatus status,

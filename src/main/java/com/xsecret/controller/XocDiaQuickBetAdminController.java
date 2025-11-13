@@ -17,7 +17,7 @@ import java.util.List;
 @RequestMapping("/admin/xoc-dia/quick-bets")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN','STAFF_XNK')")
 public class XocDiaQuickBetAdminController {
 
     private final XocDiaQuickBetService quickBetService;
