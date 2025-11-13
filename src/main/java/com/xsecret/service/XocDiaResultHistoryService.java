@@ -3,6 +3,7 @@ package com.xsecret.service;
 import com.xsecret.dto.response.XocDiaResultHistoryResponse;
 import com.xsecret.dto.response.XocDiaResultHistoryResponse.Parity;
 import com.xsecret.entity.XocDiaResultHistory;
+import com.xsecret.entity.XocDiaSession;
 import com.xsecret.repository.XocDiaResultHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -12,6 +13,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -50,6 +52,22 @@ public class XocDiaResultHistoryService {
                     return XocDiaResultHistoryResponse.fromEntity(history, redCount, parity);
                 })
                 .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void record(XocDiaSession session, String resultCode, Instant recordedAt) {
+        if (session == null || resultCode == null || resultCode.isBlank()) {
+            return;
+        }
+        String normalized = resultCode.trim().toLowerCase(Locale.ROOT);
+
+        XocDiaResultHistory history = XocDiaResultHistory.builder()
+                .session(session)
+                .resultCode(resultCode)
+                .normalizedResultCode(normalized)
+                .recordedAt(recordedAt != null ? recordedAt : Instant.now())
+                .build();
+        resultHistoryRepository.save(history);
     }
 
     private int resolveRedCount(String normalizedCode) {

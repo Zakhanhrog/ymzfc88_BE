@@ -17,6 +17,7 @@ public class XocDiaSessionService {
 
     private final XocDiaSessionRepository sessionRepository;
     private final XocDiaBetService betService;
+    private final XocDiaResultHistoryService resultHistoryService;
 
     @Transactional
     public XocDiaSessionResponse getCurrentSession() {
@@ -90,6 +91,7 @@ public class XocDiaSessionService {
 
         XocDiaSession saved = sessionRepository.save(session);
         betService.settleBets(saved, resultCode);
+        resultHistoryService.record(saved, resultCode, now);
         return XocDiaSessionResponse.fromEntity(saved, now);
     }
 

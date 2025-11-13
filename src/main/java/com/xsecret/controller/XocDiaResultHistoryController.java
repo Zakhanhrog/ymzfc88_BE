@@ -21,10 +21,10 @@ public class XocDiaResultHistoryController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<XocDiaResultHistoryResponse>>> getResultHistory(
-            @RequestParam(name = "limit", defaultValue = "102") int limit,
-            @RequestParam(name = "order", defaultValue = "asc") String order
+            @RequestParam(name = "limit", defaultValue = "120") int limit,
+            @RequestParam(name = "order", defaultValue = "desc") String order
     ) {
-        boolean ascending = !"desc".equalsIgnoreCase(order);
+        boolean ascending = "asc".equalsIgnoreCase(order);
         List<XocDiaResultHistoryResponse> histories = resultHistoryService.getRecentHistories(limit, ascending);
         return ResponseEntity.ok(ApiResponse.success(histories));
     }

@@ -30,6 +30,8 @@ public class CreateUserRequestDto {
     @NotNull(message = "Vai trò không được để trống")
     private String role; // USER hoặc ADMIN
 
+    private String staffRole;
+
     private String referralCode;
 
     private String invitedByCode;

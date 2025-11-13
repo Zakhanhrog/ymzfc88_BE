@@ -16,6 +16,7 @@ import com.xsecret.dto.response.TransactionAnalyticsResponse;
 import com.xsecret.dto.response.UserResponse;
 import com.xsecret.entity.Transaction;
 import com.xsecret.entity.User;
+import com.xsecret.exception.UserAlreadyExistsException;
 import com.xsecret.mapper.UserMapper;
 import com.xsecret.security.UserPrincipal;
 import com.xsecret.service.AnalyticsService;
@@ -356,6 +357,25 @@ public class AdminController {
         UserResponse userResponse = userMapper.toUserResponse(user);
         
         return ResponseEntity.ok(ApiResponse.success(userResponse));
+    }
+
+    @PutMapping("/profile")
+    public ResponseEntity<ApiResponse<UserResponse>> updateAdminProfile(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @Valid @RequestBody UpdateUserRequestDto request
+    ) {
+        log.info("Updating admin profile for user {}", userPrincipal.getUsername());
+
+        try {
+            User updatedUser = userService.updateUser(userPrincipal.getId(), request);
+            UserResponse response = userMapper.toUserResponse(updatedUser);
+            return ResponseEntity.ok(ApiResponse.success("Cập nhật thông tin thành công", response));
+        } catch (UserAlreadyExistsException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("Error updating admin profile", e);
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
     }
     
     // ======================== TRANSACTION MANAGEMENT ========================

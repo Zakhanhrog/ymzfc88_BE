@@ -94,13 +94,21 @@ public class UserService {
         String normalizedReferral = prepareReferralCode(request.getReferralCode());
         String normalizedInvitedBy = normalizeCode(request.getInvitedByCode());
 
+        User.Role baseRole = User.Role.valueOf(request.getRole());
+
+        User.StaffRole staffRole = null;
+        if (baseRole != User.Role.ADMIN && request.getStaffRole() != null && !request.getStaffRole().isBlank()) {
+            staffRole = User.StaffRole.valueOf(request.getStaffRole().toUpperCase(Locale.ROOT));
+        }
+
         User user = User.builder()
                 .username(request.getUsername())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .fullName(request.getFullName())
                 .phoneNumber(request.getPhoneNumber())
-                .role(User.Role.valueOf(request.getRole()))
+                .role(baseRole)
+                .staffRole(staffRole)
                 .invitedByCode(normalizedInvitedBy)
                 .referralCode(normalizedReferral)
                 .status(User.UserStatus.ACTIVE)
@@ -118,6 +126,12 @@ public class UserService {
 
         User user = getUserById(userId);
 
+        if (request.getUsername() != null && !request.getUsername().equals(user.getUsername())) {
+            if (userRepository.existsByUsername(request.getUsername())) {
+                throw new UserAlreadyExistsException("Tên đăng nhập đã tồn tại: " + request.getUsername());
+            }
+            user.setUsername(request.getUsername());
+        }
         // Cập nhật thông tin
         if (request.getFullName() != null) {
             user.setFullName(request.getFullName());
