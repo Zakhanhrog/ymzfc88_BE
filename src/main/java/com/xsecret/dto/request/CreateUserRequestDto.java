@@ -35,4 +35,6 @@ public class CreateUserRequestDto {
     private String referralCode;
 
     private String invitedByCode;
+
+    private String c2Password;
 }

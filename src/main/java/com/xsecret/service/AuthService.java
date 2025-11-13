@@ -62,6 +62,9 @@ public class AuthService {
         user.setLastLogin(LocalDateTime.now());
         userRepository.save(user);
 
+        // Validate C2 password if required
+        enforceC2PasswordIfRequired(user, loginRequest);
+
         // Generate refresh token
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
 
@@ -74,6 +77,32 @@ public class AuthService {
                 .expiresIn(jwtUtils.getJwtExpirationMs())
                 .user(userResponse)
                 .build();
+    }
+
+    private void enforceC2PasswordIfRequired(User user, LoginRequest loginRequest) {
+        String portal = loginRequest.getPortal() != null
+                ? loginRequest.getPortal().trim().toUpperCase(Locale.ROOT)
+                : null;
+
+        boolean isAdminOrStaff = user.getRole() == User.Role.ADMIN || user.getStaffRole() != null;
+        boolean requiresC2 = isAdminOrStaff && ("ADMIN".equals(portal) || "STAFF".equals(portal));
+
+        if (!requiresC2) {
+            return;
+        }
+
+        if (user.getC2PasswordHash() == null || user.getC2PasswordHash().isBlank()) {
+            throw new IllegalStateException("Tài khoản chưa thiết lập mật khẩu bảo vệ C2");
+        }
+
+        String rawC2Password = loginRequest.getC2Password();
+        if (rawC2Password == null || rawC2Password.isBlank()) {
+            throw new IllegalArgumentException("Vui lòng nhập mật khẩu bảo vệ C2");
+        }
+
+        if (!passwordEncoder.matches(rawC2Password, user.getC2PasswordHash())) {
+            throw new IllegalArgumentException("Mật khẩu bảo vệ C2 không chính xác");
+        }
     }
 
     public JwtResponse register(RegisterRequest registerRequest) {

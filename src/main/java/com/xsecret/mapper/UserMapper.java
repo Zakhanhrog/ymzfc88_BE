@@ -32,6 +32,8 @@ public class UserMapper {
                 .updatedAt(user.getUpdatedAt())
                 .referralCode(user.getReferralCode())
                 .invitedByCode(user.getInvitedByCode())
+                .hasC2Password(user.getC2PasswordHash() != null && !user.getC2PasswordHash().isBlank())
+                .c2PasswordUpdatedAt(user.getC2PasswordUpdatedAt())
                 .build();
     }
 }

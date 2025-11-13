@@ -1,6 +1,8 @@
 package com.xsecret.service;
 
 import com.xsecret.dto.request.SicboBetRequest;
+import com.xsecret.dto.response.SicboBetHistoryItemResponse;
+import com.xsecret.dto.response.SicboBetHistoryPageResponse;
 import com.xsecret.dto.response.SicboBetPlacementResponse;
 import com.xsecret.entity.PointTransaction;
 import com.xsecret.entity.SicboBet;
@@ -11,9 +13,12 @@ import com.xsecret.entity.User;
 import com.xsecret.repository.SicboBetRepository;
 import com.xsecret.repository.SicboQuickBetConfigRepository;
 import com.xsecret.repository.SicboSessionRepository;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
@@ -245,10 +250,11 @@ public class SicboBetService {
                 bet.setResultCode(resultCode);
                 bet.setSettledAt(now);
 
-                if (isTripleResult) {
-                    boolean handled = false;
                     String betCode = bet.getBetCode();
-                    if (betCode != null && betCode.equals("sicbo_combo_triple_" + tripleFace)) {
+                boolean resolved = false;
+
+                if (isTripleResult && betCode != null) {
+                    if (betCode.equals("sicbo_combo_triple_" + tripleFace)) {
                         BigDecimal multiplier = bet.getPayoutMultiplier() != null
                                 ? bet.getPayoutMultiplier().add(BigDecimal.ONE)
                                 : BigDecimal.ONE;
@@ -267,8 +273,8 @@ public class SicboBetService {
 
                         bet.setWinAmount(winAmount);
                         bet.setStatus(SicboBet.Status.WON);
-                        handled = true;
-                    } else if (betCode != null && betCode.equals("sicbo_single_" + tripleFace)) {
+                        resolved = true;
+                    } else if (betCode.equals("sicbo_single_" + tripleFace)) {
                         BigDecimal baseMultiplier = Optional.ofNullable(bet.getPayoutMultiplier()).orElse(BigDecimal.ZERO);
                         BigDecimal winAmount = bet.getStake()
                                 .add(bet.getStake().multiply(baseMultiplier).multiply(BigDecimal.valueOf(3)));
@@ -286,7 +292,7 @@ public class SicboBetService {
 
                         bet.setWinAmount(winAmount);
                         bet.setStatus(SicboBet.Status.WON);
-                        handled = true;
+                        resolved = true;
                     } else if (session.getTableNumber() != null && session.getTableNumber() == 2) {
                         if (isLowTriple && "sicbo_primary_small".equals(betCode)) {
                             pointService.addPoints(
@@ -302,7 +308,7 @@ public class SicboBetService {
 
                             bet.setWinAmount(bet.getStake());
                             bet.setStatus(SicboBet.Status.REFUNDED);
-                            handled = true;
+                            resolved = true;
                         } else if (isHighTriple && "sicbo_primary_big".equals(betCode)) {
                             pointService.addPoints(
                                     bet.getUser(),
@@ -317,15 +323,12 @@ public class SicboBetService {
 
                             bet.setWinAmount(bet.getStake());
                             bet.setStatus(SicboBet.Status.REFUNDED);
-                            handled = true;
+                            resolved = true;
                         }
                     }
-
-                    if (!handled) {
-                        bet.setWinAmount(BigDecimal.ZERO);
-                        bet.setStatus(SicboBet.Status.LOST);
                     }
-                } else if (winningCodes.contains(bet.getBetCode())) {
+
+                if (!resolved && betCode != null && winningCodes.contains(betCode)) {
                     BigDecimal multiplier = bet.getPayoutMultiplier() != null
                             ? bet.getPayoutMultiplier().add(BigDecimal.ONE)
                             : BigDecimal.ONE;
@@ -344,7 +347,10 @@ public class SicboBetService {
 
                     bet.setWinAmount(winAmount);
                     bet.setStatus(SicboBet.Status.WON);
-                } else {
+                    resolved = true;
+                }
+
+                if (!resolved) {
                     bet.setWinAmount(BigDecimal.ZERO);
                     bet.setStatus(SicboBet.Status.LOST);
                 }
@@ -474,6 +480,30 @@ public class SicboBetService {
             }
         }
         return faces;
+    }
+
+    @Transactional(readOnly = true)
+    public SicboBetHistoryPageResponse getUserBetHistory(User user, int page, int size) {
+        if (user == null) {
+            throw new IllegalArgumentException("Người dùng không hợp lệ");
+        }
+        int sanitizedPage = Math.max(page, 0);
+        int sanitizedSize = Math.min(Math.max(size, 1), 50);
+
+        Pageable pageable = PageRequest.of(sanitizedPage, sanitizedSize);
+        Page<SicboBet> betPage = betRepository.findByUserOrderByCreatedAtDesc(user, pageable);
+
+        List<SicboBetHistoryItemResponse> items = betPage.getContent().stream()
+                .map(SicboBetHistoryItemResponse::fromEntity)
+                .collect(Collectors.toList());
+
+        return SicboBetHistoryPageResponse.builder()
+                .items(items)
+                .page(betPage.getNumber())
+                .size(betPage.getSize())
+                .totalItems(betPage.getTotalElements())
+                .hasMore(betPage.hasNext())
+                .build();
     }
 }
 

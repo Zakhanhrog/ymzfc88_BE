@@ -33,4 +33,6 @@ public class UserResponse {
     private LocalDateTime updatedAt;
     private String referralCode;
     private String invitedByCode;
+    private Boolean hasC2Password;
+    private LocalDateTime c2PasswordUpdatedAt;
 }

@@ -83,6 +83,12 @@ public class User {
     @Column(name = "staff_role")
     private StaffRole staffRole;
 
+    @Column(name = "c2_password_hash")
+    private String c2PasswordHash;
+
+    @Column(name = "c2_password_updated_at")
+    private LocalDateTime c2PasswordUpdatedAt;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

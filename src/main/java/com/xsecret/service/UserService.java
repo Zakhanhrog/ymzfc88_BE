@@ -2,6 +2,7 @@ package com.xsecret.service;
 
 import com.xsecret.dto.request.CreateUserRequestDto;
 import com.xsecret.dto.request.UpdateUserRequestDto;
+import com.xsecret.dto.request.UserProfileUpdateRequest;
 import com.xsecret.dto.request.UserFilterRequestDto;
 import com.xsecret.entity.User;
 import com.xsecret.exception.UserAlreadyExistsException;
@@ -22,6 +23,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+
+import org.springframework.util.StringUtils;
 
 @Service
 @RequiredArgsConstructor
@@ -113,6 +116,21 @@ public class UserService {
                 .referralCode(normalizedReferral)
                 .status(User.UserStatus.ACTIVE)
                 .build();
+
+        boolean isAdminAccount = baseRole == User.Role.ADMIN;
+        boolean isStaffAccount = staffRole != null;
+        if ((isAdminAccount || isStaffAccount) &&
+                (request.getC2Password() == null || request.getC2Password().isBlank())) {
+            throw new IllegalArgumentException("Tài khoản quản trị hoặc nhân viên bắt buộc phải có mật khẩu bảo vệ C2");
+        }
+
+        if (request.getC2Password() != null && !request.getC2Password().isBlank()) {
+            if (!isAdminOrStaff(baseRole, staffRole)) {
+                throw new IllegalArgumentException("Chỉ tài khoản quản trị hoặc nhân viên mới được thiết lập mật khẩu bảo vệ C2");
+            }
+            user.setC2PasswordHash(passwordEncoder.encode(request.getC2Password()));
+            user.setC2PasswordUpdatedAt(LocalDateTime.now());
+        }
 
         return userRepository.save(user);
     }
@@ -277,6 +295,90 @@ public class UserService {
         User user = getUserById(userId);
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
+    }
+
+    @Transactional
+    public User updateUserProfile(Long userId, UserProfileUpdateRequest request) {
+        User user = getUserById(userId);
+
+        if (StringUtils.hasText(request.getFullName())) {
+            user.setFullName(request.getFullName().trim());
+        }
+
+        if (StringUtils.hasText(request.getEmail()) && !request.getEmail().equalsIgnoreCase(user.getEmail())) {
+            if (userRepository.existsByEmail(request.getEmail())) {
+                throw new UserAlreadyExistsException("Email đã tồn tại: " + request.getEmail());
+            }
+            user.setEmail(request.getEmail().trim());
+        }
+
+        if (request.getPhoneNumber() != null) {
+            String trimmedPhone = request.getPhoneNumber().trim();
+            user.setPhoneNumber(trimmedPhone.isEmpty() ? null : trimmedPhone);
+        }
+
+        return userRepository.save(user);
+    }
+
+    @Transactional
+    public void changeUserPassword(Long userId, String currentPassword, String newPassword) {
+        User user = getUserById(userId);
+
+        if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+            throw new IllegalArgumentException("Mật khẩu hiện tại không chính xác");
+        }
+
+        if (passwordEncoder.matches(newPassword, user.getPassword())) {
+            throw new IllegalArgumentException("Mật khẩu mới phải khác mật khẩu hiện tại");
+        }
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+    }
+
+    @Transactional(readOnly = true)
+    public void verifyC2Password(Long userId, String rawC2Password) {
+        User user = getUserById(userId);
+        verifyC2Password(user, rawC2Password);
+    }
+
+    @Transactional(readOnly = true)
+    public void verifyC2Password(User user, String rawC2Password) {
+        if (user.getC2PasswordHash() == null || user.getC2PasswordHash().isBlank()) {
+            throw new IllegalStateException("Tài khoản chưa thiết lập mật khẩu bảo vệ C2");
+        }
+        if (rawC2Password == null || rawC2Password.isBlank()) {
+            throw new IllegalArgumentException("Vui lòng nhập mật khẩu bảo vệ C2");
+        }
+        if (!passwordEncoder.matches(rawC2Password, user.getC2PasswordHash())) {
+            throw new IllegalArgumentException("Mật khẩu bảo vệ C2 không chính xác");
+        }
+    }
+
+    @Transactional
+    public void updateUserC2Password(Long userId, String newPassword) {
+        log.info("Updating C2 password for user: {}", userId);
+        User user = getUserById(userId);
+        if (!isAdminOrStaff(user)) {
+            throw new IllegalArgumentException("Chỉ áp dụng mật khẩu C2 cho tài khoản quản trị hoặc nhân viên");
+        }
+        if (newPassword == null || newPassword.isBlank()) {
+            throw new IllegalArgumentException("Mật khẩu bảo vệ C2 không được để trống");
+        }
+        user.setC2PasswordHash(passwordEncoder.encode(newPassword));
+        user.setC2PasswordUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+    }
+
+    private boolean isAdminOrStaff(User user) {
+        return isAdminOrStaff(user.getRole(), user.getStaffRole());
+    }
+
+    private boolean isAdminOrStaff(User.Role role, User.StaffRole staffRole) {
+        if (role == User.Role.ADMIN) {
+            return true;
+        }
+        return staffRole != null;
     }
 
     public Page<User> getUsersByStaffRole(User.StaffRole staffRole, Pageable pageable) {

@@ -32,4 +32,6 @@ public class UpdateUserRequestDto {
     private User.Role role;
     
     private User.UserStatus status;
+
+    private String c2Password;
 }

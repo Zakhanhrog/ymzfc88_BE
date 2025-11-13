@@ -24,6 +24,8 @@ public interface SicboBetRepository extends JpaRepository<SicboBet, Long> {
 
     List<SicboBet> findByUserOrderByCreatedAtDesc(User user);
 
+    Page<SicboBet> findByUserOrderByCreatedAtDesc(User user, Pageable pageable);
+
     List<SicboBet> findByStatusAndSettledAtBetween(SicboBet.Status status, Instant start, Instant end);
 
     List<SicboBet> findByStatusInAndSettledAtBetween(Collection<SicboBet.Status> statuses, Instant start, Instant end);

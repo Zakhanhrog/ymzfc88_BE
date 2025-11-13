@@ -4,6 +4,7 @@ import com.xsecret.dto.request.CreateUserRequestDto;
 import com.xsecret.dto.request.LoginRequest;
 import com.xsecret.dto.request.PaymentMethodRequestDto;
 import com.xsecret.dto.request.ProcessTransactionRequestDto;
+import com.xsecret.dto.request.UpdateC2PasswordRequest;
 import com.xsecret.dto.request.UpdateStaffRoleRequest;
 import com.xsecret.dto.request.UpdateUserRequestDto;
 import com.xsecret.dto.request.UserFilterRequestDto;
@@ -96,6 +97,9 @@ public class AdminController {
             }
 
             return ResponseEntity.ok(ApiResponse.success("Đăng nhập thành công", jwtResponse));
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            log.warn("Admin login failed (C2 validation) for {}: {}", loginRequest.getUsernameOrEmail(), ex.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
         } catch (AuthenticationException authenticationException) {
             log.warn("Portal login failed for {}: {}", loginRequest.getUsernameOrEmail(), authenticationException.getMessage());
             return ResponseEntity.status(401)
@@ -313,6 +317,7 @@ public class AdminController {
     }
 
     @PostMapping("/users/{id}/reset-password")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> resetUserPassword(
             @PathVariable Long id,
             @RequestParam String newPassword) {
@@ -323,6 +328,22 @@ public class AdminController {
             return ResponseEntity.ok(ApiResponse.<Void>success("Reset mật khẩu thành công", null));
         } catch (Exception e) {
             log.error("Error resetting password", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    @PostMapping("/users/{id}/c2-password")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> updateUserC2Password(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateC2PasswordRequest request) {
+        log.info("Updating C2 password for user: {}", id);
+        try {
+            userService.updateUserC2Password(id, request.getNewPassword());
+            return ResponseEntity.ok(ApiResponse.<Void>success("Cập nhật mật khẩu bảo vệ thành công", null));
+        } catch (Exception e) {
+            log.error("Error updating C2 password", e);
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error(e.getMessage()));
         }
@@ -367,6 +388,13 @@ public class AdminController {
         log.info("Updating admin profile for user {}", userPrincipal.getUsername());
 
         try {
+            if (request.getC2Password() == null || request.getC2Password().isBlank()) {
+                return ResponseEntity.badRequest().body(ApiResponse.error("Vui lòng nhập mật khẩu bảo vệ C2 để xác nhận"));
+            }
+
+            userService.verifyC2Password(userPrincipal.getId(), request.getC2Password());
+            request.setC2Password(null);
+
             User updatedUser = userService.updateUser(userPrincipal.getId(), request);
             UserResponse response = userMapper.toUserResponse(updatedUser);
             return ResponseEntity.ok(ApiResponse.success("Cập nhật thông tin thành công", response));
@@ -375,6 +403,23 @@ public class AdminController {
         } catch (Exception e) {
             log.error("Error updating admin profile", e);
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    @PostMapping("/profile/c2-password")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> updateAdminC2Password(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @Valid @RequestBody UpdateC2PasswordRequest request) {
+        log.info("Updating admin C2 password for user {}", userPrincipal.getUsername());
+
+        try {
+            userService.updateUserC2Password(userPrincipal.getId(), request.getNewPassword());
+            return ResponseEntity.ok(ApiResponse.<Void>success("Cập nhật mật khẩu bảo vệ thành công", null));
+        } catch (Exception e) {
+            log.error("Error updating admin C2 password", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
         }
     }
     

@@ -31,10 +31,14 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<JwtResponse>> login(@Valid @RequestBody LoginRequest loginRequest) {
         log.info("Login attempt for: {}", loginRequest.getUsernameOrEmail());
-        
-        JwtResponse jwtResponse = authService.login(loginRequest);
-        
-        return ResponseEntity.ok(ApiResponse.success("Đăng nhập thành công", jwtResponse));
+
+        try {
+            JwtResponse jwtResponse = authService.login(loginRequest);
+            return ResponseEntity.ok(ApiResponse.success("Đăng nhập thành công", jwtResponse));
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            log.warn("Login failed for {}: {}", loginRequest.getUsernameOrEmail(), ex.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
+        }
     }
 
     @PostMapping("/register")
