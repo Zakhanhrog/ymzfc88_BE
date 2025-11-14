@@ -26,7 +26,9 @@ import com.xsecret.service.DashboardService;
 import com.xsecret.service.PaymentMethodService;
 import com.xsecret.service.SystemSettingsService;
 import com.xsecret.service.TransactionService;
+import com.xsecret.service.UserLoginHistoryService;
 import com.xsecret.service.UserService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -64,10 +66,12 @@ public class AdminController {
     private final com.xsecret.service.BetService betService;
     private final DashboardService dashboardService;
     private final AnalyticsService analyticsService;
+    private final UserLoginHistoryService userLoginHistoryService;
 
     @PostMapping("/login")
     @PreAuthorize("permitAll()")
-    public ResponseEntity<ApiResponse<JwtResponse>> adminLogin(@Valid @RequestBody LoginRequest loginRequest) {
+    public ResponseEntity<ApiResponse<JwtResponse>> adminLogin(@Valid @RequestBody LoginRequest loginRequest,
+                                                               HttpServletRequest request) {
         log.info("Admin login attempt for: {}", loginRequest.getUsernameOrEmail());
 
         try {
@@ -87,6 +91,12 @@ public class AdminController {
             };
 
             if (!authorized) {
+                userLoginHistoryService.recordLoginFailure(
+                        loginRequest.getUsernameOrEmail(),
+                        loginRequest.getPortal(),
+                        "PORTAL_ACCESS_DENIED",
+                        request
+                );
                 String message = switch (requestedPortal) {
                     case "AGENT" -> "Bạn không có quyền truy cập cổng đại lý";
                     case "STAFF" -> "Bạn không có quyền truy cập cổng nhân viên";
@@ -96,12 +106,26 @@ public class AdminController {
                         .body(ApiResponse.error(message));
             }
 
+            Long userId = jwtResponse.getUser() != null ? jwtResponse.getUser().getId() : null;
+            userLoginHistoryService.recordLoginSuccess(userId, loginRequest.getUsernameOrEmail(), loginRequest.getPortal(), request);
             return ResponseEntity.ok(ApiResponse.success("Đăng nhập thành công", jwtResponse));
         } catch (IllegalArgumentException | IllegalStateException ex) {
             log.warn("Admin login failed (C2 validation) for {}: {}", loginRequest.getUsernameOrEmail(), ex.getMessage());
+            userLoginHistoryService.recordLoginFailure(
+                    loginRequest.getUsernameOrEmail(),
+                    loginRequest.getPortal(),
+                    ex.getMessage(),
+                    request
+            );
             return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
         } catch (AuthenticationException authenticationException) {
             log.warn("Portal login failed for {}: {}", loginRequest.getUsernameOrEmail(), authenticationException.getMessage());
+            userLoginHistoryService.recordLoginFailure(
+                    loginRequest.getUsernameOrEmail(),
+                    loginRequest.getPortal(),
+                    "AUTHENTICATION_FAILED",
+                    request
+            );
             return ResponseEntity.status(401)
                     .body(ApiResponse.error("Sai thông tin đăng nhập"));
         }

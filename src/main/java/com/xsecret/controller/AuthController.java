@@ -10,11 +10,15 @@ import com.xsecret.entity.User;
 import com.xsecret.mapper.UserMapper;
 import com.xsecret.security.UserPrincipal;
 import com.xsecret.service.AuthService;
+import com.xsecret.service.UserLoginHistoryService;
 import com.xsecret.service.UserService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,16 +31,36 @@ public class AuthController {
     private final AuthService authService;
     private final UserService userService;
     private final UserMapper userMapper;
+    private final UserLoginHistoryService userLoginHistoryService;
 
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<JwtResponse>> login(@Valid @RequestBody LoginRequest loginRequest) {
+    public ResponseEntity<ApiResponse<JwtResponse>> login(@Valid @RequestBody LoginRequest loginRequest,
+                                                          HttpServletRequest request) {
         log.info("Login attempt for: {}", loginRequest.getUsernameOrEmail());
 
         try {
             JwtResponse jwtResponse = authService.login(loginRequest);
+            Long userId = jwtResponse.getUser() != null ? jwtResponse.getUser().getId() : null;
+            userLoginHistoryService.recordLoginSuccess(userId, loginRequest.getUsernameOrEmail(), loginRequest.getPortal(), request);
             return ResponseEntity.ok(ApiResponse.success("Đăng nhập thành công", jwtResponse));
+        } catch (AuthenticationException ex) {
+            log.warn("Authentication failed for {}: {}", loginRequest.getUsernameOrEmail(), ex.getMessage());
+            userLoginHistoryService.recordLoginFailure(
+                    loginRequest.getUsernameOrEmail(),
+                    loginRequest.getPortal(),
+                    "AUTHENTICATION_FAILED",
+                    request
+            );
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Tên đăng nhập hoặc mật khẩu không đúng"));
         } catch (IllegalArgumentException | IllegalStateException ex) {
             log.warn("Login failed for {}: {}", loginRequest.getUsernameOrEmail(), ex.getMessage());
+            userLoginHistoryService.recordLoginFailure(
+                    loginRequest.getUsernameOrEmail(),
+                    loginRequest.getPortal(),
+                    ex.getMessage(),
+                    request
+            );
             return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
         }
     }
