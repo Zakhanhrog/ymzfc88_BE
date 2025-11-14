@@ -65,5 +65,7 @@ public class SystemSettings {
     public static final String SICBO_REFUND_LOSS_PERCENTAGE = "sicbo_refund_loss_percentage";
     public static final String XOC_DIA_REFUND_WIN_PERCENTAGE = "xocdia_refund_win_percentage";
     public static final String XOC_DIA_REFUND_LOSS_PERCENTAGE = "xocdia_refund_loss_percentage";
+    public static final String SICBO_REFUND_PAYOUT_TIME = "sicbo_refund_payout_time";
+    public static final String XOC_DIA_REFUND_PAYOUT_TIME = "xocdia_refund_payout_time";
 }
 

@@ -26,6 +26,8 @@ public interface SicboBetRepository extends JpaRepository<SicboBet, Long> {
 
     Page<SicboBet> findByUserOrderByCreatedAtDesc(User user, Pageable pageable);
 
+    long countByUser(User user);
+
     List<SicboBet> findByStatusAndSettledAtBetween(SicboBet.Status status, Instant start, Instant end);
 
     List<SicboBet> findByStatusInAndSettledAtBetween(Collection<SicboBet.Status> statuses, Instant start, Instant end);
@@ -62,8 +64,8 @@ public interface SicboBetRepository extends JpaRepository<SicboBet, Long> {
 
     @Query("""
         SELECT b.user.id,
-               COALESCE(SUM(CASE WHEN b.status <> com.xsecret.entity.SicboBet$Status.REFUNDED THEN b.stake ELSE 0 END), 0),
-               COALESCE(SUM(CASE WHEN b.status = com.xsecret.entity.SicboBet$Status.LOST THEN b.stake ELSE 0 END), 0)
+               COALESCE(SUM(CASE WHEN b.status <> :refundedStatus THEN b.stake ELSE 0 END), 0),
+               COALESCE(SUM(CASE WHEN b.status = :lostStatus THEN b.stake ELSE 0 END), 0)
         FROM SicboBet b
         WHERE b.user.id IN :userIds
           AND (:start IS NULL OR b.createdAt >= :start)
@@ -73,7 +75,9 @@ public interface SicboBetRepository extends JpaRepository<SicboBet, Long> {
     List<Object[]> aggregateTotalsByUsers(
             @Param("userIds") List<Long> userIds,
             @Param("start") Instant start,
-            @Param("end") Instant end
+            @Param("end") Instant end,
+            @Param("refundedStatus") SicboBet.Status refundedStatus,
+            @Param("lostStatus") SicboBet.Status lostStatus
     );
 
     @Query("""
@@ -139,6 +143,13 @@ public interface SicboBetRepository extends JpaRepository<SicboBet, Long> {
         WHERE b.user = :user AND b.status = com.xsecret.entity.SicboBet$Status.LOST
     """)
     BigDecimal sumLostStakeByUser(@Param("user") User user);
+
+    @Query("""
+        SELECT COALESCE(SUM(CASE WHEN b.status <> com.xsecret.entity.SicboBet$Status.REFUNDED THEN b.stake ELSE 0 END), 0)
+        FROM SicboBet b
+        WHERE b.user = :user
+    """)
+    BigDecimal sumStakeByUser(@Param("user") User user);
 }
 
 

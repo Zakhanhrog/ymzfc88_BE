@@ -1,6 +1,8 @@
 package com.xsecret.controller.admin;
 
 import com.xsecret.dto.response.AdminGameBetHistoryResponse;
+import com.xsecret.dto.response.AdminUserBetDetailResponse;
+import com.xsecret.dto.response.AdminUserBetSummaryResponse;
 import com.xsecret.dto.response.ApiResponse;
 import com.xsecret.service.AdminGameHistoryService;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +47,29 @@ public class AdminGameHistoryController {
                 page,
                 size
         );
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/user-summary")
+    public ResponseEntity<ApiResponse<AdminUserBetSummaryResponse>> getUserBetSummary(
+            @RequestParam(value = "search", required = false) String search,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size
+    ) {
+        log.info("Admin request user bet summary - search={}, page={}, size={}", search, page, size);
+        AdminUserBetSummaryResponse response = adminGameHistoryService.getUserBetSummaries(search, page, size);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/user-detail")
+    public ResponseEntity<ApiResponse<AdminUserBetDetailResponse>> getUserBetDetail(
+            @RequestParam("userId") Long userId,
+            @RequestParam(value = "gameType", required = false) String gameType,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size
+    ) {
+        log.info("Admin request user bet detail - userId={}, gameType={}, page={}, size={}", userId, gameType, page, size);
+        AdminUserBetDetailResponse response = adminGameHistoryService.getUserBetDetail(userId, gameType, page, size);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

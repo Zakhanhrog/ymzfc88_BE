@@ -12,7 +12,10 @@ import com.xsecret.dto.response.AgentDashboardSummaryResponse;
 import com.xsecret.dto.response.AgentInviteInfoResponse;
 import com.xsecret.dto.response.AgentInviteReferralResponse;
 import com.xsecret.entity.AgentCommissionPayout;
+import com.xsecret.entity.Bet;
+import com.xsecret.entity.SicboBet;
 import com.xsecret.entity.User;
+import com.xsecret.entity.XocDiaBet;
 import com.xsecret.repository.AgentCommissionPayoutRepository;
 import com.xsecret.repository.BetRepository;
 import com.xsecret.repository.SicboBetRepository;
@@ -95,7 +98,13 @@ public class AgentPortalService {
 
         if (!userIds.isEmpty()) {
             // Lottery bets
-            List<Object[]> betAggregates = betRepository.aggregateTotalsByUsers(userIds, startDateTime, endDateTime);
+            List<Object[]> betAggregates = betRepository.aggregateTotalsByUsers(
+                    userIds,
+                    startDateTime,
+                    endDateTime,
+                    Bet.BetStatus.CANCELLED,
+                    Bet.BetStatus.LOST
+            );
             for (Object[] row : betAggregates) {
                 Long userId = (Long) row[0];
                 accumulate(totalBetMap, userId, toBigDecimal(row[1]));
@@ -105,14 +114,26 @@ public class AgentPortalService {
             Instant startInstant = startDateTime != null ? startDateTime.atZone(ZoneId.systemDefault()).toInstant() : null;
             Instant endInstant = endDateTime != null ? endDateTime.atZone(ZoneId.systemDefault()).toInstant() : null;
 
-            List<Object[]> xocDiaAggregates = xocDiaBetRepository.aggregateTotalsByUsers(userIds, startInstant, endInstant);
+            List<Object[]> xocDiaAggregates = xocDiaBetRepository.aggregateTotalsByUsers(
+                    userIds,
+                    startInstant,
+                    endInstant,
+                    XocDiaBet.Status.REFUNDED,
+                    XocDiaBet.Status.LOST
+            );
             for (Object[] row : xocDiaAggregates) {
                 Long userId = (Long) row[0];
                 accumulate(totalBetMap, userId, toBigDecimal(row[1]));
                 accumulate(totalLostMap, userId, toBigDecimal(row[2]));
             }
 
-            List<Object[]> sicboAggregates = sicboBetRepository.aggregateTotalsByUsers(userIds, startInstant, endInstant);
+            List<Object[]> sicboAggregates = sicboBetRepository.aggregateTotalsByUsers(
+                    userIds,
+                    startInstant,
+                    endInstant,
+                    SicboBet.Status.REFUNDED,
+                    SicboBet.Status.LOST
+            );
             for (Object[] row : sicboAggregates) {
                 Long userId = (Long) row[0];
                 accumulate(totalBetMap, userId, toBigDecimal(row[1]));
@@ -340,7 +361,13 @@ public class AgentPortalService {
         Map<Long, BigDecimal> totalLostMap = new HashMap<>();
 
         if (!customerIds.isEmpty()) {
-            List<Object[]> betAggregates = betRepository.aggregateTotalsByUsers(customerIds, startDateTime, endDateTime);
+            List<Object[]> betAggregates = betRepository.aggregateTotalsByUsers(
+                    customerIds,
+                    startDateTime,
+                    endDateTime,
+                    Bet.BetStatus.CANCELLED,
+                    Bet.BetStatus.LOST
+            );
             for (Object[] row : betAggregates) {
                 Long userId = (Long) row[0];
                 accumulate(totalBetMap, userId, toBigDecimal(row[1]));
@@ -350,14 +377,26 @@ public class AgentPortalService {
             Instant startInstant = startDateTime != null ? startDateTime.atZone(ZoneId.systemDefault()).toInstant() : null;
             Instant endInstant = endDateTime != null ? endDateTime.atZone(ZoneId.systemDefault()).toInstant() : null;
 
-            List<Object[]> xocDiaAggregates = xocDiaBetRepository.aggregateTotalsByUsers(customerIds, startInstant, endInstant);
+            List<Object[]> xocDiaAggregates = xocDiaBetRepository.aggregateTotalsByUsers(
+                    customerIds,
+                    startInstant,
+                    endInstant,
+                    XocDiaBet.Status.REFUNDED,
+                    XocDiaBet.Status.LOST
+            );
             for (Object[] row : xocDiaAggregates) {
                 Long userId = (Long) row[0];
                 accumulate(totalBetMap, userId, toBigDecimal(row[1]));
                 accumulate(totalLostMap, userId, toBigDecimal(row[2]));
             }
 
-            List<Object[]> sicboAggregates = sicboBetRepository.aggregateTotalsByUsers(customerIds, startInstant, endInstant);
+            List<Object[]> sicboAggregates = sicboBetRepository.aggregateTotalsByUsers(
+                    customerIds,
+                    startInstant,
+                    endInstant,
+                    SicboBet.Status.REFUNDED,
+                    SicboBet.Status.LOST
+            );
             for (Object[] row : sicboAggregates) {
                 Long userId = (Long) row[0];
                 accumulate(totalBetMap, userId, toBigDecimal(row[1]));

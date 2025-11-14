@@ -4,8 +4,11 @@ import com.xsecret.dto.request.AdminAgentCommissionPayoutRequest;
 import com.xsecret.dto.response.AdminAgentCommissionReportResponse;
 import com.xsecret.dto.response.AdminAgentCommissionReportRowResponse;
 import com.xsecret.entity.AgentCommissionPayout;
+import com.xsecret.entity.Bet;
 import com.xsecret.entity.PointTransaction;
+import com.xsecret.entity.SicboBet;
 import com.xsecret.entity.User;
+import com.xsecret.entity.XocDiaBet;
 import com.xsecret.repository.AgentCommissionPayoutRepository;
 import com.xsecret.repository.BetRepository;
 import com.xsecret.repository.SicboBetRepository;
@@ -233,17 +236,35 @@ public class AdminAgentReportService {
         BigDecimal totalBet = BigDecimal.ZERO;
         BigDecimal totalLost = BigDecimal.ZERO;
 
-        for (Object[] row : betRepository.aggregateTotalsByUsers(customerIds, startDateTime, endDateTime)) {
+        for (Object[] row : betRepository.aggregateTotalsByUsers(
+                customerIds,
+                startDateTime,
+                endDateTime,
+                Bet.BetStatus.CANCELLED,
+                Bet.BetStatus.LOST
+        )) {
             totalBet = totalBet.add(safe(row[1]));
             totalLost = totalLost.add(safe(row[2]));
         }
 
-        for (Object[] row : xocDiaBetRepository.aggregateTotalsByUsers(customerIds, startInstant, endInstant)) {
+        for (Object[] row : xocDiaBetRepository.aggregateTotalsByUsers(
+                customerIds,
+                startInstant,
+                endInstant,
+                XocDiaBet.Status.REFUNDED,
+                XocDiaBet.Status.LOST
+        )) {
             totalBet = totalBet.add(safe(row[1]));
             totalLost = totalLost.add(safe(row[2]));
         }
 
-        for (Object[] row : sicboBetRepository.aggregateTotalsByUsers(customerIds, startInstant, endInstant)) {
+        for (Object[] row : sicboBetRepository.aggregateTotalsByUsers(
+                customerIds,
+                startInstant,
+                endInstant,
+                SicboBet.Status.REFUNDED,
+                SicboBet.Status.LOST
+        )) {
             totalBet = totalBet.add(safe(row[1]));
             totalLost = totalLost.add(safe(row[2]));
         }

@@ -627,6 +627,10 @@ public class BetService {
         }
     }
 
+    private double safeDouble(BigDecimal value) {
+        return value != null ? value.doubleValue() : 0d;
+    }
+
     /**
      * Lấy thống kê bet của user
      */
@@ -634,8 +638,8 @@ public class BetService {
     public BetStatisticsResponse getUserBetStatistics(Long userId) {
         long totalBetsCount = betRepository.countByUserId(userId);
         long wonBetsCount = betRepository.countByUserIdAndIsWinTrue(userId);
-        double totalBetAmountSum = betRepository.getTotalBetAmountByUserId(userId);
-        double totalWinAmountSum = betRepository.getTotalWinAmountByUserId(userId);
+        double totalBetAmountSum = safeDouble(betRepository.sumStakeByUserId(userId));
+        double totalWinAmountSum = safeDouble(betRepository.sumWinAmountByUserId(userId));
 
         return BetStatisticsResponse.builder()
                 .totalBets(totalBetsCount)

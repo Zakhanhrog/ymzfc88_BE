@@ -23,6 +23,7 @@ public class ScheduledTaskService {
     private final BetService betService;
     private final LotteryResultAutoImportService lotteryResultAutoImportService;
     private final LotteryResultService lotteryResultService;
+    private final GameRefundService gameRefundService;
     
     // Timezone Vietnam
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
@@ -243,5 +244,17 @@ public class ScheduledTaskService {
     @Scheduled(cron = "0 */5 * * * ?")
     public void logSystemStatus() {
         log.info("📊 System Status: Scheduled tasks are running normally");
+    }
+
+    /**
+     * Xử lý hoàn trả cược theo lịch mỗi phút
+     */
+    @Scheduled(cron = "0 */1 * * * ?", zone = "Asia/Ho_Chi_Minh")
+    public void processScheduledRefunds() {
+        try {
+            gameRefundService.processDueRefunds();
+        } catch (Exception ex) {
+            log.error("❌ Error while processing scheduled game refunds", ex);
+        }
     }
 }

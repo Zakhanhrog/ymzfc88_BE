@@ -77,14 +77,20 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
     /**
      * Tính tổng tiền cược của user
      */
-    @Query("SELECT COALESCE(SUM(b.totalAmount), 0) FROM Bet b WHERE b.user.id = :userId")
-    double getTotalBetAmountByUserId(@Param("userId") Long userId);
+    @Query("SELECT COALESCE(SUM(b.totalAmount), 0) FROM Bet b WHERE b.user.id = :userId AND b.status <> com.xsecret.entity.Bet$BetStatus.CANCELLED")
+    BigDecimal sumStakeByUserId(@Param("userId") Long userId);
     
     /**
      * Tính tổng tiền thắng của user
      */
-    @Query("SELECT COALESCE(SUM(b.winAmount), 0) FROM Bet b WHERE b.user.id = :userId AND b.isWin = true")
-    double getTotalWinAmountByUserId(@Param("userId") Long userId);
+    @Query("SELECT COALESCE(SUM(b.winAmount), 0) FROM Bet b WHERE b.user.id = :userId AND b.status = com.xsecret.entity.Bet$BetStatus.WON")
+    BigDecimal sumWinAmountByUserId(@Param("userId") Long userId);
+    
+    /**
+     * Tính tổng tiền thua của user
+     */
+    @Query("SELECT COALESCE(SUM(b.totalAmount), 0) FROM Bet b WHERE b.user.id = :userId AND b.status = com.xsecret.entity.Bet$BetStatus.LOST")
+    BigDecimal sumLostStakeByUserId(@Param("userId") Long userId);
     
     /**
      * Tìm bet theo khoảng thời gian
@@ -199,8 +205,8 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
 
     @Query("""
         SELECT b.user.id,
-               COALESCE(SUM(CASE WHEN b.status <> com.xsecret.entity.Bet$BetStatus.CANCELLED THEN b.totalAmount ELSE 0 END), 0),
-               COALESCE(SUM(CASE WHEN b.status = com.xsecret.entity.Bet$BetStatus.LOST THEN b.totalAmount ELSE 0 END), 0)
+               COALESCE(SUM(CASE WHEN b.status <> :cancelledStatus THEN b.totalAmount ELSE 0 END), 0),
+               COALESCE(SUM(CASE WHEN b.status = :lostStatus THEN b.totalAmount ELSE 0 END), 0)
         FROM Bet b
         WHERE b.user.id IN :userIds
           AND (:startDate IS NULL OR b.createdAt >= :startDate)
@@ -210,7 +216,9 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
     List<Object[]> aggregateTotalsByUsers(
             @Param("userIds") List<Long> userIds,
             @Param("startDate") LocalDateTime startDate,
-            @Param("endDate") LocalDateTime endDate
+            @Param("endDate") LocalDateTime endDate,
+            @Param("cancelledStatus") Bet.BetStatus cancelledStatus,
+            @Param("lostStatus") Bet.BetStatus lostStatus
     );
 
     @Query("""

@@ -51,7 +51,6 @@ com/xsecret/dto/response/AgentCustomerSummaryResponse.class
 com/xsecret/dto/response/StaffMktBetResponse.class
 com/xsecret/controller/XocDiaQuickBetAdminController.class
 com/xsecret/controller/XocDiaResultHistoryController.class
-com/xsecret/controller/BetController.class
 com/xsecret/entity/MarqueeNotification$MarqueeNotificationBuilder.class
 com/xsecret/dto/response/XocDiaQuickBetResponse$XocDiaQuickBetResponseBuilder.class
 com/xsecret/entity/XocDiaQuickBetConfig$XocDiaQuickBetConfigBuilder.class
@@ -228,7 +227,6 @@ com/xsecret/dto/response/AdminAgentCommissionReportResponse$AdminAgentCommission
 com/xsecret/dto/response/StaffMktFinanceOverviewResponse.class
 com/xsecret/service/SicboResultHistoryService.class
 com/xsecret/controller/SicboBetController.class
-com/xsecret/controller/LotteryResultController.class
 com/xsecret/entity/XocDiaSession$XocDiaSessionBuilder.class
 com/xsecret/controller/SicboQuickBetAdminController.class
 com/xsecret/dto/response/BetResponse$BetResponseBuilder.class
@@ -239,7 +237,6 @@ com/xsecret/controller/SicboResultHistoryController.class
 com/xsecret/service/SicboSessionService.class
 com/xsecret/dto/response/StaffMktGameOverviewResponse$StaffMktGameOverviewResponseBuilder.class
 com/xsecret/dto/response/XocDiaResultHistoryResponse$Parity.class
-com/xsecret/service/BetService.class
 com/xsecret/mapper/UserMapper.class
 com/xsecret/entity/TelegramConfig$TelegramConfigBuilder.class
 com/xsecret/controller/admin/AdminTelegramController.class
@@ -290,7 +287,6 @@ com/xsecret/service/XocDiaBetService.class
 com/xsecret/dto/request/DepositRequestDto.class
 com/xsecret/service/UserLoginHistoryService.class
 com/xsecret/repository/AgentCommissionPayoutRepository.class
-com/xsecret/service/ScheduledTaskService.class
 com/xsecret/dto/response/BetAnalyticsResponse.class
 com/xsecret/event/LotteryResultPublishedEvent.class
 com/xsecret/controller/AdminPromotionController.class
@@ -394,7 +390,6 @@ com/xsecret/dto/response/BetAnalyticsItemResponse.class
 com/xsecret/service/bet/checker/XienResultChecker.class
 com/xsecret/dto/response/ApiResponse.class
 com/xsecret/dto/response/XocDiaSessionResponse$XocDiaSessionResponseBuilder.class
-com/xsecret/controller/AdminController.class
 com/xsecret/dto/response/BetStatisticsResponse.class
 com/xsecret/dto/response/XocDiaBetHistoryItemResponse$XocDiaBetHistoryItemResponseBuilder.class
 com/xsecret/dto/response/AgentCommissionSummaryResponse.class

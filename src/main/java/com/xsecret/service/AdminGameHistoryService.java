@@ -2,11 +2,18 @@ package com.xsecret.service;
 
 import com.xsecret.dto.response.AdminGameBetHistoryItemResponse;
 import com.xsecret.dto.response.AdminGameBetHistoryResponse;
+import com.xsecret.dto.response.AdminUserBetDetailResponse;
+import com.xsecret.dto.response.AdminUserBetSummaryItemResponse;
+import com.xsecret.dto.response.AdminUserBetSummaryResponse;
 import com.xsecret.entity.Bet;
 import com.xsecret.entity.SicboBet;
+import com.xsecret.entity.Transaction;
+import com.xsecret.entity.User;
 import com.xsecret.entity.XocDiaBet;
 import com.xsecret.repository.BetRepository;
 import com.xsecret.repository.SicboBetRepository;
+import com.xsecret.repository.TransactionRepository;
+import com.xsecret.repository.UserRepository;
 import com.xsecret.repository.XocDiaBetRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +31,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
@@ -36,6 +45,13 @@ public class AdminGameHistoryService {
     private final BetRepository betRepository;
     private final XocDiaBetRepository xocDiaBetRepository;
     private final SicboBetRepository sicboBetRepository;
+    private final UserRepository userRepository;
+    private final TransactionRepository transactionRepository;
+
+    private static final List<Transaction.TransactionStatus> SUCCESS_DEPOSIT_STATUSES = List.of(
+            Transaction.TransactionStatus.APPROVED,
+            Transaction.TransactionStatus.COMPLETED
+    );
 
     @Transactional
     public AdminGameBetHistoryResponse getGameHistory(
@@ -65,6 +81,126 @@ public class AdminGameHistoryService {
             default:
                 return buildLotteryHistory(status, startDate, endDate, pageable);
         }
+    }
+
+    @Transactional
+    public AdminUserBetSummaryResponse getUserBetSummaries(
+            String search,
+            int page,
+            int size
+    ) {
+        Pageable pageable = PageRequest.of(
+                Math.max(page, 0),
+                Math.max(size, 1),
+                Sort.by(Sort.Direction.DESC, "createdAt")
+        );
+
+        Page<User> userPage;
+        if (StringUtils.hasText(search)) {
+            userPage = userRepository.findBySearchTermWithFilters(
+                    search.trim(),
+                    null,
+                    null,
+                    pageable
+            );
+        } else {
+            userPage = userRepository.findByRoleNot(User.Role.ADMIN, pageable);
+        }
+
+        List<AdminUserBetSummaryItemResponse> items = userPage.getContent().stream()
+                .map(this::buildUserBetSummaryItem)
+                .collect(Collectors.toList());
+
+        return AdminUserBetSummaryResponse.builder()
+                .items(items)
+                .page(userPage.getNumber())
+                .size(userPage.getSize())
+                .totalItems(userPage.getTotalElements())
+                .hasMore(userPage.hasNext())
+                .build();
+    }
+
+    @Transactional
+    public AdminUserBetDetailResponse getUserBetDetail(
+            Long userId,
+            String rawGameType,
+            int page,
+            int size
+    ) {
+        if (userId == null) {
+            throw new IllegalArgumentException("Thiếu thông tin người dùng");
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người dùng"));
+
+        String gameType = normalizeGameType(rawGameType);
+        int pageIndex = Math.max(page, 0);
+        int pageSize = Math.max(size, 1);
+
+        boolean includeLottery = "all".equals(gameType) || "lottery".equals(gameType);
+        boolean includeSicbo = "all".equals(gameType) || "sicbo".equals(gameType);
+        boolean includeXocDia = "all".equals(gameType) || "xocdia".equals(gameType);
+
+        long totalLottery = includeLottery ? betRepository.countByUserId(userId) : 0;
+        long totalSicbo = includeSicbo ? sicboBetRepository.countByUser(user) : 0;
+        long totalXocDia = includeXocDia ? xocDiaBetRepository.countByUser(user) : 0;
+        long totalItems = totalLottery + totalSicbo + totalXocDia;
+
+        UserBetAggregate aggregate = computeAggregate(user);
+
+        if (totalItems == 0 || (long) pageIndex * pageSize >= totalItems) {
+            return buildDetailResponse(user, aggregate, List.of(), totalItems, pageIndex, pageSize);
+        }
+
+        List<AdminGameBetHistoryItemResponse> combined = new ArrayList<>();
+
+        if (includeLottery && totalLottery > 0) {
+            int fetchSize = computeFetchSize(totalLottery, pageIndex, pageSize);
+            Pageable lotteryPageable = PageRequest.of(0, fetchSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+            combined.addAll(
+                    betRepository.findByUserIdOrderByCreatedAtDesc(userId, lotteryPageable)
+                            .getContent()
+                            .stream()
+                            .map(this::mapLotteryBet)
+                            .collect(Collectors.toList())
+            );
+        }
+
+        if (includeSicbo && totalSicbo > 0) {
+            int fetchSize = computeFetchSize(totalSicbo, pageIndex, pageSize);
+            Pageable sicboPageable = PageRequest.of(0, fetchSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+            combined.addAll(
+                    sicboBetRepository.findByUserOrderByCreatedAtDesc(user, sicboPageable)
+                            .getContent()
+                            .stream()
+                            .map(this::mapSicboBet)
+                            .collect(Collectors.toList())
+            );
+        }
+
+        if (includeXocDia && totalXocDia > 0) {
+            int fetchSize = computeFetchSize(totalXocDia, pageIndex, pageSize);
+            Pageable xocDiaPageable = PageRequest.of(0, fetchSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+            combined.addAll(
+                    xocDiaBetRepository.findByUserOrderByCreatedAtDesc(user, xocDiaPageable)
+                            .getContent()
+                            .stream()
+                            .map(this::mapXocDiaBet)
+                            .collect(Collectors.toList())
+            );
+        }
+
+        combined.sort(Comparator.comparing(
+                AdminGameBetHistoryItemResponse::getCreatedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())
+        ));
+
+        int fromIndex = Math.min(pageIndex * pageSize, combined.size());
+        int toIndex = Math.min(fromIndex + pageSize, combined.size());
+        List<AdminGameBetHistoryItemResponse> pageItems = combined.subList(fromIndex, toIndex);
+
+        return buildDetailResponse(user, aggregate, pageItems, totalItems, pageIndex, pageSize);
     }
 
     private AdminGameBetHistoryResponse buildLotteryHistory(
@@ -101,6 +237,89 @@ public class AdminGameHistoryService {
                 .totalStakeAmount(safe(totalStake))
                 .totalWinAmount(safe(totalWin))
                 .build();
+    }
+
+    private AdminUserBetSummaryItemResponse buildUserBetSummaryItem(User user) {
+        UserBetAggregate aggregate = computeAggregate(user);
+        return AdminUserBetSummaryItemResponse.builder()
+                .userId(user.getId())
+                .username(user.getUsername())
+                .fullName(user.getFullName())
+                .phoneNumber(user.getPhoneNumber())
+                .totalStakeAmount(aggregate.totalStake())
+                .totalWinAmount(aggregate.totalWin())
+                .totalLossAmount(aggregate.totalLoss())
+                .totalDepositAmount(aggregate.totalDeposit())
+                .netProfitAmount(aggregate.netProfit())
+                .build();
+    }
+
+    private AdminUserBetDetailResponse buildDetailResponse(
+            User user,
+            UserBetAggregate aggregate,
+            List<AdminGameBetHistoryItemResponse> items,
+            long totalItems,
+            int page,
+            int size
+    ) {
+        boolean hasMore = totalItems > (long) (page + 1) * size;
+        return AdminUserBetDetailResponse.builder()
+                .userId(user.getId())
+                .username(user.getUsername())
+                .fullName(user.getFullName())
+                .phoneNumber(user.getPhoneNumber())
+                .totalStakeAmount(aggregate.totalStake())
+                .totalWinAmount(aggregate.totalWin())
+                .totalLossAmount(aggregate.totalLoss())
+                .totalDepositAmount(aggregate.totalDeposit())
+                .netProfitAmount(aggregate.netProfit())
+                .items(items)
+                .totalItems(totalItems)
+                .page(page)
+                .size(size)
+                .hasMore(hasMore)
+                .build();
+    }
+
+    private UserBetAggregate computeAggregate(User user) {
+        BigDecimal lotteryStake = safe(betRepository.sumStakeByUserId(user.getId()));
+        BigDecimal lotteryWin = safe(betRepository.sumWinAmountByUserId(user.getId()));
+        BigDecimal lotteryLoss = safe(betRepository.sumLostStakeByUserId(user.getId()));
+
+        BigDecimal sicboStake = safe(sicboBetRepository.sumStakeByUser(user));
+        BigDecimal sicboWin = safe(sicboBetRepository.sumWinAmountByUser(user));
+        BigDecimal sicboLoss = safe(sicboBetRepository.sumLostStakeByUser(user));
+
+        BigDecimal xocDiaStake = safe(xocDiaBetRepository.sumStakeByUser(user));
+        BigDecimal xocDiaWin = safe(xocDiaBetRepository.sumWinAmountByUser(user));
+        BigDecimal xocDiaLoss = safe(xocDiaBetRepository.sumLostStakeByUser(user));
+
+        BigDecimal totalStake = lotteryStake.add(sicboStake).add(xocDiaStake);
+        BigDecimal totalWin = lotteryWin.add(sicboWin).add(xocDiaWin);
+        BigDecimal totalLoss = lotteryLoss.add(sicboLoss).add(xocDiaLoss);
+        BigDecimal totalDeposit = safe(
+                transactionRepository.sumDepositAmountByUserAndStatuses(user, SUCCESS_DEPOSIT_STATUSES)
+        );
+        BigDecimal netProfit = totalWin.subtract(totalLoss);
+
+        return new UserBetAggregate(totalStake, totalWin, totalLoss, totalDeposit, netProfit);
+    }
+
+    private int computeFetchSize(long totalCount, int page, int size) {
+        long required = (long) (page + 1) * size;
+        long fetch = Math.min(totalCount, Math.max(required, size));
+        return (int) Math.min(fetch, Integer.MAX_VALUE);
+    }
+
+    private String normalizeGameType(String rawGameType) {
+        String normalized = normalize(rawGameType, "all");
+        return switch (normalized) {
+            case "sicbo" -> "sicbo";
+            case "xoc-dia", "xocdia" -> "xocdia";
+            case "lottery", "lotto" -> "lottery";
+            case "all" -> "all";
+            default -> "all";
+        };
     }
 
     private AdminGameBetHistoryResponse buildXocDiaHistory(
@@ -313,6 +532,15 @@ public class AdminGameHistoryService {
 
     private String valueOrDash(String value) {
         return StringUtils.hasText(value) ? value : "-";
+    }
+
+    private record UserBetAggregate(
+            BigDecimal totalStake,
+            BigDecimal totalWin,
+            BigDecimal totalLoss,
+            BigDecimal totalDeposit,
+            BigDecimal netProfit
+    ) {
     }
 }
 

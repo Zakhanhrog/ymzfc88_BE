@@ -4,6 +4,7 @@ import com.xsecret.dto.request.SicboBetRequest;
 import com.xsecret.dto.response.SicboBetHistoryItemResponse;
 import com.xsecret.dto.response.SicboBetHistoryPageResponse;
 import com.xsecret.dto.response.SicboBetPlacementResponse;
+import com.xsecret.entity.GameRefundAccrual;
 import com.xsecret.entity.PointTransaction;
 import com.xsecret.entity.SicboBet;
 import com.xsecret.entity.SicboQuickBetConfig;
@@ -94,6 +95,7 @@ public class SicboBetService {
     private final PointService pointService;
     private final SicboResultHistoryService resultHistoryService;
     private final SystemSettingsService systemSettingsService;
+    private final GameRefundService gameRefundService;
 
     @Transactional
     public SicboBetPlacementResponse placeBets(User user, SicboBetRequest request) {
@@ -410,14 +412,12 @@ public class SicboBetService {
             description.append(" phiên #").append(session.getId());
         }
 
-                    pointService.addPoints(
+        gameRefundService.accrueRefund(
                 bet.getUser(),
+                GameRefundAccrual.GameType.SICBO,
                 cashbackAmount,
-                            PointTransaction.PointTransactionType.BET_REFUND,
                 description.toString(),
-                            "SICBO_CASHBACK",
-                session != null ? session.getId() : null,
-                null
+                session != null ? session.getId() : null
         );
     }
 

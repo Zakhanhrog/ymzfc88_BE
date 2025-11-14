@@ -115,4 +115,15 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
                                      @Param("status") Transaction.TransactionStatus status,
                                      @Param("start") LocalDateTime start,
                                      @Param("end") LocalDateTime end);
+
+    @Query("""
+        SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t
+        WHERE t.user = :user
+          AND t.type = com.xsecret.entity.Transaction$TransactionType.DEPOSIT
+          AND t.status IN :statuses
+    """)
+    BigDecimal sumDepositAmountByUserAndStatuses(
+            @Param("user") User user,
+            @Param("statuses") List<Transaction.TransactionStatus> statuses
+    );
 }

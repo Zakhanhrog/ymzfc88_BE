@@ -8,9 +8,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -176,6 +178,18 @@ public class SystemSettingsService {
     public BigDecimal getGameRefundFactor(String key) {
         return getGameRefundPercentage(key)
                 .divide(BigDecimal.valueOf(100), 6, RoundingMode.DOWN);
+    }
+
+    @Transactional(readOnly = true)
+    public LocalTime getTimeSetting(String key, String defaultValue) {
+        String value = getSettingValue(key, defaultValue);
+        String candidate = StringUtils.hasText(value) ? value.trim() : defaultValue;
+        try {
+            return LocalTime.parse(candidate);
+        } catch (Exception ex) {
+            log.warn("Invalid time value for key {}: {}. Using default {}", key, candidate, defaultValue);
+            return LocalTime.parse(defaultValue);
+        }
     }
 
     /**
@@ -371,6 +385,24 @@ public class SystemSettingsService {
                     .settingKey(SystemSettings.XOC_DIA_REFUND_LOSS_PERCENTAGE)
                     .settingValue("0")
                     .description("Tỷ lệ hoàn trả (%) cho lệnh thua Xóc Đĩa")
+                    .category("GAME_REFUND")
+                    .build());
+        }
+
+        if (!systemSettingsRepository.existsBySettingKey(SystemSettings.SICBO_REFUND_PAYOUT_TIME)) {
+            createOrUpdateSetting(SystemSettingsRequest.builder()
+                    .settingKey(SystemSettings.SICBO_REFUND_PAYOUT_TIME)
+                    .settingValue("12:00")
+                    .description("Thời gian chạy hoàn trả Sicbo hằng ngày (HH:mm)")
+                    .category("GAME_REFUND")
+                    .build());
+        }
+
+        if (!systemSettingsRepository.existsBySettingKey(SystemSettings.XOC_DIA_REFUND_PAYOUT_TIME)) {
+            createOrUpdateSetting(SystemSettingsRequest.builder()
+                    .settingKey(SystemSettings.XOC_DIA_REFUND_PAYOUT_TIME)
+                    .settingValue("12:00")
+                    .description("Thời gian chạy hoàn trả Xóc Đĩa hằng ngày (HH:mm)")
                     .category("GAME_REFUND")
                     .build());
         }

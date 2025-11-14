@@ -4,6 +4,7 @@ import com.xsecret.dto.request.XocDiaBetRequest;
 import com.xsecret.dto.response.XocDiaBetHistoryItemResponse;
 import com.xsecret.dto.response.XocDiaBetHistoryPageResponse;
 import com.xsecret.dto.response.XocDiaBetPlacementResponse;
+import com.xsecret.entity.GameRefundAccrual;
 import com.xsecret.entity.PointTransaction;
 import com.xsecret.entity.SystemSettings;
 import com.xsecret.entity.User;
@@ -141,6 +142,7 @@ public class XocDiaBetService {
     private final XocDiaResultHistoryRepository resultHistoryRepository;
     private final PointService pointService;
     private final SystemSettingsService systemSettingsService;
+    private final GameRefundService gameRefundService;
 
     @Transactional
     public XocDiaBetPlacementResponse placeBets(User user, XocDiaBetRequest request) {
@@ -387,14 +389,12 @@ public class XocDiaBetService {
             description.append(" phiên #").append(session.getId());
         }
 
-        pointService.addPoints(
+        gameRefundService.accrueRefund(
                 bet.getUser(),
+                GameRefundAccrual.GameType.XOC_DIA,
                 cashbackAmount,
-                PointTransaction.PointTransactionType.BET_REFUND,
                 description.toString(),
-                "XOC_DIA_CASHBACK",
-                session != null ? session.getId() : null,
-                null
+                session != null ? session.getId() : null
         );
     }
 
