@@ -5,6 +5,7 @@ import com.xsecret.dto.response.SicboBetHistoryItemResponse;
 import com.xsecret.dto.response.SicboBetHistoryPageResponse;
 import com.xsecret.dto.response.SicboBetPlacementResponse;
 import com.xsecret.entity.GameRefundAccrual;
+import com.xsecret.entity.Notification;
 import com.xsecret.entity.PointTransaction;
 import com.xsecret.entity.SicboBet;
 import com.xsecret.entity.SicboQuickBetConfig;
@@ -38,6 +39,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.text.NumberFormat;
 
 @Service
 @RequiredArgsConstructor
@@ -96,6 +98,7 @@ public class SicboBetService {
     private final SicboResultHistoryService resultHistoryService;
     private final SystemSettingsService systemSettingsService;
     private final GameRefundService gameRefundService;
+    private final NotificationService notificationService;
 
     @Transactional
     public SicboBetPlacementResponse placeBets(User user, SicboBetRequest request) {
@@ -316,6 +319,12 @@ public class SicboBetService {
 
                             bet.setWinAmount(bet.getStake());
                             bet.setStatus(SicboBet.Status.REFUNDED);
+                        notifySicboRefund(
+                                bet.getUser(),
+                                bet.getStake(),
+                                "do ra bộ ba nhỏ",
+                                session
+                        );
                             resolved = true;
                         } else if (isHighTriple && "sicbo_primary_big".equals(betCode)) {
                             pointService.addPoints(
@@ -331,6 +340,12 @@ public class SicboBetService {
 
                             bet.setWinAmount(bet.getStake());
                             bet.setStatus(SicboBet.Status.REFUNDED);
+                        notifySicboRefund(
+                                bet.getUser(),
+                                bet.getStake(),
+                                "do ra bộ ba lớn",
+                                session
+                        );
                             resolved = true;
                         }
                     }
@@ -448,6 +463,12 @@ public class SicboBetService {
             bet.setWinAmount(bet.getStake());
             bet.setSettledAt(now);
             bet.setStatus(SicboBet.Status.REFUNDED);
+            notifySicboRefund(
+                    bet.getUser(),
+                    bet.getStake(),
+                    String.format("do phiên bàn %d bị hủy (%s)", session.getTableNumber(), reason),
+                    session
+            );
         }
 
         betRepository.saveAll(pendingBets);
@@ -537,6 +558,38 @@ public class SicboBetService {
             }
         }
         return faces;
+    }
+
+    private void notifySicboRefund(User user, BigDecimal amount, String reason, SicboSession session) {
+        if (user == null || amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        StringBuilder message = new StringBuilder()
+                .append("Bạn vừa được hoàn ")
+                .append(formatPoints(amount))
+                .append(" điểm Sicbo");
+        if (session != null) {
+            if (session.getTableNumber() != null) {
+                message.append(" bàn ").append(session.getTableNumber());
+            }
+            message.append(" phiên #").append(session.getId());
+        }
+        if (reason != null && !reason.isBlank()) {
+            message.append(" - ").append(reason);
+        }
+
+        notificationService.createSystemNotificationForUser(
+                user,
+                "Hoàn trả Sicbo",
+                message.toString(),
+                Notification.NotificationPriority.INFO,
+                Notification.NotificationType.TRANSACTION
+        );
+    }
+
+    private String formatPoints(BigDecimal amount) {
+        NumberFormat formatter = NumberFormat.getNumberInstance(new Locale("vi", "VN"));
+        return formatter.format(amount.setScale(0, RoundingMode.DOWN));
     }
 
     @Transactional(readOnly = true)

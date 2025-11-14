@@ -5,6 +5,7 @@ import com.xsecret.dto.response.XocDiaBetHistoryItemResponse;
 import com.xsecret.dto.response.XocDiaBetHistoryPageResponse;
 import com.xsecret.dto.response.XocDiaBetPlacementResponse;
 import com.xsecret.entity.GameRefundAccrual;
+import com.xsecret.entity.Notification;
 import com.xsecret.entity.PointTransaction;
 import com.xsecret.entity.SystemSettings;
 import com.xsecret.entity.User;
@@ -36,6 +37,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.text.NumberFormat;
 
 @Service
 @RequiredArgsConstructor
@@ -143,6 +145,7 @@ public class XocDiaBetService {
     private final PointService pointService;
     private final SystemSettingsService systemSettingsService;
     private final GameRefundService gameRefundService;
+    private final NotificationService notificationService;
 
     @Transactional
     public XocDiaBetPlacementResponse placeBets(User user, XocDiaBetRequest request) {
@@ -312,6 +315,12 @@ public class XocDiaBetService {
                 bet.setWinAmount(bet.getStake());
                 bet.setStatus(XocDiaBet.Status.REFUNDED);
                 totalWinAmount = totalWinAmount.add(bet.getStake());
+                notifyXocDiaRefund(
+                        bet.getUser(),
+                        bet.getStake(),
+                        "do kết quả Hòa (2 Đỏ 2 Trắng)",
+                        session != null ? session.getId() : null
+                );
             } else {
                 bet.setWinAmount(BigDecimal.ZERO);
                 bet.setStatus(XocDiaBet.Status.LOST);
@@ -349,6 +358,12 @@ public class XocDiaBetService {
             bet.setWinAmount(bet.getStake());
             bet.setSettledAt(now);
             bet.setStatus(XocDiaBet.Status.REFUNDED);
+            notifyXocDiaRefund(
+                    bet.getUser(),
+                    bet.getStake(),
+                    "do phiên bị hủy (" + reason + ")",
+                    session != null ? session.getId() : null
+            );
         }
 
         betRepository.saveAll(pendingBets);
@@ -431,6 +446,35 @@ public class XocDiaBetService {
         return code.trim()
                 .toLowerCase(Locale.ROOT)
                 .replaceAll("[\\s_]+", "-");
+    }
+
+    private void notifyXocDiaRefund(User user, BigDecimal amount, String reason, Long sessionId) {
+        if (user == null || amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        StringBuilder message = new StringBuilder()
+                .append("Bạn vừa được hoàn ")
+                .append(formatPoints(amount))
+                .append(" điểm Xóc Đĩa");
+        if (sessionId != null) {
+            message.append(" phiên #").append(sessionId);
+        }
+        if (reason != null && !reason.isBlank()) {
+            message.append(" - ").append(reason);
+        }
+
+        notificationService.createSystemNotificationForUser(
+                user,
+                "Hoàn trả Xóc Đĩa",
+                message.toString(),
+                Notification.NotificationPriority.INFO,
+                Notification.NotificationType.TRANSACTION
+        );
+    }
+
+    private String formatPoints(BigDecimal amount) {
+        NumberFormat formatter = NumberFormat.getNumberInstance(new Locale("vi", "VN"));
+        return formatter.format(amount.setScale(0, RoundingMode.DOWN));
     }
 
     @Transactional(readOnly = true)

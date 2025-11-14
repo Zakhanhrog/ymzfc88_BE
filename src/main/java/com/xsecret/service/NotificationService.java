@@ -24,6 +24,42 @@ public class NotificationService {
     private final UserRepository userRepository;
 
     /**
+     * Hệ thống: Tạo thông báo cho 1 người dùng (không yêu cầu admin)
+     */
+    @Transactional
+    public Notification createSystemNotificationForUser(
+            User targetUser,
+            String title,
+            String message,
+            Notification.NotificationPriority priority,
+            Notification.NotificationType type
+    ) {
+        if (targetUser == null) {
+            throw new IllegalArgumentException("Target user is required");
+        }
+
+        Notification.NotificationPriority safePriority =
+                priority != null ? priority : Notification.NotificationPriority.INFO;
+        Notification.NotificationType safeType =
+                type != null ? type : Notification.NotificationType.SYSTEM;
+
+        Notification notification = Notification.builder()
+                .title(title != null ? title : "Thông báo hệ thống")
+                .message(message != null ? message : "")
+                .priority(safePriority)
+                .type(safeType)
+                .targetUser(targetUser)
+                .createdBy(null)
+                .isRead(false)
+                .expiresAt(null)
+                .build();
+
+        Notification saved = notificationRepository.save(notification);
+        log.info("Created system notification {} for user {}", saved.getId(), targetUser.getUsername());
+        return saved;
+    }
+
+    /**
      * Admin: Tạo thông báo mới
      */
     @Transactional

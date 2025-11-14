@@ -1,6 +1,7 @@
 package com.xsecret.service;
 
 import com.xsecret.entity.GameRefundAccrual;
+import com.xsecret.entity.Notification;
 import com.xsecret.entity.PointTransaction;
 import com.xsecret.entity.SystemSettings;
 import com.xsecret.entity.User;
@@ -19,6 +20,8 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.text.NumberFormat;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +34,7 @@ public class GameRefundService {
     private final GameRefundAccrualRepository accrualRepository;
     private final SystemSettingsService systemSettingsService;
     private final PointService pointService;
+    private final NotificationService notificationService;
 
     @Transactional
     public void accrueRefund(
@@ -99,6 +103,7 @@ public class GameRefundService {
                     accrual.setPaidAt(Instant.now());
                     accrual.setFailureReason(null);
                     accrualRepository.save(accrual);
+                    notifyRefundPaid(accrual);
                 } catch (Exception ex) {
                     accrual.setStatus(GameRefundAccrual.Status.FAILED);
                     accrual.setFailureReason(ex.getMessage());
@@ -145,6 +150,38 @@ public class GameRefundService {
             builder.append(" - ").append(accrual.getDescription());
         }
         return builder.toString();
+    }
+
+    private void notifyRefundPaid(GameRefundAccrual accrual) {
+        User user = accrual.getUser();
+        if (user == null || accrual.getAmount() == null) {
+            return;
+        }
+        String gameLabel = accrual.getGameType() == GameRefundAccrual.GameType.SICBO ? "Sicbo" : "Xóc Đĩa";
+        StringBuilder message = new StringBuilder()
+                .append("Bạn vừa nhận hoàn trả ")
+                .append(formatPoints(accrual.getAmount()))
+                .append(" điểm từ ")
+                .append(gameLabel);
+        if (accrual.getReferenceSessionId() != null) {
+            message.append(" phiên #").append(accrual.getReferenceSessionId());
+        }
+        if (StringUtils.hasText(accrual.getDescription())) {
+            message.append(" - ").append(accrual.getDescription());
+        }
+
+        notificationService.createSystemNotificationForUser(
+                user,
+                "Hoàn trả " + gameLabel,
+                message.toString(),
+                Notification.NotificationPriority.INFO,
+                Notification.NotificationType.TRANSACTION
+        );
+    }
+
+    private String formatPoints(BigDecimal amount) {
+        NumberFormat formatter = NumberFormat.getNumberInstance(new Locale("vi", "VN"));
+        return formatter.format(amount.setScale(0, RoundingMode.DOWN));
     }
 }
 
