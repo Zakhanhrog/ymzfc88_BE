@@ -5,6 +5,7 @@ import com.xsecret.dto.response.XocDiaBetHistoryItemResponse;
 import com.xsecret.dto.response.XocDiaBetHistoryPageResponse;
 import com.xsecret.dto.response.XocDiaBetPlacementResponse;
 import com.xsecret.entity.PointTransaction;
+import com.xsecret.entity.SystemSettings;
 import com.xsecret.entity.User;
 import com.xsecret.entity.XocDiaBet;
 import com.xsecret.entity.XocDiaQuickBetConfig;
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -138,6 +140,7 @@ public class XocDiaBetService {
     private final XocDiaQuickBetConfigRepository quickBetConfigRepository;
     private final XocDiaResultHistoryRepository resultHistoryRepository;
     private final PointService pointService;
+    private final SystemSettingsService systemSettingsService;
 
     @Transactional
     public XocDiaBetPlacementResponse placeBets(User user, XocDiaBetRequest request) {
@@ -267,6 +270,8 @@ public class XocDiaBetService {
         BigDecimal totalStake = BigDecimal.ZERO;
         BigDecimal totalWinAmount = BigDecimal.ZERO;
         int winningBets = 0;
+        BigDecimal winCashbackPercent = systemSettingsService.getGameRefundPercentage(SystemSettings.XOC_DIA_REFUND_WIN_PERCENTAGE);
+        BigDecimal lossCashbackPercent = systemSettingsService.getGameRefundPercentage(SystemSettings.XOC_DIA_REFUND_LOSS_PERCENTAGE);
 
         for (XocDiaBet bet : pendingBets) {
             bet.setResultCode(resultCode);
@@ -309,10 +314,12 @@ public class XocDiaBetService {
                 bet.setWinAmount(BigDecimal.ZERO);
                 bet.setStatus(XocDiaBet.Status.LOST);
             }
+
+            applyCashbackIfApplicable(bet, session, winCashbackPercent, lossCashbackPercent);
         }
 
         if (!pendingBets.isEmpty()) {
-        betRepository.saveAll(pendingBets);
+            betRepository.saveAll(pendingBets);
         }
 
         recordResultHistory(session, resultCode, now, pendingBets.size(), winningBets, totalStake, totalWinAmount);
@@ -343,6 +350,52 @@ public class XocDiaBetService {
         }
 
         betRepository.saveAll(pendingBets);
+    }
+
+    private void applyCashbackIfApplicable(
+            XocDiaBet bet,
+            XocDiaSession session,
+            BigDecimal winPercent,
+            BigDecimal lossPercent
+    ) {
+        if (bet == null || bet.getStake() == null || bet.getStake().compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        XocDiaBet.Status status = bet.getStatus();
+        if (status == null || status == XocDiaBet.Status.PENDING || status == XocDiaBet.Status.REFUNDED) {
+            return;
+        }
+
+        BigDecimal applicablePercent = status == XocDiaBet.Status.WON ? winPercent : lossPercent;
+        if (applicablePercent == null || applicablePercent.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        BigDecimal cashbackAmount = bet.getStake()
+                .multiply(applicablePercent)
+                .divide(BigDecimal.valueOf(100), 0, RoundingMode.DOWN);
+
+        if (cashbackAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        StringBuilder description = new StringBuilder("Hoàn trả cược Xóc Đĩa (")
+                .append(status == XocDiaBet.Status.WON ? "thắng" : "thua")
+                .append(")");
+        if (session != null) {
+            description.append(" phiên #").append(session.getId());
+        }
+
+        pointService.addPoints(
+                bet.getUser(),
+                cashbackAmount,
+                PointTransaction.PointTransactionType.BET_REFUND,
+                description.toString(),
+                "XOC_DIA_CASHBACK",
+                session != null ? session.getId() : null,
+                null
+        );
     }
 
     private void recordResultHistory(
@@ -382,6 +435,9 @@ public class XocDiaBetService {
 
     @Transactional(readOnly = true)
     public XocDiaBetHistoryPageResponse getUserBetHistory(User user, int page, int size) {
+        if (user == null) {
+            throw new IllegalArgumentException("Người dùng không hợp lệ");
+        }
         int sanitizedPage = Math.max(page, 0);
         int sanitizedSize = Math.min(Math.max(size, 1), 50);
 
@@ -392,12 +448,19 @@ public class XocDiaBetService {
                 .map(XocDiaBetHistoryItemResponse::fromEntity)
                 .collect(Collectors.toList());
 
+        BigDecimal totalWinAmount = Optional.ofNullable(betRepository.sumWinAmountByUser(user))
+                .orElse(BigDecimal.ZERO);
+        BigDecimal totalLossAmount = Optional.ofNullable(betRepository.sumLostStakeByUser(user))
+                .orElse(BigDecimal.ZERO);
+
         return XocDiaBetHistoryPageResponse.builder()
                 .items(items)
                 .page(betPage.getNumber())
                 .size(betPage.getSize())
                 .totalItems(betPage.getTotalElements())
                 .hasMore(betPage.hasNext())
+                .totalWinAmount(totalWinAmount)
+                .totalLossAmount(totalLossAmount)
                 .build();
 }
 

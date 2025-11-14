@@ -127,6 +127,18 @@ public interface SicboBetRepository extends JpaRepository<SicboBet, Long> {
             @Param("start") Instant start,
             @Param("end") Instant end
     );
+
+    @Query("""
+        SELECT COALESCE(SUM(b.winAmount), 0) FROM SicboBet b
+        WHERE b.user = :user AND b.status = com.xsecret.entity.SicboBet$Status.WON
+    """)
+    BigDecimal sumWinAmountByUser(@Param("user") User user);
+
+    @Query("""
+        SELECT COALESCE(SUM(b.stake), 0) FROM SicboBet b
+        WHERE b.user = :user AND b.status = com.xsecret.entity.SicboBet$Status.LOST
+    """)
+    BigDecimal sumLostStakeByUser(@Param("user") User user);
 }
 
 

@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Data
@@ -18,5 +19,7 @@ public class SicboBetHistoryPageResponse {
     private int size;
     private long totalItems;
     private boolean hasMore;
+    private BigDecimal totalWinAmount;
+    private BigDecimal totalLossAmount;
 }
 

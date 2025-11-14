@@ -72,6 +72,7 @@ public class PointTransaction {
         BET_PLACED("Đặt cược"),
         BET_WIN("Thắng cược"),
         BET_REFUND("Hoàn cược"),
+        BET_CASHBACK("Hoàn trả cược"),
         BET_CANCELLED("Hủy cược");
 
         private final String displayName;

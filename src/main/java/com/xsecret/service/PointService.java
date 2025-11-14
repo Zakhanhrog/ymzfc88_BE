@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -182,10 +183,13 @@ public class PointService {
                             .build();
                     return userPointRepository.save(newUserPoint);
                 });
+        ensureUserPointInitialized(userPoint);
+
+        BigDecimal normalizedPoints = normalizePoints(points);
 
         // Sử dụng user.points làm chuẩn để tránh không đồng bộ
         BigDecimal balanceBefore = BigDecimal.valueOf(user.getPoints() != null ? user.getPoints() : 0L);
-        BigDecimal balanceAfter = balanceBefore.add(points);
+        BigDecimal balanceAfter = balanceBefore.add(normalizedPoints);
 
         // Update user points first (chuẩn)
         user.setPoints(balanceAfter.longValue());
@@ -193,7 +197,7 @@ public class PointService {
 
         // Sync userPoint với user.points
         userPoint.setTotalPoints(balanceAfter);
-        userPoint.setLifetimeEarned(userPoint.getLifetimeEarned().add(points));
+        userPoint.setLifetimeEarned(userPoint.getLifetimeEarned().add(normalizedPoints));
         userPointRepository.save(userPoint);
 
         // Create transaction record
@@ -201,7 +205,7 @@ public class PointService {
                 .user(user)
                 .transactionCode(generateTransactionCode())
                 .type(type)
-                .points(points)
+                .points(normalizedPoints)
                 .balanceBefore(balanceBefore)
                 .balanceAfter(balanceAfter)
                 .description(description)
@@ -224,27 +228,30 @@ public class PointService {
                         .lifetimeEarned(BigDecimal.ZERO)
                         .lifetimeSpent(BigDecimal.ZERO)
                         .build()));
+        ensureUserPointInitialized(userPoint);
+
+        BigDecimal normalizedPoints = normalizePoints(points);
 
         BigDecimal balanceBefore = BigDecimal.valueOf(user.getPoints() != null ? user.getPoints() : 0L);
 
-        if (balanceBefore.compareTo(points) < 0) {
+        if (balanceBefore.compareTo(normalizedPoints) < 0) {
             throw new RuntimeException("Insufficient points");
         }
 
-        BigDecimal balanceAfter = balanceBefore.subtract(points);
+        BigDecimal balanceAfter = balanceBefore.subtract(normalizedPoints);
 
         user.setPoints(balanceAfter.longValue());
         userRepository.save(user);
 
         userPoint.setTotalPoints(balanceAfter);
-        userPoint.setLifetimeSpent(userPoint.getLifetimeSpent().add(points));
+        userPoint.setLifetimeSpent(userPoint.getLifetimeSpent().add(normalizedPoints));
         userPointRepository.save(userPoint);
 
         PointTransaction transaction = PointTransaction.builder()
                 .user(user)
                 .transactionCode(generateTransactionCode())
                 .type(type)
-                .points(points.negate())
+                .points(normalizedPoints.negate())
                 .balanceBefore(balanceBefore)
                 .balanceAfter(balanceAfter)
                 .description(description)
@@ -307,6 +314,28 @@ public class PointService {
         }
         
         return transactions.map(this::mapToResponse);
+    }
+
+    private void ensureUserPointInitialized(UserPoint userPoint) {
+        if (userPoint.getTotalPoints() == null) {
+            userPoint.setTotalPoints(BigDecimal.ZERO);
+        }
+        if (userPoint.getLifetimeEarned() == null) {
+            userPoint.setLifetimeEarned(BigDecimal.ZERO);
+        }
+        if (userPoint.getLifetimeSpent() == null) {
+            userPoint.setLifetimeSpent(BigDecimal.ZERO);
+        }
+    }
+
+    private BigDecimal normalizePoints(BigDecimal value) {
+        if (value == null) {
+            return BigDecimal.ZERO;
+        }
+        if (value.scale() <= 0) {
+            return value;
+        }
+        return value.setScale(0, RoundingMode.DOWN);
     }
 
     private PointTransactionResponse mapToResponse(PointTransaction transaction) {

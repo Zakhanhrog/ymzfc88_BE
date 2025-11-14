@@ -9,6 +9,7 @@ import com.xsecret.entity.SicboBet;
 import com.xsecret.entity.SicboQuickBetConfig;
 import com.xsecret.entity.SicboResultHistory;
 import com.xsecret.entity.SicboSession;
+import com.xsecret.entity.SystemSettings;
 import com.xsecret.entity.User;
 import com.xsecret.repository.SicboBetRepository;
 import com.xsecret.repository.SicboQuickBetConfigRepository;
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -91,6 +93,7 @@ public class SicboBetService {
     private final SicboQuickBetConfigRepository quickBetConfigRepository;
     private final PointService pointService;
     private final SicboResultHistoryService resultHistoryService;
+    private final SystemSettingsService systemSettingsService;
 
     @Transactional
     public SicboBetPlacementResponse placeBets(User user, SicboBetRequest request) {
@@ -239,6 +242,9 @@ public class SicboBetService {
 
         List<SicboBet> pendingBets = betRepository.findBySessionAndStatus(session, SicboBet.Status.PENDING);
         if (!pendingBets.isEmpty()) {
+            BigDecimal winCashbackPercent = systemSettingsService.getGameRefundPercentage(SystemSettings.SICBO_REFUND_WIN_PERCENTAGE);
+            BigDecimal lossCashbackPercent = systemSettingsService.getGameRefundPercentage(SystemSettings.SICBO_REFUND_LOSS_PERCENTAGE);
+
             boolean isTripleResult = tripleFace != null;
             boolean isLowTriple = false;
             boolean isHighTriple = false;
@@ -354,6 +360,8 @@ public class SicboBetService {
                     bet.setWinAmount(BigDecimal.ZERO);
                     bet.setStatus(SicboBet.Status.LOST);
                 }
+
+                applyCashbackIfApplicable(bet, session, winCashbackPercent, lossCashbackPercent);
             }
 
             betRepository.saveAll(pendingBets);
@@ -362,6 +370,55 @@ public class SicboBetService {
         if (resultSum > 0 && historyCategory != null) {
             resultHistoryService.record(session, resultCode, resultSum, historyCategory, now);
         }
+    }
+
+    private void applyCashbackIfApplicable(
+            SicboBet bet,
+            SicboSession session,
+            BigDecimal winPercent,
+            BigDecimal lossPercent
+    ) {
+        if (bet == null || bet.getStake() == null || bet.getStake().compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        SicboBet.Status status = bet.getStatus();
+        if (status == null || status == SicboBet.Status.PENDING || status == SicboBet.Status.REFUNDED) {
+            return;
+        }
+
+        BigDecimal applicablePercent = status == SicboBet.Status.WON ? winPercent : lossPercent;
+        if (applicablePercent == null || applicablePercent.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        BigDecimal cashbackAmount = bet.getStake()
+                .multiply(applicablePercent)
+                .divide(BigDecimal.valueOf(100), 0, RoundingMode.DOWN);
+
+        if (cashbackAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        StringBuilder description = new StringBuilder("Hoàn trả cược Sicbo (")
+                .append(status == SicboBet.Status.WON ? "thắng" : "thua")
+                .append(")");
+        if (session != null) {
+            if (session.getTableNumber() != null) {
+                description.append(" bàn ").append(session.getTableNumber());
+            }
+            description.append(" phiên #").append(session.getId());
+        }
+
+                    pointService.addPoints(
+                bet.getUser(),
+                cashbackAmount,
+                            PointTransaction.PointTransactionType.BET_REFUND,
+                description.toString(),
+                            "SICBO_CASHBACK",
+                session != null ? session.getId() : null,
+                null
+        );
     }
 
     @Transactional
@@ -497,12 +554,19 @@ public class SicboBetService {
                 .map(SicboBetHistoryItemResponse::fromEntity)
                 .collect(Collectors.toList());
 
+        BigDecimal totalWinAmount = Optional.ofNullable(betRepository.sumWinAmountByUser(user))
+                .orElse(BigDecimal.ZERO);
+        BigDecimal totalLossAmount = Optional.ofNullable(betRepository.sumLostStakeByUser(user))
+                .orElse(BigDecimal.ZERO);
+
         return SicboBetHistoryPageResponse.builder()
                 .items(items)
                 .page(betPage.getNumber())
                 .size(betPage.getSize())
                 .totalItems(betPage.getTotalElements())
                 .hasMore(betPage.hasNext())
+                .totalWinAmount(totalWinAmount)
+                .totalLossAmount(totalLossAmount)
                 .build();
     }
 }

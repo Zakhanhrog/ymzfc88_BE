@@ -9,6 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -147,6 +149,33 @@ public class SystemSettingsService {
             log.warn("Invalid agent commission percentage value: {}. Falling back to default 5%", value);
             return 5.0;
         }
+    }
+
+    /**
+     * Lấy tỷ lệ hoàn trả trò chơi theo phần trăm (0 - 100)
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal getGameRefundPercentage(String key) {
+        String value = getSettingValue(key, "0");
+        try {
+            BigDecimal percentage = new BigDecimal(value.trim());
+            if (percentage.compareTo(BigDecimal.ZERO) < 0) {
+                return BigDecimal.ZERO;
+            }
+            return percentage;
+        } catch (Exception ex) {
+            log.warn("Invalid refund percentage for key {} with value '{}'. Using 0%", key, value);
+            return BigDecimal.ZERO;
+        }
+    }
+
+    /**
+     * Chuyển đổi tỷ lệ hoàn trả thành hệ số (ví dụ 5% -> 0.05)
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal getGameRefundFactor(String key) {
+        return getGameRefundPercentage(key)
+                .divide(BigDecimal.valueOf(100), 6, RoundingMode.DOWN);
     }
 
     /**
@@ -306,6 +335,43 @@ public class SystemSettingsService {
                     .settingValue("#")
                     .description("Link cho thẻ Hotline")
                     .category("CONTACT")
+                    .build());
+        }
+
+        // Game refund defaults
+        if (!systemSettingsRepository.existsBySettingKey(SystemSettings.SICBO_REFUND_WIN_PERCENTAGE)) {
+            createOrUpdateSetting(SystemSettingsRequest.builder()
+                    .settingKey(SystemSettings.SICBO_REFUND_WIN_PERCENTAGE)
+                    .settingValue("0")
+                    .description("Tỷ lệ hoàn trả (%) cho lệnh thắng Sicbo")
+                    .category("GAME_REFUND")
+                    .build());
+        }
+
+        if (!systemSettingsRepository.existsBySettingKey(SystemSettings.SICBO_REFUND_LOSS_PERCENTAGE)) {
+            createOrUpdateSetting(SystemSettingsRequest.builder()
+                    .settingKey(SystemSettings.SICBO_REFUND_LOSS_PERCENTAGE)
+                    .settingValue("0")
+                    .description("Tỷ lệ hoàn trả (%) cho lệnh thua Sicbo")
+                    .category("GAME_REFUND")
+                    .build());
+        }
+
+        if (!systemSettingsRepository.existsBySettingKey(SystemSettings.XOC_DIA_REFUND_WIN_PERCENTAGE)) {
+            createOrUpdateSetting(SystemSettingsRequest.builder()
+                    .settingKey(SystemSettings.XOC_DIA_REFUND_WIN_PERCENTAGE)
+                    .settingValue("0")
+                    .description("Tỷ lệ hoàn trả (%) cho lệnh thắng Xóc Đĩa")
+                    .category("GAME_REFUND")
+                    .build());
+        }
+
+        if (!systemSettingsRepository.existsBySettingKey(SystemSettings.XOC_DIA_REFUND_LOSS_PERCENTAGE)) {
+            createOrUpdateSetting(SystemSettingsRequest.builder()
+                    .settingKey(SystemSettings.XOC_DIA_REFUND_LOSS_PERCENTAGE)
+                    .settingValue("0")
+                    .description("Tỷ lệ hoàn trả (%) cho lệnh thua Xóc Đĩa")
+                    .category("GAME_REFUND")
                     .build());
         }
     }
