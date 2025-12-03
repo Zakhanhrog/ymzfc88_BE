@@ -76,6 +76,7 @@ public class SecurityConfig {
                     .requestMatchers("/xoc-dia/bets/**").hasAnyRole("USER", "ADMIN") // Đặt cược Xóc Đĩa cần đăng nhập
                     .requestMatchers("/sicbo/bets/**").hasAnyRole("USER", "ADMIN") // Đặt cược Sicbo cần đăng nhập
                     .requestMatchers("/public/**").permitAll() // Public endpoints (lottery results, etc.)
+                    .requestMatchers("/stream-configs/public/**").permitAll() // Public stream config endpoints
                     .requestMatchers("/marquee-notifications/public/**").permitAll() // Public marquee notifications
                     .requestMatchers("/banners/public/**").permitAll() // Public banners
                     .requestMatchers(HttpMethod.GET, "/promotions/**").permitAll() // Public promotions (GET endpoints only)
