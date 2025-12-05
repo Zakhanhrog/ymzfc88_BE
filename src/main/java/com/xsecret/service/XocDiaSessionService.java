@@ -95,6 +95,38 @@ public class XocDiaSessionService {
         return XocDiaSessionResponse.fromEntity(saved, now);
     }
 
+    @Transactional
+    public XocDiaSessionResponse refundBetsForUndeterminedResult() {
+        Instant now = Instant.now();
+
+        XocDiaSession session = sessionRepository.findTopByOrderByStartedAtDesc()
+                .orElseThrow(() -> new IllegalStateException("Không tìm thấy phiên Xóc Đĩa để hoàn tiền"));
+
+        if (session.getStatus() != XocDiaSession.Status.RUNNING) {
+            throw new IllegalStateException("Phiên Xóc Đĩa hiện tại không hợp lệ để hoàn tiền");
+        }
+
+        initializePhaseIfNeeded(session, now);
+        boolean advanced = advancePhaseIfNeeded(session, now);
+        if (advanced) {
+            session = sessionRepository.save(session);
+        }
+
+        if (session.getPhase() != XocDiaSession.Phase.SHOW_RESULT) {
+            throw new IllegalStateException("Chỉ có thể hoàn tiền khi phiên đang ở trạng thái Trả kết quả");
+        }
+
+        String reason = "Kết quả không xác định";
+        betService.refundUnsettledBets(session, reason);
+
+        session.setResultCode("UNDETERMINED");
+        session.setPhase(XocDiaSession.Phase.PAYOUT);
+        session.setPhaseStartedAt(now);
+
+        XocDiaSession saved = sessionRepository.save(session);
+        return XocDiaSessionResponse.fromEntity(saved, now);
+    }
+
     private boolean initializePhaseIfNeeded(XocDiaSession session, Instant referenceTime) {
         boolean updated = false;
 
@@ -117,6 +149,20 @@ public class XocDiaSessionService {
             return false;
         }
 
+        // Nếu đang ở PAYOUT phase và hết thời gian, kết thúc session thay vì chuyển sang phase tiếp theo
+        if (session.getPhase() == XocDiaSession.Phase.PAYOUT && session.getPhase().getDurationMillis() != null) {
+            long duration = session.getPhase().getDurationMillis();
+            Instant phaseEnd = session.getPhaseStartedAt().plusMillis(duration);
+            Instant now = referenceTime != null ? referenceTime : Instant.now();
+            
+            if (!phaseEnd.isAfter(now)) {
+                // PAYOUT phase đã hết thời gian, kết thúc session
+                session.setStatus(XocDiaSession.Status.ENDED);
+                session.setEndedAt(now);
+                return true;
+            }
+        }
+
         boolean updated = false;
         Instant now = referenceTime != null ? referenceTime : Instant.now();
         int safetyCounter = 0;
@@ -132,12 +178,17 @@ public class XocDiaSessionService {
             }
 
             XocDiaSession.Phase nextPhase = session.getPhase().next();
+            
+            // Nếu next phase là COUNTDOWN (tức là đang ở INVITE_BET và sẽ quay lại COUNTDOWN),
+            // thì kết thúc session thay vì chuyển sang COUNTDOWN
+            if (nextPhase == XocDiaSession.Phase.COUNTDOWN) {
+                session.setStatus(XocDiaSession.Status.ENDED);
+                session.setEndedAt(phaseEnd);
+                return true;
+            }
+            
             session.setPhase(nextPhase);
             session.setPhaseStartedAt(phaseEnd);
-
-            if (nextPhase == XocDiaSession.Phase.COUNTDOWN) {
-                session.setResultCode(null);
-            }
 
             updated = true;
             safetyCounter++;

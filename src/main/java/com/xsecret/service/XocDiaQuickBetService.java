@@ -55,6 +55,7 @@ public class XocDiaQuickBetService {
                 .name(request.getName())
                 .description(request.getDescription())
                 .payoutMultiplier(request.getPayoutMultiplier())
+                .feeRate(request.getFeeRate())
                 .pattern(normalizePattern(request.getPattern()))
                 .layoutGroup(normalizedGroup)
                 .displayOrder(request.getDisplayOrder())
@@ -82,6 +83,7 @@ public class XocDiaQuickBetService {
         config.setName(request.getName());
         config.setDescription(request.getDescription());
         config.setPayoutMultiplier(request.getPayoutMultiplier());
+        config.setFeeRate(request.getFeeRate());
         config.setPattern(normalizePattern(request.getPattern()));
         config.setLayoutGroup(normalizedGroup);
         config.setDisplayOrder(request.getDisplayOrder());
@@ -115,6 +117,7 @@ public class XocDiaQuickBetService {
                     config.setName(request.getName());
                     config.setDescription(request.getDescription());
                     config.setPayoutMultiplier(request.getPayoutMultiplier());
+                    config.setFeeRate(request.getFeeRate());
                     config.setPattern(normalizePattern(request.getPattern()));
                     config.setLayoutGroup(normalizedGroup);
                     config.setDisplayOrder(request.getDisplayOrder());

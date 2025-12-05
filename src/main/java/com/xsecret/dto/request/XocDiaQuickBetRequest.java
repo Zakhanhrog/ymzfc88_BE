@@ -32,6 +32,13 @@ public class XocDiaQuickBetRequest {
     private BigDecimal payoutMultiplier;
 
     /**
+     * Tỷ lệ phế (ví dụ 0.03 nghĩa là 3%)
+     * NULL hoặc 0 nghĩa là không tính phế cho loại đánh này
+     */
+    @DecimalMin(value = "0.0", message = "Tỷ lệ phế phải lớn hơn hoặc bằng 0")
+    private BigDecimal feeRate;
+
+    /**
      * Chuỗi biểu diễn pattern (vd: white,white,red,red). Cho phép để trống.
      */
     private String pattern;

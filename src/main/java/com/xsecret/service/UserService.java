@@ -418,6 +418,13 @@ public class UserService {
             roleStats.put(role.name(), userRepository.countByRole(role));
         }
         stats.put("usersByRole", roleStats);
+        
+        // Thống kê theo staff role (bao gồm AGENT)
+        Map<String, Long> staffRoleStats = new HashMap<>();
+        for (User.StaffRole staffRole : User.StaffRole.values()) {
+            staffRoleStats.put(staffRole.name(), userRepository.countByStaffRole(staffRole));
+        }
+        stats.put("usersByStaffRole", staffRoleStats);
 
         // Người dùng mới trong 30 ngày
         LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);

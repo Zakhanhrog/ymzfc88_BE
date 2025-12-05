@@ -72,6 +72,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     long countByStatus(User.UserStatus status);
 
     long countByRole(User.Role role);
+    
+    long countByStaffRole(User.StaffRole staffRole);
 
     long countByCreatedAtAfter(LocalDateTime dateTime);
 

@@ -63,6 +63,19 @@ public class SicboSessionAdminController {
         }
     }
 
+    @PostMapping("/result/refund")
+    public ResponseEntity<ApiResponse<SicboSessionResponse>> refundBetsForUndeterminedResult(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam(name = "table", defaultValue = "1") Integer tableNumber) {
+        assertTableAccess(principal, tableNumber);
+        try {
+            SicboSessionResponse data = sessionService.refundBetsForUndeterminedResult(tableNumber);
+            return ResponseEntity.ok(ApiResponse.success("Đã hoàn tiền cược cho tất cả người chơi do kết quả không xác định", data));
+        } catch (IllegalStateException ex) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
+        }
+    }
+
     private void assertTableAccess(UserPrincipal principal, Integer tableNumber) {
         if (principal == null) {
             throw new AccessDeniedException("Bạn không có quyền thao tác bàn này");

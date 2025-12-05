@@ -106,6 +106,39 @@ public class SicboSessionService {
         return SicboSessionResponse.fromEntity(saved, now);
     }
 
+    @Transactional
+    public SicboSessionResponse refundBetsForUndeterminedResult(int tableNumber) {
+        Instant now = Instant.now();
+
+        SicboSession session = sessionRepository.findTopByTableNumberOrderByStartedAtDesc(tableNumber)
+                .orElseThrow(() -> new IllegalStateException("Không tìm thấy phiên Sicbo để hoàn tiền cho bàn " + tableNumber));
+
+        if (session.getStatus() != SicboSession.Status.RUNNING) {
+            throw new IllegalStateException("Phiên Sicbo hiện tại không hợp lệ để hoàn tiền");
+        }
+
+        initializePhaseIfNeeded(session, now);
+        boolean advanced = advancePhaseIfNeeded(session, now);
+        if (advanced) {
+            session = sessionRepository.save(session);
+        }
+
+        if (session.getPhase() != SicboSession.Phase.SHOW_RESULT) {
+            throw new IllegalStateException("Chỉ có thể hoàn tiền khi phiên đang ở trạng thái Trả kết quả");
+        }
+
+        String reason = "Kết quả không xác định";
+        betService.refundUnsettledBets(session, reason);
+
+        session.setResultCode("UNDETERMINED");
+        session.setPhase(SicboSession.Phase.PAYOUT);
+        session.setPhaseStartedAt(now);
+
+        SicboSession saved = sessionRepository.save(session);
+        log.info("Đã hoàn tiền cho phiên Sicbo session {} (bàn {}) do kết quả không xác định", saved.getId(), tableNumber);
+        return SicboSessionResponse.fromEntity(saved, now);
+    }
+
     private boolean initializePhaseIfNeeded(SicboSession session, Instant referenceTime) {
         boolean updated = false;
 
@@ -128,6 +161,21 @@ public class SicboSessionService {
             return false;
         }
 
+        // Nếu đang ở PAYOUT phase và hết thời gian, kết thúc session thay vì chuyển sang phase tiếp theo
+        if (session.getPhase() == SicboSession.Phase.PAYOUT && session.getPhase().getDurationMillis() != null) {
+            long duration = session.getPhase().getDurationMillis();
+            Instant phaseEnd = session.getPhaseStartedAt().plusMillis(duration);
+            Instant now = referenceTime != null ? referenceTime : Instant.now();
+            
+            if (!phaseEnd.isAfter(now)) {
+                // PAYOUT phase đã hết thời gian, kết thúc session
+                session.setStatus(SicboSession.Status.ENDED);
+                session.setEndedAt(now);
+                log.info("Phiên Sicbo {} (bàn {}) đã kết thúc sau khi hoàn tất PAYOUT phase", session.getId(), session.getTableNumber());
+                return true;
+            }
+        }
+
         boolean updated = false;
         Instant now = referenceTime != null ? referenceTime : Instant.now();
         int safetyCounter = 0;
@@ -143,12 +191,18 @@ public class SicboSessionService {
             }
 
             SicboSession.Phase nextPhase = session.getPhase().next();
+            
+            // Nếu next phase là COUNTDOWN (tức là đang ở INVITE_BET và sẽ quay lại COUNTDOWN),
+            // thì kết thúc session thay vì chuyển sang COUNTDOWN
+            if (nextPhase == SicboSession.Phase.COUNTDOWN) {
+                session.setStatus(SicboSession.Status.ENDED);
+                session.setEndedAt(phaseEnd);
+                log.info("Phiên Sicbo {} (bàn {}) đã kết thúc sau khi hoàn tất INVITE_BET phase", session.getId(), session.getTableNumber());
+                return true;
+            }
+            
             session.setPhase(nextPhase);
             session.setPhaseStartedAt(phaseEnd);
-
-            if (nextPhase == SicboSession.Phase.COUNTDOWN) {
-                session.setResultCode(null);
-            }
 
             updated = true;
             safetyCounter++;

@@ -58,6 +58,9 @@ public class AuthService {
         User user = userRepository.findByUsernameOrEmail(username, username)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
 
+        // Check if staff trying to login on user portal
+        validatePortalAccess(user, loginRequest);
+
         // Update last login
         user.setLastLogin(LocalDateTime.now());
         userRepository.save(user);
@@ -77,6 +80,30 @@ public class AuthService {
                 .expiresIn(jwtUtils.getJwtExpirationMs())
                 .user(userResponse)
                 .build();
+    }
+
+    private void validatePortalAccess(User user, LoginRequest loginRequest) {
+        String portal = loginRequest.getPortal() != null
+                ? loginRequest.getPortal().trim().toUpperCase(Locale.ROOT)
+                : "USER";
+
+        // Check if user is staff (not agent)
+        boolean isStaff = user.getStaffRole() != null && user.getStaffRole() != User.StaffRole.AGENT;
+        boolean isAgent = user.getStaffRole() == User.StaffRole.AGENT;
+        boolean isUserPortal = portal.equals("USER") || portal.isEmpty() || portal.isBlank();
+
+        // Block staff (not agent) from logging into user portal
+        if (isStaff && isUserPortal) {
+            throw new IllegalStateException("Tài khoản nhân viên không được đăng nhập vào giao diện người dùng. Vui lòng sử dụng portal nhân viên.");
+        }
+
+        // Block regular users from logging into staff/agent/admin portals
+        if (!isStaff && !isAgent && user.getRole() != User.Role.ADMIN) {
+            boolean isRestrictedPortal = portal.equals("ADMIN") || portal.equals("STAFF") || portal.equals("AGENT");
+            if (isRestrictedPortal) {
+                throw new IllegalStateException("Tài khoản không có quyền truy cập vào portal này.");
+            }
+        }
     }
 
     private void enforceC2PasswordIfRequired(User user, LoginRequest loginRequest) {

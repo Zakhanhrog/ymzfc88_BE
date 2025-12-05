@@ -59,6 +59,18 @@ public class XocDiaSessionAdminController {
         }
     }
 
+    @PostMapping("/result/refund")
+    public ResponseEntity<ApiResponse<XocDiaSessionResponse>> refundBetsForUndeterminedResult(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        assertXocDiaAccess(principal);
+        try {
+            XocDiaSessionResponse data = sessionService.refundBetsForUndeterminedResult();
+            return ResponseEntity.ok(ApiResponse.success("Đã hoàn tiền cược cho tất cả người chơi do kết quả không xác định", data));
+        } catch (IllegalStateException ex) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
+        }
+    }
+
     private void assertXocDiaAccess(UserPrincipal principal) {
         if (principal == null) {
             throw new AccessDeniedException("Bạn không có quyền thao tác bàn Xóc Đĩa");

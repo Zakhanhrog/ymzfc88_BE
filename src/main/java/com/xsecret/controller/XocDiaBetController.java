@@ -48,7 +48,7 @@ public class XocDiaBetController {
     public ResponseEntity<ApiResponse<XocDiaBetHistoryPageResponse>> getBetHistory(
             Authentication authentication,
             @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "10") int size
+            @RequestParam(name = "size", defaultValue = "20") int size
     ) {
         try {
             String username = authentication.getName();

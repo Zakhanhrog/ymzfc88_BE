@@ -36,6 +36,14 @@ public class StreamConfig {
     @Builder.Default
     private Boolean isActive = true;
     
+    @Column(name = "is_live_paused", nullable = false)
+    @Builder.Default
+    private Boolean isLivePaused = false;
+    
+    @Column(name = "is_live_ended", nullable = false)
+    @Builder.Default
+    private Boolean isLiveEnded = false;
+    
     @Column(name = "description", length = 500)
     private String description;
     

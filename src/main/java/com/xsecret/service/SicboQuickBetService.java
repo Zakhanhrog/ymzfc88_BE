@@ -9,6 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -29,9 +31,25 @@ public class SicboQuickBetService {
 
     @Transactional(readOnly = true)
     public List<SicboQuickBetResponse> getActiveConfigs() {
+        return getActiveConfigs(null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SicboQuickBetResponse> getActiveConfigs(Integer tableNumber) {
         return repository.findAllByIsActiveTrueOrderByDisplayOrderAsc()
                 .stream()
-                .map(SicboQuickBetResponse::fromEntity)
+                .map(config -> {
+                    SicboQuickBetResponse response = SicboQuickBetResponse.fromEntity(config);
+                    // Nếu là bàn 1 và có phế, trừ phế vào payout multiplier
+                    if (tableNumber != null && tableNumber == 1 && config.getFeeRate() != null 
+                            && config.getFeeRate().compareTo(BigDecimal.ZERO) > 0) {
+                        BigDecimal adjustedMultiplier = config.getPayoutMultiplier()
+                                .subtract(config.getFeeRate())
+                                .max(BigDecimal.ZERO);
+                        response.setPayoutMultiplier(adjustedMultiplier.setScale(2, RoundingMode.HALF_UP));
+                    }
+                    return response;
+                })
                 .collect(Collectors.toList());
     }
 
@@ -53,6 +71,7 @@ public class SicboQuickBetService {
                 .name(request.getName())
                 .description(request.getDescription())
                 .payoutMultiplier(request.getPayoutMultiplier())
+                .feeRate(request.getFeeRate())
                 .layoutGroup(normalizeGroup(request.getLayoutGroup()))
                 .displayOrder(request.getDisplayOrder())
                 .isActive(request.getIsActive() != null ? request.getIsActive() : Boolean.TRUE)
@@ -77,6 +96,7 @@ public class SicboQuickBetService {
         config.setName(request.getName());
         config.setDescription(request.getDescription());
         config.setPayoutMultiplier(request.getPayoutMultiplier());
+        config.setFeeRate(request.getFeeRate());
         config.setLayoutGroup(normalizeGroup(request.getLayoutGroup()));
         config.setDisplayOrder(request.getDisplayOrder());
         if (request.getIsActive() != null) {
@@ -107,6 +127,7 @@ public class SicboQuickBetService {
                     config.setName(request.getName());
                     config.setDescription(request.getDescription());
                     config.setPayoutMultiplier(request.getPayoutMultiplier());
+                    config.setFeeRate(request.getFeeRate());
                     config.setLayoutGroup(normalizeGroup(request.getLayoutGroup()));
                     config.setDisplayOrder(request.getDisplayOrder());
                     if (request.getIsActive() != null) {

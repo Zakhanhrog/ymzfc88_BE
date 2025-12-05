@@ -16,6 +16,7 @@ public class SicboQuickBetResponse {
     private String name;
     private String description;
     private BigDecimal payoutMultiplier;
+    private BigDecimal feeRate;
     private String layoutGroup;
     private Integer displayOrder;
     private Boolean isActive;
@@ -29,6 +30,7 @@ public class SicboQuickBetResponse {
                 .name(entity.getName())
                 .description(entity.getDescription())
                 .payoutMultiplier(entity.getPayoutMultiplier())
+                .feeRate(entity.getFeeRate())
                 .layoutGroup(entity.getLayoutGroup())
                 .displayOrder(entity.getDisplayOrder())
                 .isActive(entity.getIsActive())

@@ -17,6 +17,8 @@ public class StreamConfigResponse {
     private Integer tableNumber;
     private String streamKey;
     private Boolean isActive;
+    private Boolean isLivePaused;
+    private Boolean isLiveEnded;
     private String description;
     private String createdAt;
     private String updatedAt;
@@ -28,6 +30,8 @@ public class StreamConfigResponse {
                 .tableNumber(config.getTableNumber())
                 .streamKey(config.getStreamKey())
                 .isActive(config.getIsActive())
+                .isLivePaused(config.getIsLivePaused() != null ? config.getIsLivePaused() : false)
+                .isLiveEnded(config.getIsLiveEnded() != null ? config.getIsLiveEnded() : false)
                 .description(config.getDescription())
                 .createdAt(config.getCreatedAt() != null ? config.getCreatedAt().toString() : null)
                 .updatedAt(config.getUpdatedAt() != null ? config.getUpdatedAt().toString() : null)

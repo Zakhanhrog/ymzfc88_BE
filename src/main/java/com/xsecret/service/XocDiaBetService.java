@@ -210,12 +210,25 @@ public class XocDiaBetService {
             BigDecimal stake = BigDecimal.valueOf(amount);
             totalStake = totalStake.add(stake);
 
+            // Tính payout multiplier và fee: nếu có phế, trừ phế
+            BigDecimal finalPayoutMultiplier = config.getPayoutMultiplier();
+            BigDecimal feeAmount = null;
+            if (config.getFeeRate() != null && config.getFeeRate().compareTo(BigDecimal.ZERO) > 0) {
+                finalPayoutMultiplier = config.getPayoutMultiplier()
+                        .subtract(config.getFeeRate())
+                        .max(BigDecimal.ZERO);
+                // Tính số tiền phế
+                feeAmount = stake.multiply(config.getFeeRate())
+                        .setScale(2, RoundingMode.DOWN);
+            }
+
             XocDiaBet bet = XocDiaBet.builder()
                     .user(user)
                     .session(session)
                     .betCode(normalizedCode)
                     .stake(stake)
-                    .payoutMultiplier(config.getPayoutMultiplier())
+                    .payoutMultiplier(finalPayoutMultiplier)
+                    .feeAmount(feeAmount)
                     .status(XocDiaBet.Status.PENDING)
                     .build();
 
@@ -483,13 +496,46 @@ public class XocDiaBetService {
             throw new IllegalArgumentException("Người dùng không hợp lệ");
         }
         int sanitizedPage = Math.max(page, 0);
-        int sanitizedSize = Math.min(Math.max(size, 1), 50);
+        int sanitizedSize = Math.min(Math.max(size, 1), 100); // Tăng max lên 100 để FE có thể tự điều chỉnh
 
         Pageable pageable = PageRequest.of(sanitizedPage, sanitizedSize);
         Page<XocDiaBet> betPage = betRepository.findByUserOrderByCreatedAtDesc(user, pageable);
 
+        // Lấy settings hoàn tiền
+        BigDecimal winRefundPercent = systemSettingsService.getGameRefundPercentage(SystemSettings.XOC_DIA_REFUND_WIN_PERCENTAGE);
+        BigDecimal lossRefundPercent = systemSettingsService.getGameRefundPercentage(SystemSettings.XOC_DIA_REFUND_LOSS_PERCENTAGE);
+
+        // Map sang response và gắn refund info
         List<XocDiaBetHistoryItemResponse> items = betPage.getContent().stream()
-                .map(XocDiaBetHistoryItemResponse::fromEntity)
+                .map(bet -> {
+                    XocDiaBetHistoryItemResponse response = XocDiaBetHistoryItemResponse.fromEntity(bet);
+                    
+                    // Xác định loại refund và % refund
+                    if (bet.getStatus() == XocDiaBet.Status.REFUNDED) {
+                        // Trường hợp hoàn tiền 100% (session bị hủy, etc)
+                        response.setRefundAmount(bet.getStake());
+                        response.setRefundType("FULL_REFUND");
+                        response.setRefundPercentage(new BigDecimal("100"));
+                    } else if (bet.getStatus() == XocDiaBet.Status.WON && winRefundPercent != null && winRefundPercent.compareTo(BigDecimal.ZERO) > 0) {
+                        // Hoàn tiền theo % thắng
+                        BigDecimal refundAmount = bet.getStake()
+                                .multiply(winRefundPercent)
+                                .divide(BigDecimal.valueOf(100), 0, RoundingMode.DOWN);
+                        response.setRefundAmount(refundAmount);
+                        response.setRefundType("WIN_PERCENT");
+                        response.setRefundPercentage(winRefundPercent);
+                    } else if (bet.getStatus() == XocDiaBet.Status.LOST && lossRefundPercent != null && lossRefundPercent.compareTo(BigDecimal.ZERO) > 0) {
+                        // Hoàn tiền theo % thua
+                        BigDecimal refundAmount = bet.getStake()
+                                .multiply(lossRefundPercent)
+                                .divide(BigDecimal.valueOf(100), 0, RoundingMode.DOWN);
+                        response.setRefundAmount(refundAmount);
+                        response.setRefundType("LOSS_PERCENT");
+                        response.setRefundPercentage(lossRefundPercent);
+                    }
+                    
+                    return response;
+                })
                 .collect(Collectors.toList());
 
         BigDecimal totalWinAmount = Optional.ofNullable(betRepository.sumWinAmountByUser(user))

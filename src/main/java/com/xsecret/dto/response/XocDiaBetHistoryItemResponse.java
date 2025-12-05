@@ -25,6 +25,11 @@ public class XocDiaBetHistoryItemResponse {
     private String resultCode;
     private Instant createdAt;
     private Instant settledAt;
+    
+    // Thông tin hoàn tiền
+    private BigDecimal refundAmount;
+    private String refundType; // "WIN_PERCENT", "LOSS_PERCENT", "FULL_REFUND"
+    private BigDecimal refundPercentage; // % hoàn tiền nếu là loại phần trăm
 
     public static XocDiaBetHistoryItemResponse fromEntity(XocDiaBet bet) {
         return XocDiaBetHistoryItemResponse.builder()
@@ -38,6 +43,9 @@ public class XocDiaBetHistoryItemResponse {
                 .resultCode(bet.getResultCode())
                 .createdAt(bet.getCreatedAt())
                 .settledAt(bet.getSettledAt())
+                .refundAmount(BigDecimal.ZERO)
+                .refundType(null)
+                .refundPercentage(null)
                 .build();
     }
 }

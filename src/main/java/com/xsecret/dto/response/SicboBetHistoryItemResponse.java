@@ -26,6 +26,11 @@ public class SicboBetHistoryItemResponse {
     private String resultCode;
     private Instant createdAt;
     private Instant settledAt;
+    
+    // Thông tin hoàn tiền
+    private BigDecimal refundAmount;
+    private String refundType; // "WIN_PERCENT", "LOSS_PERCENT", "FULL_REFUND"
+    private BigDecimal refundPercentage; // % hoàn tiền nếu là loại phần trăm
 
     public static SicboBetHistoryItemResponse fromEntity(SicboBet bet) {
         return SicboBetHistoryItemResponse.builder()
@@ -40,6 +45,9 @@ public class SicboBetHistoryItemResponse {
                 .resultCode(bet.getResultCode())
                 .createdAt(bet.getCreatedAt())
                 .settledAt(bet.getSettledAt())
+                .refundAmount(BigDecimal.ZERO)
+                .refundType(null)
+                .refundPercentage(null)
                 .build();
     }
 }

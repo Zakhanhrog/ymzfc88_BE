@@ -130,6 +130,7 @@ public class AnalyticsService {
                         .totalStake(totalStake)
                         .totalWinAmount(totalWinAmount)
                         .totalLostAmount(totalLostAmount)
+                        .totalFee(BigDecimal.ZERO)
                         .build())
                 .build();
     }
@@ -150,6 +151,8 @@ public class AnalyticsService {
         BigDecimal totalLostAmount = shouldCalculateLoss(status)
                 ? safeBigDecimal(sicboBetRepository.sumStakeByStatusesAndDate(List.of(SicboBet.Status.LOST), startInstant, endInstant))
                 : BigDecimal.ZERO;
+        BigDecimal totalFee = safeBigDecimal(sicboBetRepository.sumFeeAmountByFilters(status, startInstant, endInstant));
+        BigDecimal totalBao = safeBigDecimal(sicboBetRepository.sumBaoAmountByFilters(status, startInstant, endInstant));
 
         List<BetAnalyticsItemResponse> items = betPage.getContent().stream()
                 .map(this::mapSicboBet)
@@ -165,6 +168,8 @@ public class AnalyticsService {
                         .totalStake(totalStake)
                         .totalWinAmount(totalWinAmount)
                         .totalLostAmount(totalLostAmount)
+                        .totalFee(totalFee)
+                        .totalBao(totalBao)
                         .build())
                 .build();
     }
@@ -185,6 +190,7 @@ public class AnalyticsService {
         BigDecimal totalLostAmount = shouldCalculateLoss(status)
                 ? safeBigDecimal(xocDiaBetRepository.sumStakeByStatusesAndDate(List.of(XocDiaBet.Status.LOST), startInstant, endInstant))
                 : BigDecimal.ZERO;
+        BigDecimal totalFee = safeBigDecimal(xocDiaBetRepository.sumFeeAmountByFilters(status, startInstant, endInstant));
 
         List<BetAnalyticsItemResponse> items = betPage.getContent().stream()
                 .map(this::mapXocDiaBet)
@@ -200,6 +206,8 @@ public class AnalyticsService {
                         .totalStake(totalStake)
                         .totalWinAmount(totalWinAmount)
                         .totalLostAmount(totalLostAmount)
+                        .totalFee(totalFee)
+                        .totalBao(BigDecimal.ZERO)
                         .build())
                 .build();
     }
@@ -218,6 +226,9 @@ public class AnalyticsService {
                 .stake(stake)
                 .winAmount(winAmount)
                 .revenue(revenue)
+                .feeAmount(BigDecimal.ZERO)
+                .baoAmount(BigDecimal.ZERO)
+                .tableNumber(null)
                 .status(bet.getStatus().name())
                 .createdAt(bet.getCreatedAt())
                 .settledAt(bet.getResultCheckedAt())
@@ -228,6 +239,9 @@ public class AnalyticsService {
         BigDecimal stake = safeBigDecimal(bet.getStake());
         BigDecimal winAmount = safeBigDecimal(bet.getWinAmount());
         BigDecimal revenue = bet.getStatus() == SicboBet.Status.LOST ? stake : BigDecimal.ZERO;
+        BigDecimal feeAmount = safeBigDecimal(bet.getFeeAmount());
+        BigDecimal baoAmount = safeBigDecimal(bet.getBaoAmount());
+        Integer tableNumber = bet.getSession() != null ? bet.getSession().getTableNumber() : null;
 
         return BetAnalyticsItemResponse.builder()
                 .id(bet.getId())
@@ -238,6 +252,9 @@ public class AnalyticsService {
                 .stake(stake)
                 .winAmount(winAmount)
                 .revenue(revenue)
+                .feeAmount(feeAmount)
+                .baoAmount(baoAmount)
+                .tableNumber(tableNumber)
                 .status(bet.getStatus().name())
                 .createdAt(bet.getCreatedAt() != null ? LocalDateTime.ofInstant(bet.getCreatedAt(), SYSTEM_ZONE) : null)
                 .settledAt(bet.getSettledAt() != null ? LocalDateTime.ofInstant(bet.getSettledAt(), SYSTEM_ZONE) : null)
@@ -248,6 +265,7 @@ public class AnalyticsService {
         BigDecimal stake = safeBigDecimal(bet.getStake());
         BigDecimal winAmount = safeBigDecimal(bet.getWinAmount());
         BigDecimal revenue = bet.getStatus() == XocDiaBet.Status.LOST ? stake : BigDecimal.ZERO;
+        BigDecimal feeAmount = safeBigDecimal(bet.getFeeAmount());
 
         return BetAnalyticsItemResponse.builder()
                 .id(bet.getId())
@@ -258,6 +276,9 @@ public class AnalyticsService {
                 .stake(stake)
                 .winAmount(winAmount)
                 .revenue(revenue)
+                .feeAmount(feeAmount)
+                .baoAmount(BigDecimal.ZERO)
+                .tableNumber(null)
                 .status(bet.getStatus().name())
                 .createdAt(bet.getCreatedAt() != null ? LocalDateTime.ofInstant(bet.getCreatedAt(), SYSTEM_ZONE) : null)
                 .settledAt(bet.getSettledAt() != null ? LocalDateTime.ofInstant(bet.getSettledAt(), SYSTEM_ZONE) : null)

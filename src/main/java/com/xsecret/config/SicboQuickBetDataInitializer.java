@@ -115,6 +115,28 @@ public class SicboQuickBetDataInitializer implements CommandLineRunner {
                     .build());
         }
 
+        // Dice pair bets - 15 combinations
+        int[][] dicePairs = {
+            {1, 2}, {1, 3}, {1, 4}, {1, 5}, {1, 6},
+            {2, 3}, {2, 4}, {2, 5}, {2, 6},
+            {3, 4}, {3, 5}, {3, 6},
+            {4, 5}, {4, 6},
+            {5, 6}
+        };
+        int pairOrder = 0;
+        for (int[] pair : dicePairs) {
+            defaults.add(SicboQuickBetConfig.builder()
+                    .code("sicbo_pair_" + pair[0] + "_" + pair[1])
+                    .name("Cặp " + pair[0] + "-" + pair[1])
+                    .description("Cược cặp xúc xắc " + pair[0] + " và " + pair[1])
+                    .payoutMultiplier(BigDecimal.valueOf(5.00))
+                    .feeRate(null)
+                    .layoutGroup(SicboQuickBetConfig.GROUP_DICE_PAIR)
+                    .displayOrder(pairOrder++)
+                    .isActive(true)
+                    .build());
+        }
+
         repository.saveAll(defaults);
         log.info("Initialized {} default Sicbo quick bet configurations", defaults.size());
     }

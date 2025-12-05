@@ -58,6 +58,13 @@ public class XocDiaQuickBetConfig {
     private BigDecimal payoutMultiplier;
 
     /**
+     * Tỷ lệ phế (ví dụ 0.03 nghĩa là 3%)
+     * NULL hoặc 0 nghĩa là không tính phế cho loại đánh này
+     */
+    @Column(name = "fee_rate", precision = 5, scale = 4)
+    private BigDecimal feeRate;
+
+    /**
      * Mẫu chấm trắng/đỏ hiển thị (ví dụ: white,white,red,red)
      */
     @Column(name = "pattern", length = 200)

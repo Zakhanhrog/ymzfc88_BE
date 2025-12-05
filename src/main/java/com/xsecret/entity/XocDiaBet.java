@@ -50,6 +50,13 @@ public class XocDiaBet {
     @Column(name = "payout_multiplier", nullable = false, precision = 10, scale = 2)
     private BigDecimal payoutMultiplier;
 
+    /**
+     * Số tiền phế
+     * NULL hoặc 0 nghĩa là không có phế
+     */
+    @Column(name = "fee_amount", precision = 18, scale = 2)
+    private BigDecimal feeAmount;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
     @Builder.Default

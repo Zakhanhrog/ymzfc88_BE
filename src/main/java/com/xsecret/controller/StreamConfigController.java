@@ -95,5 +95,49 @@ public class StreamConfigController {
         List<StreamConfigResponse> configs = streamConfigService.getActiveStreamConfigs();
         return ResponseEntity.ok(ApiResponse.success("Active stream configs fetched successfully", configs));
     }
+    
+    @PostMapping("/admin/toggle-live-pause")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF_XD', 'STAFF_TX1', 'STAFF_TX2')")
+    public ResponseEntity<ApiResponse<StreamConfigResponse>> toggleLivePause(
+            @RequestParam StreamConfig.GameType gameType,
+            @RequestParam(required = false) Integer tableNumber) {
+        try {
+            StreamConfigResponse response = streamConfigService.toggleLivePause(gameType, tableNumber);
+            String message = response.getIsLivePaused() 
+                    ? "Đã tạm dừng live stream cho người dùng" 
+                    : "Đã tiếp tục live stream cho người dùng";
+            return ResponseEntity.ok(ApiResponse.success(message, response));
+        } catch (RuntimeException e) {
+            log.error("Error toggling live pause: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("Error toggling live pause: {}", e.getMessage(), e);
+            return ResponseEntity.status(500)
+                    .body(ApiResponse.error("Lỗi khi toggle live pause: " + e.getMessage()));
+        }
+    }
+    
+    @PostMapping("/admin/toggle-live-ended")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF_XD', 'STAFF_TX1', 'STAFF_TX2')")
+    public ResponseEntity<ApiResponse<StreamConfigResponse>> toggleLiveEnded(
+            @RequestParam StreamConfig.GameType gameType,
+            @RequestParam(required = false) Integer tableNumber) {
+        try {
+            StreamConfigResponse response = streamConfigService.toggleLiveEnded(gameType, tableNumber);
+            String message = response.getIsLiveEnded() 
+                    ? "Đã đánh dấu live stream đã kết thúc cho người dùng" 
+                    : "Đã mở lại live stream cho người dùng";
+            return ResponseEntity.ok(ApiResponse.success(message, response));
+        } catch (RuntimeException e) {
+            log.error("Error toggling live ended: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("Error toggling live ended: {}", e.getMessage(), e);
+            return ResponseEntity.status(500)
+                    .body(ApiResponse.error("Lỗi khi toggle live ended: " + e.getMessage()));
+        }
+    }
 }
 

@@ -171,5 +171,47 @@ public class StreamConfigService {
         log.info("Deleting stream config with id: {}", id);
         streamConfigRepository.deleteById(id);
     }
+    
+    /**
+     * Toggle trạng thái pause live cho stream
+     */
+    public StreamConfigResponse toggleLivePause(StreamConfig.GameType gameType, Integer tableNumber) {
+        StreamConfig config;
+        if (tableNumber != null) {
+            config = streamConfigRepository.findByGameTypeAndTableNumber(gameType, tableNumber)
+                    .orElseThrow(() -> new RuntimeException("Stream config not found for " + gameType + " table " + tableNumber));
+        } else {
+            config = streamConfigRepository.findByGameTypeAndTableNumberIsNull(gameType)
+                    .orElseThrow(() -> new RuntimeException("Stream config not found for " + gameType));
+        }
+        
+        boolean newPauseState = !(config.getIsLivePaused() != null ? config.getIsLivePaused() : false);
+        config.setIsLivePaused(newPauseState);
+        
+        StreamConfig saved = streamConfigRepository.save(config);
+        log.info("Toggled live pause for {} {} to {}", gameType, tableNumber != null ? "table " + tableNumber : "", newPauseState);
+        return StreamConfigResponse.fromEntity(saved);
+    }
+    
+    /**
+     * Toggle trạng thái ended live cho stream
+     */
+    public StreamConfigResponse toggleLiveEnded(StreamConfig.GameType gameType, Integer tableNumber) {
+        StreamConfig config;
+        if (tableNumber != null) {
+            config = streamConfigRepository.findByGameTypeAndTableNumber(gameType, tableNumber)
+                    .orElseThrow(() -> new RuntimeException("Stream config not found for " + gameType + " table " + tableNumber));
+        } else {
+            config = streamConfigRepository.findByGameTypeAndTableNumberIsNull(gameType)
+                    .orElseThrow(() -> new RuntimeException("Stream config not found for " + gameType));
+        }
+        
+        boolean newEndedState = !(config.getIsLiveEnded() != null ? config.getIsLiveEnded() : false);
+        config.setIsLiveEnded(newEndedState);
+        
+        StreamConfig saved = streamConfigRepository.save(config);
+        log.info("Toggled live ended for {} {} to {}", gameType, tableNumber != null ? "table " + tableNumber : "", newEndedState);
+        return StreamConfigResponse.fromEntity(saved);
+    }
 }
 

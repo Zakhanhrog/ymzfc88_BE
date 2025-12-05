@@ -31,6 +31,13 @@ public class SicboQuickBetRequest {
     @DecimalMin(value = "0.01", message = "Tỷ lệ trả thưởng phải lớn hơn 0")
     private BigDecimal payoutMultiplier;
 
+    /**
+     * Tỷ lệ phế cho bàn 1 (ví dụ 0.03 nghĩa là 3%)
+     * NULL hoặc 0 nghĩa là không tính phế cho loại đánh này
+     */
+    @DecimalMin(value = "0.0", message = "Tỷ lệ phế phải lớn hơn hoặc bằng 0")
+    private BigDecimal feeRate;
+
     @NotBlank(message = "Nhóm hiển thị không được để trống")
     private String layoutGroup;
 

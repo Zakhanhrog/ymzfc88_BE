@@ -72,7 +72,7 @@ public class SicboSession {
     }
 
     public enum Phase {
-        COUNTDOWN("countdown", "", Duration.ofSeconds(25).toMillis()),
+        COUNTDOWN("countdown", "", Duration.ofSeconds(30).toMillis()),
         BETTING_CLOSED("betting-closed", "Ngưng cược", 1_500L),
         WAITING_RESULT("waiting-result", "Chờ kết quả", 3_000L),
         SHOW_RESULT("show-result", "Trả kết quả", null),

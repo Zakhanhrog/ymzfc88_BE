@@ -62,6 +62,16 @@ public interface SicboBetRepository extends JpaRepository<SicboBet, Long> {
                                          @Param("start") Instant start,
                                          @Param("end") Instant end);
 
+    @Query("SELECT COALESCE(SUM(b.feeAmount), 0) FROM SicboBet b WHERE (:status IS NULL OR b.status = :status) AND (:start IS NULL OR b.settledAt >= :start) AND (:end IS NULL OR b.settledAt <= :end) AND b.feeAmount IS NOT NULL")
+    BigDecimal sumFeeAmountByFilters(@Param("status") SicboBet.Status status,
+                                     @Param("start") Instant start,
+                                     @Param("end") Instant end);
+
+    @Query("SELECT COALESCE(SUM(b.baoAmount), 0) FROM SicboBet b WHERE (:status IS NULL OR b.status = :status) AND (:start IS NULL OR b.settledAt >= :start) AND (:end IS NULL OR b.settledAt <= :end) AND b.baoAmount IS NOT NULL")
+    BigDecimal sumBaoAmountByFilters(@Param("status") SicboBet.Status status,
+                                     @Param("start") Instant start,
+                                     @Param("end") Instant end);
+
     @Query("""
         SELECT b.user.id,
                COALESCE(SUM(CASE WHEN b.status <> :refundedStatus THEN b.stake ELSE 0 END), 0),

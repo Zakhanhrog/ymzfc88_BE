@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -21,9 +22,10 @@ public class SicboQuickBetPublicController {
     private final SicboQuickBetService quickBetService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<SicboQuickBetResponse>>> getActiveQuickBets() {
+    public ResponseEntity<ApiResponse<List<SicboQuickBetResponse>>> getActiveQuickBets(
+            @RequestParam(required = false) Integer table) {
         try {
-            List<SicboQuickBetResponse> data = quickBetService.getActiveConfigs();
+            List<SicboQuickBetResponse> data = quickBetService.getActiveConfigs(table);
             return ResponseEntity.ok(ApiResponse.success(data));
         } catch (RuntimeException ex) {
             log.error("Lỗi lấy danh sách quick bet Sicbo", ex);

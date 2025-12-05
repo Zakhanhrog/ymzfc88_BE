@@ -58,6 +58,13 @@ public class SicboQuickBetConfig {
     private BigDecimal payoutMultiplier;
 
     /**
+     * Tỷ lệ phế cho bàn 1 (ví dụ 0.03 nghĩa là 3%, chỉ áp dụng cho bàn 1)
+     * NULL hoặc 0 nghĩa là không tính phế cho loại đánh này
+     */
+    @Column(name = "fee_rate", precision = 5, scale = 4)
+    private BigDecimal feeRate;
+
+    /**
      * Nhóm hiển thị trên giao diện (ví dụ: PRIMARY, COMBINATION, TOTAL_TOP, TOTAL_BOTTOM, SINGLE)
      */
     @Column(name = "layout_group", nullable = false, length = 50)
@@ -90,6 +97,7 @@ public class SicboQuickBetConfig {
     public static final String GROUP_TOTAL_BOTTOM = "TOTAL_BOTTOM";
     public static final String GROUP_SINGLE = "SINGLE";
     public static final String GROUP_PARITY = "PARITY";
+    public static final String GROUP_DICE_PAIR = "DICE_PAIR";
 }
 
 

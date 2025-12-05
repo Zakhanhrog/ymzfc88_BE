@@ -28,6 +28,8 @@ public class BetAnalyticsResponse {
         private BigDecimal totalStake;
         private BigDecimal totalWinAmount;
         private BigDecimal totalLostAmount;
+        private BigDecimal totalFee;
+        private BigDecimal totalBao;
     }
 }
 

@@ -21,6 +21,9 @@ public class BetAnalyticsItemResponse {
     private BigDecimal stake;
     private BigDecimal winAmount;
     private BigDecimal revenue;
+    private BigDecimal feeAmount;
+    private BigDecimal baoAmount;
+    private Integer tableNumber;
     private String status;
     private LocalDateTime createdAt;
     private LocalDateTime settledAt;

@@ -62,6 +62,22 @@ public class SicboBet {
     @Column(name = "payout_multiplier", nullable = false, precision = 10, scale = 2)
     private BigDecimal payoutMultiplier;
 
+    /**
+     * Số tiền phế (chỉ áp dụng cho bàn 1)
+     * NULL hoặc 0 nghĩa là không có phế
+     */
+    @Column(name = "fee_amount", precision = 18, scale = 2)
+    private BigDecimal feeAmount;
+
+    /**
+     * Số tiền bão (chỉ áp dụng cho bàn 2)
+     * Tiền thua trong trường hợp đặc biệt:
+     * - Ra bộ ba nhỏ (111,222,333) mà đánh Tài → thua
+     * - Ra bộ ba lớn (444,555,666) mà đánh Xỉu → thua
+     */
+    @Column(name = "bao_amount", precision = 18, scale = 2)
+    private BigDecimal baoAmount;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
     @Builder.Default

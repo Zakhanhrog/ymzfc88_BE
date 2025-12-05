@@ -16,6 +16,7 @@ public class XocDiaQuickBetResponse {
     private String name;
     private String description;
     private BigDecimal payoutMultiplier;
+    private BigDecimal feeRate;
     private String pattern;
     private String layoutGroup;
     private Integer displayOrder;
@@ -30,6 +31,7 @@ public class XocDiaQuickBetResponse {
                 .name(entity.getName())
                 .description(entity.getDescription())
                 .payoutMultiplier(entity.getPayoutMultiplier())
+                .feeRate(entity.getFeeRate())
                 .pattern(entity.getPattern())
                 .layoutGroup(entity.getLayoutGroup())
                 .displayOrder(entity.getDisplayOrder())
