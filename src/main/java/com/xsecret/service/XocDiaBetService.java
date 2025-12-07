@@ -13,6 +13,7 @@ import com.xsecret.entity.XocDiaBet;
 import com.xsecret.entity.XocDiaQuickBetConfig;
 import com.xsecret.entity.XocDiaResultHistory;
 import com.xsecret.entity.XocDiaSession;
+import com.xsecret.repository.GameRefundAccrualRepository;
 import com.xsecret.repository.XocDiaBetRepository;
 import com.xsecret.repository.XocDiaQuickBetConfigRepository;
 import com.xsecret.repository.XocDiaResultHistoryRepository;
@@ -145,6 +146,7 @@ public class XocDiaBetService {
     private final PointService pointService;
     private final SystemSettingsService systemSettingsService;
     private final GameRefundService gameRefundService;
+    private final GameRefundAccrualRepository gameRefundAccrualRepository;
     private final NotificationService notificationService;
 
     @Transactional
@@ -505,10 +507,38 @@ public class XocDiaBetService {
         BigDecimal winRefundPercent = systemSettingsService.getGameRefundPercentage(SystemSettings.XOC_DIA_REFUND_WIN_PERCENTAGE);
         BigDecimal lossRefundPercent = systemSettingsService.getGameRefundPercentage(SystemSettings.XOC_DIA_REFUND_LOSS_PERCENTAGE);
 
+        // Lấy danh sách session IDs để check refund status
+        List<Long> sessionIds = betPage.getContent().stream()
+                .map(bet -> bet.getSession() != null ? bet.getSession().getId() : null)
+                .filter(id -> id != null)
+                .distinct()
+                .collect(Collectors.toList());
+        
+        // Lấy danh sách refund đã được thanh toán (PAID) cho các session này
+        List<GameRefundAccrual> paidRefunds = sessionIds.isEmpty() ? Collections.emptyList() :
+                gameRefundAccrualRepository.findByUserAndGameTypeAndSessionIds(
+                        user,
+                        GameRefundAccrual.GameType.XOC_DIA,
+                        sessionIds
+                ).stream()
+                .filter(accrual -> accrual.getStatus() == GameRefundAccrual.Status.PAID)
+                .collect(Collectors.toList());
+        
+        // Tạo map sessionId -> hasPaidRefund
+        Map<Long, Boolean> sessionRefundPaidMap = paidRefunds.stream()
+                .collect(Collectors.toMap(
+                        GameRefundAccrual::getReferenceSessionId,
+                        accrual -> true,
+                        (existing, replacement) -> true
+                ));
+
         // Map sang response và gắn refund info
         List<XocDiaBetHistoryItemResponse> items = betPage.getContent().stream()
                 .map(bet -> {
                     XocDiaBetHistoryItemResponse response = XocDiaBetHistoryItemResponse.fromEntity(bet);
+                    
+                    Long sessionId = bet.getSession() != null ? bet.getSession().getId() : null;
+                    boolean isRefundPaid = sessionId != null && sessionRefundPaidMap.containsKey(sessionId);
                     
                     // Xác định loại refund và % refund
                     if (bet.getStatus() == XocDiaBet.Status.REFUNDED) {
@@ -516,6 +546,7 @@ public class XocDiaBetService {
                         response.setRefundAmount(bet.getStake());
                         response.setRefundType("FULL_REFUND");
                         response.setRefundPercentage(new BigDecimal("100"));
+                        response.setIsRefundPaid(true); // FULL_REFUND luôn được hoàn ngay
                     } else if (bet.getStatus() == XocDiaBet.Status.WON && winRefundPercent != null && winRefundPercent.compareTo(BigDecimal.ZERO) > 0) {
                         // Hoàn tiền theo % thắng
                         BigDecimal refundAmount = bet.getStake()
@@ -524,6 +555,7 @@ public class XocDiaBetService {
                         response.setRefundAmount(refundAmount);
                         response.setRefundType("WIN_PERCENT");
                         response.setRefundPercentage(winRefundPercent);
+                        response.setIsRefundPaid(isRefundPaid);
                     } else if (bet.getStatus() == XocDiaBet.Status.LOST && lossRefundPercent != null && lossRefundPercent.compareTo(BigDecimal.ZERO) > 0) {
                         // Hoàn tiền theo % thua
                         BigDecimal refundAmount = bet.getStake()
@@ -532,6 +564,9 @@ public class XocDiaBetService {
                         response.setRefundAmount(refundAmount);
                         response.setRefundType("LOSS_PERCENT");
                         response.setRefundPercentage(lossRefundPercent);
+                        response.setIsRefundPaid(isRefundPaid);
+                    } else {
+                        response.setIsRefundPaid(false);
                     }
                     
                     return response;

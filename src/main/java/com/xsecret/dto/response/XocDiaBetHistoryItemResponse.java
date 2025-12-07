@@ -30,6 +30,7 @@ public class XocDiaBetHistoryItemResponse {
     private BigDecimal refundAmount;
     private String refundType; // "WIN_PERCENT", "LOSS_PERCENT", "FULL_REFUND"
     private BigDecimal refundPercentage; // % hoàn tiền nếu là loại phần trăm
+    private Boolean isRefundPaid; // true nếu đã hoàn cược (refund đã được thanh toán), false nếu chưa
 
     public static XocDiaBetHistoryItemResponse fromEntity(XocDiaBet bet) {
         return XocDiaBetHistoryItemResponse.builder()

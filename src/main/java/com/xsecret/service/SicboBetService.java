@@ -13,6 +13,7 @@ import com.xsecret.entity.SicboResultHistory;
 import com.xsecret.entity.SicboSession;
 import com.xsecret.entity.SystemSettings;
 import com.xsecret.entity.User;
+import com.xsecret.repository.GameRefundAccrualRepository;
 import com.xsecret.repository.SicboBetRepository;
 import com.xsecret.repository.SicboQuickBetConfigRepository;
 import com.xsecret.repository.SicboSessionRepository;
@@ -112,6 +113,7 @@ public class SicboBetService {
     private final SicboResultHistoryService resultHistoryService;
     private final SystemSettingsService systemSettingsService;
     private final GameRefundService gameRefundService;
+    private final GameRefundAccrualRepository gameRefundAccrualRepository;
     private final NotificationService notificationService;
 
     @Transactional
@@ -675,10 +677,38 @@ public class SicboBetService {
         BigDecimal winRefundPercent = systemSettingsService.getGameRefundPercentage(SystemSettings.SICBO_REFUND_WIN_PERCENTAGE);
         BigDecimal lossRefundPercent = systemSettingsService.getGameRefundPercentage(SystemSettings.SICBO_REFUND_LOSS_PERCENTAGE);
 
+        // Lấy danh sách session IDs để check refund status
+        List<Long> sessionIds = betPage.getContent().stream()
+                .map(bet -> bet.getSession() != null ? bet.getSession().getId() : null)
+                .filter(id -> id != null)
+                .distinct()
+                .collect(Collectors.toList());
+        
+        // Lấy danh sách refund đã được thanh toán (PAID) cho các session này
+        List<GameRefundAccrual> paidRefunds = sessionIds.isEmpty() ? Collections.emptyList() :
+                gameRefundAccrualRepository.findByUserAndGameTypeAndSessionIds(
+                        user,
+                        GameRefundAccrual.GameType.SICBO,
+                        sessionIds
+                ).stream()
+                .filter(accrual -> accrual.getStatus() == GameRefundAccrual.Status.PAID)
+                .collect(Collectors.toList());
+        
+        // Tạo map sessionId -> hasPaidRefund
+        Map<Long, Boolean> sessionRefundPaidMap = paidRefunds.stream()
+                .collect(Collectors.toMap(
+                        GameRefundAccrual::getReferenceSessionId,
+                        accrual -> true,
+                        (existing, replacement) -> true
+                ));
+
         // Map sang response và gắn refund info
         List<SicboBetHistoryItemResponse> items = betPage.getContent().stream()
                 .map(bet -> {
                     SicboBetHistoryItemResponse response = SicboBetHistoryItemResponse.fromEntity(bet);
+                    
+                    Long sessionId = bet.getSession() != null ? bet.getSession().getId() : null;
+                    boolean isRefundPaid = sessionId != null && sessionRefundPaidMap.containsKey(sessionId);
                     
                     // Xác định loại refund và % refund
                     if (bet.getStatus() == SicboBet.Status.REFUNDED) {
@@ -686,6 +716,7 @@ public class SicboBetService {
                         response.setRefundAmount(bet.getStake());
                         response.setRefundType("FULL_REFUND");
                         response.setRefundPercentage(new BigDecimal("100"));
+                        response.setIsRefundPaid(true); // FULL_REFUND luôn được hoàn ngay
                     } else if (bet.getStatus() == SicboBet.Status.WON && winRefundPercent != null && winRefundPercent.compareTo(BigDecimal.ZERO) > 0) {
                         // Hoàn tiền theo % thắng
                         BigDecimal refundAmount = bet.getStake()
@@ -694,6 +725,7 @@ public class SicboBetService {
                         response.setRefundAmount(refundAmount);
                         response.setRefundType("WIN_PERCENT");
                         response.setRefundPercentage(winRefundPercent);
+                        response.setIsRefundPaid(isRefundPaid);
                     } else if (bet.getStatus() == SicboBet.Status.LOST && lossRefundPercent != null && lossRefundPercent.compareTo(BigDecimal.ZERO) > 0) {
                         // Hoàn tiền theo % thua
                         BigDecimal refundAmount = bet.getStake()
@@ -702,6 +734,9 @@ public class SicboBetService {
                         response.setRefundAmount(refundAmount);
                         response.setRefundType("LOSS_PERCENT");
                         response.setRefundPercentage(lossRefundPercent);
+                        response.setIsRefundPaid(isRefundPaid);
+                    } else {
+                        response.setIsRefundPaid(false);
                     }
                     
                     return response;
