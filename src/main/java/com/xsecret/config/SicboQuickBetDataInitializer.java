@@ -137,6 +137,21 @@ public class SicboQuickBetDataInitializer implements CommandLineRunner {
                     .build());
         }
 
+        // Dice pair double bets - 6 combinations (11, 22, 33, 44, 55, 66)
+        int doublePairOrder = 0;
+        for (int face = 1; face <= 6; face++) {
+            defaults.add(SicboQuickBetConfig.builder()
+                    .code("sicbo_pair_double_" + face)
+                    .name("Cặp đôi " + face + "-" + face)
+                    .description("Cược cặp đôi " + face + "-" + face)
+                    .payoutMultiplier(BigDecimal.valueOf(8.00))
+                    .feeRate(null)
+                    .layoutGroup(SicboQuickBetConfig.GROUP_DICE_PAIR_DOUBLE)
+                    .displayOrder(doublePairOrder++)
+                    .isActive(true)
+                    .build());
+        }
+
         repository.saveAll(defaults);
         log.info("Initialized {} default Sicbo quick bet configurations", defaults.size());
     }

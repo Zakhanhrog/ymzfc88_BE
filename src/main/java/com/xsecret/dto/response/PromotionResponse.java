@@ -16,6 +16,7 @@ public class PromotionResponse {
     private Long id;
     private String title;
     private String description;
+    private String details;
     private String imageUrl;
     private Boolean isActive;
     private Integer displayOrder;

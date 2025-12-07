@@ -81,6 +81,7 @@ public class PromotionService {
         Promotion promotion = Promotion.builder()
                 .title(request.getTitle())
                 .description(request.getDescription())
+                .details(request.getDetails())
                 .imageUrl(request.getImageUrl())
                 .isActive(request.getIsActive() != null ? request.getIsActive() : true)
                 .displayOrder(request.getDisplayOrder() != null ? request.getDisplayOrder() : 0)
@@ -104,6 +105,7 @@ public class PromotionService {
         
         promotion.setTitle(request.getTitle());
         promotion.setDescription(request.getDescription());
+        promotion.setDetails(request.getDetails());
         promotion.setImageUrl(request.getImageUrl());
         if (request.getIsActive() != null) {
             promotion.setIsActive(request.getIsActive());
@@ -158,6 +160,7 @@ public class PromotionService {
                 .id(promotion.getId())
                 .title(promotion.getTitle())
                 .description(promotion.getDescription())
+                .details(promotion.getDetails())
                 .imageUrl(promotion.getImageUrl())
                 .isActive(promotion.getIsActive())
                 .displayOrder(promotion.getDisplayOrder())

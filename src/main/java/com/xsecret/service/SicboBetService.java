@@ -80,6 +80,12 @@ public class SicboBetService {
                     createFallbackConfig("sicbo_pair_" + pair[0] + "_" + pair[1], "Cặp " + pair[0] + "-" + pair[1], 5.0, SicboQuickBetConfig.GROUP_DICE_PAIR, i));
         }
 
+        // Dice pair double fallback configs (11, 22, 33, 44, 55, 66)
+        for (int face = 1; face <= 6; face++) {
+            fallback.put("sicbo_pair_double_" + face,
+                    createFallbackConfig("sicbo_pair_double_" + face, "Cặp đôi " + face + "-" + face, 8.0, SicboQuickBetConfig.GROUP_DICE_PAIR_DOUBLE, face - 1));
+        }
+
         int[] topTotals = {4, 5, 6, 7, 8, 9, 10};
         double[] topMultipliers = {30, 18, 14, 12, 8, 6, 6};
         for (int index = 0; index < topTotals.length; index++) {
@@ -136,6 +142,7 @@ public class SicboBetService {
 
         List<SicboQuickBetConfig> configs = quickBetConfigRepository.findAllByCodeIn(requestedCodes);
         Map<String, SicboQuickBetConfig> configMap = configs.stream()
+                .filter(config -> Boolean.TRUE.equals(config.getIsActive()))
                 .collect(Collectors.toMap(
                         config -> normalizeCode(config.getCode()),
                         config -> config
@@ -160,6 +167,11 @@ public class SicboBetService {
 
             if (config == null) {
                 throw new IllegalStateException("Loại cược " + item.getCode() + " hiện không hỗ trợ");
+            }
+
+            // Validate isActive cho config từ database (fallback configs luôn active)
+            if (configMap.containsKey(normalizedCode) && !Boolean.TRUE.equals(config.getIsActive())) {
+                throw new IllegalStateException("Loại cược " + item.getCode() + " hiện không khả dụng");
             }
 
             long amount = Optional.ofNullable(item.getAmount()).orElse(0L);
@@ -583,6 +595,13 @@ public class SicboBetService {
                 }
             }
         }
+
+        // Check dice pair doubles (cặp đôi) - nếu có ít nhất 2 xúc xắc cùng mặt thì thắng
+        counts.forEach((face, count) -> {
+            if (count >= 2) {
+                winners.add("sicbo_pair_double_" + face);
+            }
+        });
 
         return winners;
     }

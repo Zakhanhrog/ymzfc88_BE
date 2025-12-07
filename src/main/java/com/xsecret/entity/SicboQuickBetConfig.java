@@ -98,6 +98,7 @@ public class SicboQuickBetConfig {
     public static final String GROUP_SINGLE = "SINGLE";
     public static final String GROUP_PARITY = "PARITY";
     public static final String GROUP_DICE_PAIR = "DICE_PAIR";
+    public static final String GROUP_DICE_PAIR_DOUBLE = "DICE_PAIR_DOUBLE";
 }
 
 

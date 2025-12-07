@@ -28,6 +28,9 @@ public class Promotion {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
     
+    @Column(name = "details", columnDefinition = "TEXT")
+    private String details;
+    
     @Column(name = "image_url", length = 500)
     private String imageUrl;
     
