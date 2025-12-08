@@ -34,4 +34,8 @@ public class UpdateUserRequestDto {
     private User.UserStatus status;
 
     private String c2Password;
+    
+    @Size(max = 10, message = "Mã đại lý không được vượt quá 10 ký tự")
+    @Pattern(regexp = "^[A-Z0-9]*$", message = "Mã đại lý chỉ được chứa chữ cái in hoa và số")
+    private String referralCode;
 }

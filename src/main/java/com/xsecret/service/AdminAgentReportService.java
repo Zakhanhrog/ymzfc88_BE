@@ -9,11 +9,19 @@ import com.xsecret.entity.PointTransaction;
 import com.xsecret.entity.SicboBet;
 import com.xsecret.entity.User;
 import com.xsecret.entity.XocDiaBet;
+import com.xsecret.entity.Transaction;
 import com.xsecret.repository.AgentCommissionPayoutRepository;
+import com.xsecret.repository.AgentNoteRepository;
 import com.xsecret.repository.BetRepository;
+import com.xsecret.repository.DailyLossRefundRepository;
+import com.xsecret.repository.GameRefundAccrualRepository;
+import com.xsecret.repository.PromotionalMoneyRepository;
 import com.xsecret.repository.SicboBetRepository;
+import com.xsecret.repository.TransactionRepository;
+import com.xsecret.repository.UserLoginHistoryRepository;
 import com.xsecret.repository.UserRepository;
 import com.xsecret.repository.XocDiaBetRepository;
+import com.xsecret.entity.AgentNote;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +40,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import org.springframework.data.domain.PageRequest;
 
 @Service
 @RequiredArgsConstructor
@@ -43,12 +52,28 @@ public class AdminAgentReportService {
     private final XocDiaBetRepository xocDiaBetRepository;
     private final SicboBetRepository sicboBetRepository;
     private final AgentCommissionPayoutRepository agentCommissionPayoutRepository;
+    private final AgentNoteRepository agentNoteRepository;
+    private final TransactionRepository transactionRepository;
+    private final UserLoginHistoryRepository userLoginHistoryRepository;
+    private final GameRefundAccrualRepository gameRefundAccrualRepository;
+    private final DailyLossRefundRepository dailyLossRefundRepository;
+    private final PromotionalMoneyRepository promotionalMoneyRepository;
     private final SystemSettingsService systemSettingsService;
     private final PointService pointService;
     private final UserService userService;
 
+    private static final List<Transaction.TransactionStatus> SUCCESS_DEPOSIT_STATUSES = List.of(
+            Transaction.TransactionStatus.APPROVED,
+            Transaction.TransactionStatus.COMPLETED
+    );
+
+    private static final List<Transaction.TransactionStatus> SUCCESS_WITHDRAW_STATUSES = List.of(
+            Transaction.TransactionStatus.APPROVED,
+            Transaction.TransactionStatus.COMPLETED
+    );
+
     @Transactional
-    public AdminAgentCommissionReportResponse getMonthlyReport(YearMonth month) {
+    public AdminAgentCommissionReportResponse getMonthlyReport(YearMonth month, String ipSearch) {
         YearMonth targetMonth = month != null ? month : YearMonth.now();
         LocalDateTime startDateTime = targetMonth.atDay(1).atStartOfDay();
         LocalDateTime endDateTime = targetMonth.atEndOfMonth().atTime(LocalTime.MAX);
@@ -60,7 +85,14 @@ public class AdminAgentReportService {
                 .divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
 
         List<User> agents = userRepository.findByStaffRole(User.StaffRole.AGENT);
-        Map<Long, AgentCommissionPayout> payoutMap = loadPayouts(targetMonth);
+        
+        // Filter by IP if provided
+        if (ipSearch != null && !ipSearch.trim().isEmpty()) {
+            agents = filterAgentsByIp(agents, ipSearch.trim());
+        }
+        
+        Map<Long, BigDecimal> payoutMap = loadPayouts(targetMonth);
+        Map<Long, String> noteMap = loadNotes(targetMonth);
 
         List<AdminAgentCommissionReportRowResponse> rows = new ArrayList<>();
 
@@ -73,10 +105,37 @@ public class AdminAgentReportService {
 
         for (User agent : agents) {
             AgentMonthlyStats stats = computeAgentStats(agent, startDateTime, endDateTime, startInstant, endInstant, commissionMultiplier);
-            AgentCommissionPayout payout = payoutMap.get(agent.getId());
-
-            BigDecimal paidCommission = payout != null ? safe(payout.getCommissionAmount()) : BigDecimal.ZERO;
+            // Tổng hoa hồng đã chia (có thể chia nhiều lần trong tháng)
+            BigDecimal paidCommission = payoutMap.getOrDefault(agent.getId(), BigDecimal.ZERO);
             BigDecimal pendingDifference = stats.commissionAmount.subtract(paidCommission);
+            
+            // Lấy danh sách khách hàng của đại lý
+            List<User> customers = Optional.ofNullable(agent.getReferralCode())
+                    .map(code -> userRepository.findByInvitedByCodeIgnoreCase(code))
+                    .orElse(List.of());
+            
+            // Tính tổng nạp và tổng rút của TẤT CẢ khách hàng của đại lý
+            BigDecimal totalDeposit = BigDecimal.ZERO;
+            BigDecimal totalWithdraw = BigDecimal.ZERO;
+            BigDecimal totalDailyLossRefund = BigDecimal.ZERO;
+            BigDecimal totalRefund = BigDecimal.ZERO;
+            BigDecimal totalPromotionalMoney = BigDecimal.ZERO;
+            
+            for (User customer : customers) {
+                totalDeposit = totalDeposit.add(safe(transactionRepository.sumDepositAmountByUserAndStatuses(customer, SUCCESS_DEPOSIT_STATUSES)));
+                totalWithdraw = totalWithdraw.add(safe(transactionRepository.sumWithdrawAmountByUserAndStatuses(customer, SUCCESS_WITHDRAW_STATUSES)));
+                totalDailyLossRefund = totalDailyLossRefund.add(safe(dailyLossRefundRepository.sumPaidRefundByUser(customer)));
+                totalRefund = totalRefund.add(safe(gameRefundAccrualRepository.sumPaidLossRefundByUser(customer)));
+                totalPromotionalMoney = totalPromotionalMoney.add(safe(promotionalMoneyRepository.sumAmountByUser(customer)));
+            }
+            
+            // Tính số dư cuối: (Tổng thua) - [(Tổng hoàn thua) + (Tổng hoàn cược) + (Tổng KM)]
+            BigDecimal refundsTotal = totalDailyLossRefund.add(totalRefund).add(totalPromotionalMoney);
+            BigDecimal finalBalance = stats.totalLostAmount.subtract(refundsTotal);
+            
+            // Lấy IP lần đầu tiên đăng nhập
+            List<String> firstLoginIps = userLoginHistoryRepository.findFirstLoginIpByUser(agent, PageRequest.of(0, 1));
+            String firstLoginIp = firstLoginIps.isEmpty() ? null : firstLoginIps.get(0);
 
             AdminAgentCommissionReportRowResponse row = AdminAgentCommissionReportRowResponse.builder()
                     .agentId(agent.getId())
@@ -87,15 +146,23 @@ public class AdminAgentReportService {
                     .totalBetAmount(stats.totalBetAmount)
                     .totalLostAmount(stats.totalLostAmount)
                     .calculatedCommissionAmount(stats.commissionAmount)
-                    .payoutStatus(payout != null ? payout.getStatus() : AgentCommissionPayout.Status.PENDING)
+                    .totalDepositAmount(totalDeposit)
+                    .totalWithdrawAmount(totalWithdraw)
+                    .totalDailyLossRefund(totalDailyLossRefund)
+                    .totalRefund(totalRefund)
+                    .totalPromotionalMoney(totalPromotionalMoney)
+                    .finalBalance(finalBalance)
+                    .firstLoginIp(firstLoginIp)
+                    .payoutStatus(paidCommission.compareTo(BigDecimal.ZERO) > 0 ? AgentCommissionPayout.Status.PAID : AgentCommissionPayout.Status.PENDING)
                     .paidCommissionAmount(paidCommission)
-                    .paidAt(payout != null ? payout.getPaidAt() : null)
-                    .payoutId(payout != null ? payout.getId() : null)
-                    .payoutNote(payout != null ? payout.getNotes() : null)
+                    .paidAt(null) // Không có paidAt cụ thể vì có thể có nhiều payouts
+                    .payoutId(null) // Không có payoutId cụ thể vì có thể có nhiều payouts
+                    .payoutNote(null) // Không có note cụ thể vì có thể có nhiều payouts
+                    .customCommissionAmount(null) // Không có customCommissionAmount cụ thể
                     .commissionRate(commissionRate)
-                    .canPayout(stats.commissionAmount.compareTo(BigDecimal.ZERO) > 0
-                            && (payout == null || payout.getStatus() != AgentCommissionPayout.Status.PAID))
+                    .canPayout(true) // Luôn cho phép chia (nếu đã điền hoa hồng)
                     .pendingDifference(pendingDifference)
+                    .agentNote(noteMap.getOrDefault(agent.getId(), null))
                     .build();
 
             rows.add(row);
@@ -148,45 +215,68 @@ public class AdminAgentReportService {
 
         AgentMonthlyStats stats = computeAgentStats(agent, startDateTime, endDateTime, startInstant, endInstant, commissionMultiplier);
 
-        if (stats.commissionAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalStateException("Hoa hồng tháng " + targetMonth + " của đại lý "
-                    + agent.getUsername() + " bằng 0, không thể chia.");
+        // Kiểm tra customCommissionAmount - bắt buộc phải có
+        if (request.getCustomCommissionAmount() == null || request.getCustomCommissionAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalStateException("Vui lòng nhập số tiền hoa hồng để chia.");
         }
 
-        AgentCommissionPayout payout = agentCommissionPayoutRepository
-                .findByAgentAndPeriodMonth(agent, targetMonth.toString())
-                .orElseGet(() -> AgentCommissionPayout.builder()
-                        .agent(agent)
-                        .periodMonth(targetMonth.toString())
-                        .periodStart(startDateTime.toLocalDate())
-                        .periodEnd(endDateTime.toLocalDate())
-                        .build());
-
-        if (payout.getStatus() == AgentCommissionPayout.Status.PAID) {
-            throw new IllegalStateException("Hoa hồng tháng " + targetMonth + " đã được chia cho đại lý này.");
-        }
-
-        payout.setAgent(agent);
-        payout.setPeriodMonth(targetMonth.toString());
-        payout.setPeriodStart(startDateTime.toLocalDate());
-        payout.setPeriodEnd(endDateTime.toLocalDate());
-        payout.setTotalLostAmount(stats.totalLostAmount.setScale(0, RoundingMode.HALF_UP));
-        payout.setCommissionAmount(stats.commissionAmount);
-        payout.setStatus(AgentCommissionPayout.Status.PAID);
-        payout.setPaidAt(LocalDateTime.now());
-        payout.setNotes(request.getNote());
+        // Luôn tạo payout mới mỗi lần chia (cho phép chia nhiều lần trong cùng một tháng)
+        BigDecimal commissionToPay = request.getCustomCommissionAmount();
+        AgentCommissionPayout payout = AgentCommissionPayout.builder()
+                .agent(agent)
+                .periodMonth(targetMonth.toString())
+                .periodStart(startDateTime.toLocalDate())
+                .periodEnd(endDateTime.toLocalDate())
+                .totalLostAmount(stats.totalLostAmount.setScale(0, RoundingMode.HALF_UP))
+                .commissionAmount(commissionToPay)
+                .status(AgentCommissionPayout.Status.PAID)
+                .paidAt(LocalDateTime.now())
+                .notes(request.getNote())
+                .build();
 
         AgentCommissionPayout saved = agentCommissionPayoutRepository.save(payout);
 
         pointService.addCommissionToAgent(
                 agent,
-                stats.commissionAmount,
+                commissionToPay,
                 String.format(Locale.ROOT, "Chia hoa hồng tháng %s", targetMonth),
                 "AGENT_COMMISSION",
                 saved.getId(),
                 admin,
                 PointTransaction.PointTransactionType.ADMIN_ADD
         );
+
+        // Tính lại tổng hoa hồng đã chia (bao gồm cả payout vừa tạo)
+        BigDecimal totalPaidCommission = safe(agentCommissionPayoutRepository.sumPaidCommissionByAgentAndMonth(
+                agent, targetMonth.toString()));
+
+        // Tính lại các trường mới cho response
+        List<User> customers = Optional.ofNullable(agent.getReferralCode())
+                .map(code -> userRepository.findByInvitedByCodeIgnoreCase(code))
+                .orElse(List.of());
+        
+        // Tính tổng nạp và tổng rút của TẤT CẢ khách hàng của đại lý
+        BigDecimal totalDeposit = BigDecimal.ZERO;
+        BigDecimal totalWithdraw = BigDecimal.ZERO;
+        BigDecimal totalDailyLossRefund = BigDecimal.ZERO;
+        BigDecimal totalRefund = BigDecimal.ZERO;
+        BigDecimal totalPromotionalMoney = BigDecimal.ZERO;
+        
+        for (User customer : customers) {
+            totalDeposit = totalDeposit.add(safe(transactionRepository.sumDepositAmountByUserAndStatuses(customer, SUCCESS_DEPOSIT_STATUSES)));
+            totalWithdraw = totalWithdraw.add(safe(transactionRepository.sumWithdrawAmountByUserAndStatuses(customer, SUCCESS_WITHDRAW_STATUSES)));
+            totalDailyLossRefund = totalDailyLossRefund.add(safe(dailyLossRefundRepository.sumPaidRefundByUser(customer)));
+            totalRefund = totalRefund.add(safe(gameRefundAccrualRepository.sumPaidLossRefundByUser(customer)));
+            totalPromotionalMoney = totalPromotionalMoney.add(safe(promotionalMoneyRepository.sumAmountByUser(customer)));
+        }
+        
+        BigDecimal refundsTotal = totalDailyLossRefund.add(totalRefund).add(totalPromotionalMoney);
+        BigDecimal finalBalance = stats.totalLostAmount.subtract(refundsTotal);
+        
+        List<String> firstLoginIps = userLoginHistoryRepository.findFirstLoginIpByUser(agent, PageRequest.of(0, 1));
+        String firstLoginIp = firstLoginIps.isEmpty() ? null : firstLoginIps.get(0);
+        
+        BigDecimal pendingDifference = stats.commissionAmount.subtract(totalPaidCommission);
 
         return AdminAgentCommissionReportRowResponse.builder()
                 .agentId(agent.getId())
@@ -197,22 +287,82 @@ public class AdminAgentReportService {
                 .totalBetAmount(stats.totalBetAmount)
                 .totalLostAmount(stats.totalLostAmount)
                 .calculatedCommissionAmount(stats.commissionAmount)
-                .payoutStatus(saved.getStatus())
-                .paidCommissionAmount(saved.getCommissionAmount())
-                .paidAt(saved.getPaidAt())
-                .payoutId(saved.getId())
-                .payoutNote(saved.getNotes())
+                .totalDepositAmount(totalDeposit)
+                .totalWithdrawAmount(totalWithdraw)
+                .totalDailyLossRefund(totalDailyLossRefund)
+                .totalRefund(totalRefund)
+                .totalPromotionalMoney(totalPromotionalMoney)
+                .finalBalance(finalBalance)
+                .firstLoginIp(firstLoginIp)
+                .payoutStatus(totalPaidCommission.compareTo(BigDecimal.ZERO) > 0 ? AgentCommissionPayout.Status.PAID : AgentCommissionPayout.Status.PENDING)
+                .paidCommissionAmount(totalPaidCommission) // Tổng tất cả payouts đã chia
+                .paidAt(saved.getPaidAt()) // Thời gian chia lần cuối
+                .payoutId(null) // Không có payoutId cụ thể vì có thể có nhiều payouts
+                .payoutNote(null) // Không có note cụ thể vì có thể có nhiều payouts
+                .customCommissionAmount(null) // Không có customCommissionAmount cụ thể
                 .commissionRate(commissionRate)
-                .canPayout(false)
-                .pendingDifference(BigDecimal.ZERO)
+                .canPayout(true) // Luôn cho phép chia tiếp
+                .pendingDifference(pendingDifference)
                 .build();
     }
 
-    private Map<Long, AgentCommissionPayout> loadPayouts(YearMonth targetMonth) {
-        Map<Long, AgentCommissionPayout> payoutMap = new HashMap<>();
-        agentCommissionPayoutRepository.findByPeriodMonth(targetMonth.toString())
-                .forEach(payout -> payoutMap.put(payout.getAgent().getId(), payout));
+    public List<AgentCommissionPayout> getAgentPayoutHistory(Long agentId, String periodMonth) {
+        User agent = userService.getUserById(agentId);
+        if (agent.getStaffRole() != User.StaffRole.AGENT) {
+            throw new IllegalStateException("Người dùng không phải đại lý.");
+        }
+        if (periodMonth != null && !periodMonth.trim().isEmpty()) {
+            // Lấy payouts của agent trong tháng cụ thể
+            return agentCommissionPayoutRepository.findByAgentAndPeriodMonthOrderByPaidAtDesc(agent, periodMonth);
+        } else {
+            // Lấy tất cả payouts của agent
+            return agentCommissionPayoutRepository.findByAgentOrderByPeriodStartDesc(agent, PageRequest.of(0, 100)).getContent();
+        }
+    }
+
+    private Map<Long, BigDecimal> loadPayouts(YearMonth targetMonth) {
+        // Tính tổng hoa hồng đã chia (PAID) cho mỗi agent trong tháng
+        Map<Long, BigDecimal> payoutMap = new HashMap<>();
+        List<User> agents = userRepository.findByStaffRole(User.StaffRole.AGENT);
+        for (User agent : agents) {
+            BigDecimal totalPaid = safe(agentCommissionPayoutRepository.sumPaidCommissionByAgentAndMonth(
+                    agent, targetMonth.toString()));
+            if (totalPaid.compareTo(BigDecimal.ZERO) > 0) {
+                payoutMap.put(agent.getId(), totalPaid);
+            }
+        }
         return payoutMap;
+    }
+
+    private Map<Long, String> loadNotes(YearMonth targetMonth) {
+        // Load ghi chú cho mỗi agent trong tháng
+        Map<Long, String> noteMap = new HashMap<>();
+        List<User> agents = userRepository.findByStaffRole(User.StaffRole.AGENT);
+        for (User agent : agents) {
+            Optional<AgentNote> noteOpt = agentNoteRepository.findByAgentAndPeriodMonth(agent, targetMonth.toString());
+            if (noteOpt.isPresent() && noteOpt.get().getNote() != null) {
+                noteMap.put(agent.getId(), noteOpt.get().getNote());
+            }
+        }
+        return noteMap;
+    }
+
+    @Transactional
+    public void saveAgentNote(Long agentId, String periodMonth, String note) {
+        User agent = userService.getUserById(agentId);
+        if (agent.getStaffRole() != User.StaffRole.AGENT) {
+            throw new IllegalStateException("Người dùng không phải đại lý.");
+        }
+
+        AgentNote agentNote = agentNoteRepository.findByAgentAndPeriodMonth(agent, periodMonth)
+                .orElseGet(() -> AgentNote.builder()
+                        .agent(agent)
+                        .periodMonth(periodMonth)
+                        .build());
+
+        agentNote.setNote(note != null && !note.trim().isEmpty() ? note.trim() : null);
+        agentNoteRepository.save(agentNote);
+        log.info("Saved note for agent {} in month {}", agent.getUsername(), periodMonth);
     }
 
     private AgentMonthlyStats computeAgentStats(
@@ -285,6 +435,16 @@ public class AdminAgentReportService {
             return YearMonth.now();
         }
         return YearMonth.parse(month.trim());
+    }
+
+    private List<User> filterAgentsByIp(List<User> agents, String ipSearch) {
+        return agents.stream()
+                .filter(agent -> {
+                    List<String> firstLoginIps = userLoginHistoryRepository.findFirstLoginIpByUser(agent, PageRequest.of(0, 1));
+                    String firstLoginIp = firstLoginIps.isEmpty() ? null : firstLoginIps.get(0);
+                    return firstLoginIp != null && firstLoginIp.contains(ipSearch);
+                })
+                .toList();
     }
 
     private BigDecimal safe(Object value) {

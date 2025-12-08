@@ -32,7 +32,11 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     @Query("SELECT t FROM Transaction t WHERE t.status = :status ORDER BY t.createdAt ASC")
     List<Transaction> findByStatusOrderByCreatedAtAsc(@Param("status") Transaction.TransactionStatus status);
     
-    @Query("SELECT t FROM Transaction t WHERE t.status = :status ORDER BY t.createdAt ASC")
+    @Query("SELECT t FROM Transaction t " +
+           "LEFT JOIN FETCH t.processedBy " +
+           "JOIN FETCH t.user " +
+           "LEFT JOIN FETCH t.paymentMethod " +
+           "WHERE t.status = :status ORDER BY t.createdAt ASC")
     Page<Transaction> findByStatusOrderByCreatedAtAsc(@Param("status") Transaction.TransactionStatus status, Pageable pageable);
     
     @Query("SELECT t FROM Transaction t WHERE t.createdAt BETWEEN :startDate AND :endDate ORDER BY t.createdAt DESC")
@@ -49,8 +53,11 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     boolean existsByTransactionCode(String transactionCode);
     
     // Admin queries
-    @Query("SELECT t FROM Transaction t WHERE " +
-           "(:type IS NULL OR t.type = :type) AND " +
+    @Query("SELECT DISTINCT t FROM Transaction t " +
+           "LEFT JOIN FETCH t.processedBy " +
+           "JOIN FETCH t.user " +
+           "LEFT JOIN FETCH t.paymentMethod " +
+           "WHERE (:type IS NULL OR t.type = :type) AND " +
            "(:status IS NULL OR t.status = :status) AND " +
            "(:startDate IS NULL OR t.createdAt >= :startDate) AND " +
            "(:endDate IS NULL OR t.createdAt <= :endDate) " +
@@ -97,7 +104,11 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     List<Transaction> findRecentTransactionsByStatuses(@Param("statuses") List<Transaction.TransactionStatus> statuses,
                                                        Pageable pageable);
 
-    @Query("SELECT t FROM Transaction t WHERE (:type IS NULL OR t.type = :type) AND (:status IS NULL OR t.status = :status) AND (:start IS NULL OR t.createdAt >= :start) AND (:end IS NULL OR t.createdAt <= :end)")
+    @Query("SELECT DISTINCT t FROM Transaction t " +
+           "LEFT JOIN FETCH t.processedBy " +
+           "JOIN FETCH t.user " +
+           "LEFT JOIN FETCH t.paymentMethod " +
+           "WHERE (:type IS NULL OR t.type = :type) AND (:status IS NULL OR t.status = :status) AND (:start IS NULL OR t.createdAt >= :start) AND (:end IS NULL OR t.createdAt <= :end)")
     Page<Transaction> findAnalytics(@Param("type") Transaction.TransactionType type,
                                     @Param("status") Transaction.TransactionStatus status,
                                     @Param("start") LocalDateTime start,
@@ -123,6 +134,17 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
           AND t.status IN :statuses
     """)
     BigDecimal sumDepositAmountByUserAndStatuses(
+            @Param("user") User user,
+            @Param("statuses") List<Transaction.TransactionStatus> statuses
+    );
+
+    @Query("""
+        SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t
+        WHERE t.user = :user
+          AND t.type = com.xsecret.entity.Transaction$TransactionType.WITHDRAW
+          AND t.status IN :statuses
+    """)
+    BigDecimal sumWithdrawAmountByUserAndStatuses(
             @Param("user") User user,
             @Param("statuses") List<Transaction.TransactionStatus> statuses
     );

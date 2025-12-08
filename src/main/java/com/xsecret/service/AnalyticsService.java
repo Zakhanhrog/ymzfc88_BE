@@ -8,7 +8,9 @@ import com.xsecret.entity.Bet;
 import com.xsecret.entity.SicboBet;
 import com.xsecret.entity.Transaction;
 import com.xsecret.entity.XocDiaBet;
+import com.xsecret.repository.AgentCommissionPayoutRepository;
 import com.xsecret.repository.BetRepository;
+import com.xsecret.repository.GameRefundAccrualRepository;
 import com.xsecret.repository.SicboBetRepository;
 import com.xsecret.repository.TransactionRepository;
 import com.xsecret.repository.XocDiaBetRepository;
@@ -43,6 +45,8 @@ public class AnalyticsService {
     private final SicboBetRepository sicboBetRepository;
     private final XocDiaBetRepository xocDiaBetRepository;
     private final TransactionRepository transactionRepository;
+    private final GameRefundAccrualRepository gameRefundAccrualRepository;
+    private final AgentCommissionPayoutRepository agentCommissionPayoutRepository;
 
     public BetAnalyticsResponse getBetAnalytics(String rawGameType,
                                                 String rawStatus,
@@ -55,6 +59,8 @@ public class AnalyticsService {
         page = Math.max(0, page);
 
         switch (gameType) {
+            case "all":
+                return buildAllGamesAnalytics(rawStatus, start, end, page, size);
             case "sicbo":
                 return buildSicboAnalytics(parseSicboStatus(rawStatus), start, end, page, size);
             case "xocdia":
@@ -111,7 +117,15 @@ public class AnalyticsService {
         Page<Bet> betPage = betRepository.findForAnalytics(status, start, end, pageable);
 
         BigDecimal totalStake = safeBigDecimal(betRepository.sumTotalAmountByFilters(status, start, end));
-        BigDecimal totalWinAmount = safeBigDecimal(betRepository.sumWinAmountByFilters(status, start, end));
+        // Tính totalWinAmount là profit (winAmount - stake), không bao gồm tiền cược gốc
+        BigDecimal totalWinAmount;
+        if (status == null || status == Bet.BetStatus.WON) {
+            // Chỉ tính profit cho các bet WON
+            totalWinAmount = safeBigDecimal(betRepository.sumWinProfitByFilters(start, end));
+        } else {
+            // Nếu filter theo status khác (LOST, PENDING), thì không có win
+            totalWinAmount = BigDecimal.ZERO;
+        }
         BigDecimal totalLostAmount = shouldCalculateLoss(status)
                 ? safeBigDecimal(betRepository.sumTotalAmountByStatusAndDate(Bet.BetStatus.LOST, start, end))
                 : BigDecimal.ZERO;
@@ -120,6 +134,8 @@ public class AnalyticsService {
                 .map(this::mapLotteryBet)
                 .collect(Collectors.toList());
 
+        FinancialSummary financial = calculateFinancialSummary(start, end);
+        
         return BetAnalyticsResponse.builder()
                 .items(items)
                 .totalItems(betPage.getTotalElements())
@@ -131,6 +147,13 @@ public class AnalyticsService {
                         .totalWinAmount(totalWinAmount)
                         .totalLostAmount(totalLostAmount)
                         .totalFee(BigDecimal.ZERO)
+                        .sicboTotalFee(BigDecimal.ZERO)
+                        .xocDiaTotalFee(BigDecimal.ZERO)
+                        .totalBao(BigDecimal.ZERO)
+                        .totalDeposit(financial.totalDeposit)
+                        .totalWithdraw(financial.totalWithdraw)
+                        .totalRefund(financial.totalRefund)
+                        .totalAgentCommission(financial.totalAgentCommission)
                         .build())
                 .build();
     }
@@ -142,16 +165,25 @@ public class AnalyticsService {
                                                      int size) {
         Instant startInstant = toInstant(start);
         Instant endInstant = toInstant(end);
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "settledAt"));
+        // Sort đã được xử lý trong query, không cần Pageable sort
+        Pageable pageable = PageRequest.of(page, size);
 
         Page<SicboBet> betPage = sicboBetRepository.findForAnalytics(status, startInstant, endInstant, pageable);
 
         BigDecimal totalStake = safeBigDecimal(sicboBetRepository.sumStakeByFilters(status, startInstant, endInstant));
-        BigDecimal totalWinAmount = safeBigDecimal(sicboBetRepository.sumWinAmountByFilters(status, startInstant, endInstant));
+        // Tính totalWinAmount là profit (winAmount - stake), không bao gồm tiền cược gốc
+        BigDecimal totalWinAmount;
+        if (status == null || status == SicboBet.Status.WON) {
+            // Chỉ tính profit cho các bet WON
+            totalWinAmount = safeBigDecimal(sicboBetRepository.sumWinProfitByCreatedAtFilters(startInstant, endInstant));
+        } else {
+            // Nếu filter theo status khác (LOST, PENDING), thì không có win
+            totalWinAmount = BigDecimal.ZERO;
+        }
         BigDecimal totalLostAmount = shouldCalculateLoss(status)
                 ? safeBigDecimal(sicboBetRepository.sumStakeByStatusesAndDate(List.of(SicboBet.Status.LOST), startInstant, endInstant))
                 : BigDecimal.ZERO;
-        BigDecimal totalFee = safeBigDecimal(sicboBetRepository.sumFeeAmountByFilters(status, startInstant, endInstant));
+        BigDecimal totalFee = safeBigDecimal(sicboBetRepository.sumFeeAmountByFilters(startInstant, endInstant));
         BigDecimal totalBao = safeBigDecimal(sicboBetRepository.sumBaoAmountByFilters(status, startInstant, endInstant));
 
         List<BetAnalyticsItemResponse> items = betPage.getContent().stream()
@@ -169,7 +201,85 @@ public class AnalyticsService {
                         .totalWinAmount(totalWinAmount)
                         .totalLostAmount(totalLostAmount)
                         .totalFee(totalFee)
+                        .sicboTotalFee(totalFee) // Sicbo fee
+                        .xocDiaTotalFee(BigDecimal.ZERO) // XocDia không có fee trong Sicbo analytics
                         .totalBao(totalBao)
+                        .build())
+                .build();
+    }
+
+    private BetAnalyticsResponse buildAllGamesAnalytics(String rawStatus,
+                                                        LocalDateTime start,
+                                                        LocalDateTime end,
+                                                        int page,
+                                                        int size) {
+        // Lấy dữ liệu từ tất cả các game
+        BetAnalyticsResponse lotteryResponse = buildLotteryAnalytics(parseLotteryStatus(rawStatus), start, end, 0, Integer.MAX_VALUE);
+        BetAnalyticsResponse sicboResponse = buildSicboAnalytics(parseSicboStatus(rawStatus), start, end, 0, Integer.MAX_VALUE);
+        BetAnalyticsResponse xocDiaResponse = buildXocDiaAnalytics(parseXocDiaStatus(rawStatus), start, end, 0, Integer.MAX_VALUE);
+
+        // Combine tất cả items và sort theo thời gian (settledAt hoặc createdAt) giảm dần
+        List<BetAnalyticsItemResponse> allItems = new java.util.ArrayList<>();
+        allItems.addAll(lotteryResponse.getItems());
+        allItems.addAll(sicboResponse.getItems());
+        allItems.addAll(xocDiaResponse.getItems());
+
+        // Sort theo settledAt (nếu có) hoặc createdAt, giảm dần
+        allItems.sort((a, b) -> {
+            LocalDateTime timeA = a.getSettledAt() != null ? a.getSettledAt() : a.getCreatedAt();
+            LocalDateTime timeB = b.getSettledAt() != null ? b.getSettledAt() : b.getCreatedAt();
+            if (timeA == null && timeB == null) return 0;
+            if (timeA == null) return 1;
+            if (timeB == null) return -1;
+            return timeB.compareTo(timeA); // Giảm dần
+        });
+
+        // Tính tổng summary
+        BigDecimal totalStake = lotteryResponse.getSummary().getTotalStake()
+                .add(sicboResponse.getSummary().getTotalStake())
+                .add(xocDiaResponse.getSummary().getTotalStake());
+        BigDecimal totalWinAmount = lotteryResponse.getSummary().getTotalWinAmount()
+                .add(sicboResponse.getSummary().getTotalWinAmount())
+                .add(xocDiaResponse.getSummary().getTotalWinAmount());
+        BigDecimal totalLostAmount = lotteryResponse.getSummary().getTotalLostAmount()
+                .add(sicboResponse.getSummary().getTotalLostAmount())
+                .add(xocDiaResponse.getSummary().getTotalLostAmount());
+        BigDecimal totalFee = sicboResponse.getSummary().getTotalFee()
+                .add(xocDiaResponse.getSummary().getTotalFee());
+        BigDecimal sicboTotalFee = sicboResponse.getSummary().getTotalFee();
+        BigDecimal xocDiaTotalFee = xocDiaResponse.getSummary().getTotalFee();
+        BigDecimal totalBao = sicboResponse.getSummary().getTotalBao();
+        
+        FinancialSummary financial = calculateFinancialSummary(start, end);
+
+        long totalItems = allItems.size();
+        int totalPages = (int) Math.ceil((double) totalItems / size);
+
+        // Phân trang
+        int startIndex = page * size;
+        int endIndex = Math.min(startIndex + size, allItems.size());
+        List<BetAnalyticsItemResponse> pagedItems = startIndex < allItems.size()
+                ? allItems.subList(startIndex, endIndex)
+                : List.of();
+
+        return BetAnalyticsResponse.builder()
+                .items(pagedItems)
+                .totalItems(totalItems)
+                .totalPages(totalPages)
+                .page(page)
+                .size(size)
+                .summary(BetAnalyticsResponse.Summary.builder()
+                        .totalStake(totalStake)
+                        .totalWinAmount(totalWinAmount)
+                        .totalLostAmount(totalLostAmount)
+                        .totalFee(totalFee)
+                        .sicboTotalFee(sicboTotalFee)
+                        .xocDiaTotalFee(xocDiaTotalFee)
+                        .totalBao(totalBao)
+                        .totalDeposit(financial.totalDeposit)
+                        .totalWithdraw(financial.totalWithdraw)
+                        .totalRefund(financial.totalRefund)
+                        .totalAgentCommission(financial.totalAgentCommission)
                         .build())
                 .build();
     }
@@ -181,21 +291,32 @@ public class AnalyticsService {
                                                       int size) {
         Instant startInstant = toInstant(start);
         Instant endInstant = toInstant(end);
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "settledAt"));
+        // Sort đã được xử lý trong query, không cần Pageable sort
+        Pageable pageable = PageRequest.of(page, size);
 
         Page<XocDiaBet> betPage = xocDiaBetRepository.findForAnalytics(status, startInstant, endInstant, pageable);
 
         BigDecimal totalStake = safeBigDecimal(xocDiaBetRepository.sumStakeByFilters(status, startInstant, endInstant));
-        BigDecimal totalWinAmount = safeBigDecimal(xocDiaBetRepository.sumWinAmountByFilters(status, startInstant, endInstant));
+        // Tính totalWinAmount là profit (winAmount - stake), không bao gồm tiền cược gốc
+        BigDecimal totalWinAmount;
+        if (status == null || status == XocDiaBet.Status.WON) {
+            // Chỉ tính profit cho các bet WON
+            totalWinAmount = safeBigDecimal(xocDiaBetRepository.sumWinProfitByCreatedAtFilters(startInstant, endInstant));
+        } else {
+            // Nếu filter theo status khác (LOST, PENDING), thì không có win
+            totalWinAmount = BigDecimal.ZERO;
+        }
         BigDecimal totalLostAmount = shouldCalculateLoss(status)
                 ? safeBigDecimal(xocDiaBetRepository.sumStakeByStatusesAndDate(List.of(XocDiaBet.Status.LOST), startInstant, endInstant))
                 : BigDecimal.ZERO;
-        BigDecimal totalFee = safeBigDecimal(xocDiaBetRepository.sumFeeAmountByFilters(status, startInstant, endInstant));
+        BigDecimal totalFee = safeBigDecimal(xocDiaBetRepository.sumFeeAmountByFilters(startInstant, endInstant));
 
         List<BetAnalyticsItemResponse> items = betPage.getContent().stream()
                 .map(this::mapXocDiaBet)
                 .collect(Collectors.toList());
 
+        FinancialSummary financial = calculateFinancialSummary(start, end);
+        
         return BetAnalyticsResponse.builder()
                 .items(items)
                 .totalItems(betPage.getTotalElements())
@@ -207,7 +328,13 @@ public class AnalyticsService {
                         .totalWinAmount(totalWinAmount)
                         .totalLostAmount(totalLostAmount)
                         .totalFee(totalFee)
+                        .sicboTotalFee(BigDecimal.ZERO) // Sicbo không có fee trong XocDia analytics
+                        .xocDiaTotalFee(totalFee) // XocDia fee
                         .totalBao(BigDecimal.ZERO)
+                        .totalDeposit(financial.totalDeposit)
+                        .totalWithdraw(financial.totalWithdraw)
+                        .totalRefund(financial.totalRefund)
+                        .totalAgentCommission(financial.totalAgentCommission)
                         .build())
                 .build();
     }
@@ -286,6 +413,16 @@ public class AnalyticsService {
     }
 
     private TransactionAnalyticsItemResponse mapTransaction(Transaction transaction) {
+        // Đảm bảo processedBy được load để tránh LazyInitializationException
+        String processedByUsername = null;
+        try {
+            if (transaction.getProcessedBy() != null) {
+                processedByUsername = transaction.getProcessedBy().getUsername();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load processedBy for transaction {}: {}", transaction.getId(), e.getMessage());
+        }
+        
         return TransactionAnalyticsItemResponse.builder()
                 .id(transaction.getId())
                 .transactionCode(transaction.getTransactionCode())
@@ -297,6 +434,7 @@ public class AnalyticsService {
                 .createdAt(transaction.getCreatedAt())
                 .processedAt(transaction.getProcessedAt())
                 .paymentMethod(transaction.getPaymentMethod() != null ? transaction.getPaymentMethod().getName() : null)
+                .processedByUsername(processedByUsername)
                 .build();
     }
 
@@ -376,6 +514,68 @@ public class AnalyticsService {
             return BigDecimal.valueOf(number.doubleValue());
         }
         return BigDecimal.ZERO;
+    }
+
+    /**
+     * Tính tổng nạp, tổng rút, tổng hoàn trả, tổng hoa hồng đại lý theo date range
+     */
+    private FinancialSummary calculateFinancialSummary(LocalDateTime start, LocalDateTime end) {
+        Instant startInstant = toInstant(start);
+        Instant endInstant = end != null ? end.atZone(SYSTEM_ZONE).toInstant() : null;
+        
+        // Tổng nạp (DEPOSIT với status APPROVED hoặc COMPLETED)
+        BigDecimal totalDeposit = safeBigDecimal(transactionRepository.sumNetAmountByFilters(
+                Transaction.TransactionType.DEPOSIT,
+                Transaction.TransactionStatus.APPROVED,
+                start,
+                end
+        )).add(safeBigDecimal(transactionRepository.sumNetAmountByFilters(
+                Transaction.TransactionType.DEPOSIT,
+                Transaction.TransactionStatus.COMPLETED,
+                start,
+                end
+        )));
+        
+        // Tổng rút (WITHDRAW với status APPROVED hoặc COMPLETED)
+        BigDecimal totalWithdraw = safeBigDecimal(transactionRepository.sumNetAmountByFilters(
+                Transaction.TransactionType.WITHDRAW,
+                Transaction.TransactionStatus.APPROVED,
+                start,
+                end
+        )).add(safeBigDecimal(transactionRepository.sumNetAmountByFilters(
+                Transaction.TransactionType.WITHDRAW,
+                Transaction.TransactionStatus.COMPLETED,
+                start,
+                end
+        )));
+        
+        // Tổng hoàn trả (GameRefundAccrual với status PAID)
+        BigDecimal totalRefund = safeBigDecimal(gameRefundAccrualRepository.sumPaidRefundByDateRange(
+                startInstant,
+                endInstant
+        ));
+        
+        // Tổng hoa hồng đại lý (AgentCommissionPayout với status PAID)
+        BigDecimal totalAgentCommission = safeBigDecimal(agentCommissionPayoutRepository.sumPaidCommissionByDateRange(
+                start,
+                end
+        ));
+        
+        return new FinancialSummary(totalDeposit, totalWithdraw, totalRefund, totalAgentCommission);
+    }
+
+    private static class FinancialSummary {
+        final BigDecimal totalDeposit;
+        final BigDecimal totalWithdraw;
+        final BigDecimal totalRefund;
+        final BigDecimal totalAgentCommission;
+
+        FinancialSummary(BigDecimal totalDeposit, BigDecimal totalWithdraw, BigDecimal totalRefund, BigDecimal totalAgentCommission) {
+            this.totalDeposit = totalDeposit;
+            this.totalWithdraw = totalWithdraw;
+            this.totalRefund = totalRefund;
+            this.totalAgentCommission = totalAgentCommission;
+        }
     }
 }
 

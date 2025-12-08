@@ -29,7 +29,13 @@ public class BetAnalyticsResponse {
         private BigDecimal totalWinAmount;
         private BigDecimal totalLostAmount;
         private BigDecimal totalFee;
+        private BigDecimal sicboTotalFee;
+        private BigDecimal xocDiaTotalFee;
         private BigDecimal totalBao;
+        private BigDecimal totalDeposit;
+        private BigDecimal totalWithdraw;
+        private BigDecimal totalRefund;
+        private BigDecimal totalAgentCommission;
     }
 }
 

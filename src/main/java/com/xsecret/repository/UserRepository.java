@@ -62,10 +62,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
            "LOWER(u.fullName) LIKE LOWER(CONCAT('%', :searchTerm, '%'))) AND " +
            "(:role IS NULL OR u.role = :role) AND " +
            "(:status IS NULL OR u.status = :status) AND " +
+           "(:startDate IS NULL OR DATE(u.createdAt) >= DATE(:startDate)) AND " +
+           "(:endDate IS NULL OR DATE(u.createdAt) <= DATE(:endDate)) AND " +
            "u.role <> 'ADMIN'")
     Page<User> findBySearchTermWithFilters(@Param("searchTerm") String searchTerm,
                                          @Param("role") User.Role role,
                                          @Param("status") User.UserStatus status,
+                                         @Param("startDate") LocalDateTime startDate,
+                                         @Param("endDate") LocalDateTime endDate,
                                          Pageable pageable);
 
     // Statistics methods
@@ -108,6 +112,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Page<User> findByStaffRoleIn(Collection<User.StaffRole> roles, Pageable pageable);
 
+    @Query("""
+        SELECT u FROM User u
+        WHERE u.role = :role
+           OR u.staffRole IN :roles
+    """)
+    Page<User> findByRoleOrStaffRoleIn(@Param("role") User.Role role,
+                                      @Param("roles") Collection<User.StaffRole> roles,
+                                      Pageable pageable);
+
     Optional<User> findByReferralCode(String referralCode);
 
     long countByInvitedByCodeIgnoreCase(String invitedByCode);
@@ -131,4 +144,17 @@ public interface UserRepository extends JpaRepository<User, Long> {
             @Param("searchTerm") String searchTerm,
             Pageable pageable
     );
+
+    // Filter with date range
+    @Query("SELECT u FROM User u WHERE " +
+           "u.role <> 'ADMIN' AND " +
+           "(:role IS NULL OR u.role = :role) AND " +
+           "(:status IS NULL OR u.status = :status) AND " +
+           "(:startDate IS NULL OR u.createdAt >= :startDate) AND " +
+           "(:endDate IS NULL OR u.createdAt <= :endDate)")
+    Page<User> findByFiltersWithDateRange(@Param("role") User.Role role,
+                                         @Param("status") User.UserStatus status,
+                                         @Param("startDate") LocalDateTime startDate,
+                                         @Param("endDate") LocalDateTime endDate,
+                                         Pageable pageable);
 }

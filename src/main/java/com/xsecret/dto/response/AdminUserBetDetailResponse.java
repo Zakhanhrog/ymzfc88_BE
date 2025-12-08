@@ -18,6 +18,10 @@ public class AdminUserBetDetailResponse {
     BigDecimal totalWinAmount;
     BigDecimal totalLossAmount;
     BigDecimal totalDepositAmount;
+    BigDecimal totalWithdrawAmount;
+    BigDecimal totalRefundAmount;
+    BigDecimal totalDailyLossRefundAmount;
+    BigDecimal totalPromotionalMoneyAmount;
     BigDecimal netProfitAmount;
 
     List<AdminGameBetHistoryItemResponse> items;

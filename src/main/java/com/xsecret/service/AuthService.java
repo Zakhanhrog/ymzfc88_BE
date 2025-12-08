@@ -21,9 +21,11 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.Locale;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -143,9 +145,12 @@ public class AuthService {
             throw new UserAlreadyExistsException("Tên đăng nhập đã tồn tại");
         }
 
-        // Check if email exists
-        if (userRepository.existsByEmail(registerRequest.getEmail())) {
+        String normalizedEmail = null;
+        if (StringUtils.hasText(registerRequest.getEmail())) {
+            normalizedEmail = registerRequest.getEmail().trim();
+            if (userRepository.existsByEmail(normalizedEmail)) {
             throw new UserAlreadyExistsException("Email đã được sử dụng");
+            }
         }
 
         String normalizedInvite = normalizeCode(registerRequest.getInviteCode());
@@ -156,7 +161,7 @@ public class AuthService {
         // Create new user
         User user = User.builder()
                 .username(registerRequest.getUsername())
-                .email(registerRequest.getEmail())
+                .email(normalizedEmail != null ? normalizedEmail : generateAutoEmail(registerRequest.getUsername()))
                 .password(passwordEncoder.encode(registerRequest.getPassword()))
                 .fullName(registerRequest.getFullName())
                 .phoneNumber(registerRequest.getPhoneNumber())
@@ -196,6 +201,12 @@ public class AuthService {
                 .expiresIn(jwtUtils.getJwtExpirationMs())
                 .user(userResponse)
                 .build();
+    }
+
+    private String generateAutoEmail(String username) {
+        String safeUsername = (username != null && !username.isBlank()) ? username.trim() : "user";
+        String randomSuffix = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        return safeUsername + "+" + randomSuffix + "@auto.local";
     }
 
     private String normalizeCode(String code) {

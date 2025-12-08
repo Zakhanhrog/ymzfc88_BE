@@ -26,6 +26,13 @@ public interface SicboBetRepository extends JpaRepository<SicboBet, Long> {
 
     Page<SicboBet> findByUserOrderByCreatedAtDesc(User user, Pageable pageable);
 
+    Page<SicboBet> findByUserAndCreatedAtBetweenOrderByCreatedAtDesc(
+            User user,
+            Instant start,
+            Instant end,
+            Pageable pageable
+    );
+
     long countByUser(User user);
 
     List<SicboBet> findByStatusAndSettledAtBetween(SicboBet.Status status, Instant start, Instant end);
@@ -41,33 +48,32 @@ public interface SicboBetRepository extends JpaRepository<SicboBet, Long> {
     List<SicboBet> findRecentSettledBetsByStatuses(@Param("statuses") Collection<SicboBet.Status> statuses,
                                                    Pageable pageable);
 
-    @Query("SELECT b FROM SicboBet b WHERE (:status IS NULL OR b.status = :status) AND (:start IS NULL OR b.settledAt >= :start) AND (:end IS NULL OR b.settledAt <= :end)")
+    @Query("SELECT b FROM SicboBet b WHERE b.settledAt IS NOT NULL AND (:status IS NULL OR b.status = :status) AND (:start IS NULL OR COALESCE(b.settledAt, b.createdAt) >= :start) AND (:end IS NULL OR COALESCE(b.settledAt, b.createdAt) <= :end) ORDER BY b.settledAt DESC")
     Page<SicboBet> findForAnalytics(@Param("status") SicboBet.Status status,
                                     @Param("start") Instant start,
                                     @Param("end") Instant end,
                                     Pageable pageable);
 
-    @Query("SELECT COALESCE(SUM(b.stake), 0) FROM SicboBet b WHERE (:status IS NULL OR b.status = :status) AND (:start IS NULL OR b.settledAt >= :start) AND (:end IS NULL OR b.settledAt <= :end)")
+    @Query("SELECT COALESCE(SUM(b.stake), 0) FROM SicboBet b WHERE b.settledAt IS NOT NULL AND (:status IS NULL OR b.status = :status) AND (:start IS NULL OR COALESCE(b.settledAt, b.createdAt) >= :start) AND (:end IS NULL OR COALESCE(b.settledAt, b.createdAt) <= :end)")
     BigDecimal sumStakeByFilters(@Param("status") SicboBet.Status status,
                                  @Param("start") Instant start,
                                  @Param("end") Instant end);
 
-    @Query("SELECT COALESCE(SUM(b.winAmount), 0) FROM SicboBet b WHERE (:status IS NULL OR b.status = :status) AND (:start IS NULL OR b.settledAt >= :start) AND (:end IS NULL OR b.settledAt <= :end)")
+    @Query("SELECT COALESCE(SUM(b.winAmount), 0) FROM SicboBet b WHERE b.settledAt IS NOT NULL AND (:status IS NULL OR b.status = :status) AND (:start IS NULL OR COALESCE(b.settledAt, b.createdAt) >= :start) AND (:end IS NULL OR COALESCE(b.settledAt, b.createdAt) <= :end)")
     BigDecimal sumWinAmountByFilters(@Param("status") SicboBet.Status status,
                                      @Param("start") Instant start,
                                      @Param("end") Instant end);
 
-    @Query("SELECT COALESCE(SUM(b.stake), 0) FROM SicboBet b WHERE b.status IN :statuses AND (:start IS NULL OR b.settledAt >= :start) AND (:end IS NULL OR b.settledAt <= :end)")
+    @Query("SELECT COALESCE(SUM(b.stake), 0) FROM SicboBet b WHERE b.settledAt IS NOT NULL AND b.status IN :statuses AND (:start IS NULL OR COALESCE(b.settledAt, b.createdAt) >= :start) AND (:end IS NULL OR COALESCE(b.settledAt, b.createdAt) <= :end)")
     BigDecimal sumStakeByStatusesAndDate(@Param("statuses") Collection<SicboBet.Status> statuses,
                                          @Param("start") Instant start,
                                          @Param("end") Instant end);
 
-    @Query("SELECT COALESCE(SUM(b.feeAmount), 0) FROM SicboBet b WHERE (:status IS NULL OR b.status = :status) AND (:start IS NULL OR b.settledAt >= :start) AND (:end IS NULL OR b.settledAt <= :end) AND b.feeAmount IS NOT NULL")
-    BigDecimal sumFeeAmountByFilters(@Param("status") SicboBet.Status status,
-                                     @Param("start") Instant start,
+    @Query("SELECT COALESCE(SUM(b.feeAmount), 0) FROM SicboBet b WHERE b.status = com.xsecret.entity.SicboBet$Status.WON AND (:start IS NULL OR COALESCE(b.settledAt, b.createdAt) >= :start) AND (:end IS NULL OR COALESCE(b.settledAt, b.createdAt) <= :end) AND b.feeAmount IS NOT NULL")
+    BigDecimal sumFeeAmountByFilters(@Param("start") Instant start,
                                      @Param("end") Instant end);
 
-    @Query("SELECT COALESCE(SUM(b.baoAmount), 0) FROM SicboBet b WHERE (:status IS NULL OR b.status = :status) AND (:start IS NULL OR b.settledAt >= :start) AND (:end IS NULL OR b.settledAt <= :end) AND b.baoAmount IS NOT NULL")
+    @Query("SELECT COALESCE(SUM(b.baoAmount), 0) FROM SicboBet b WHERE b.settledAt IS NOT NULL AND (:status IS NULL OR b.status = :status) AND (:start IS NULL OR COALESCE(b.settledAt, b.createdAt) >= :start) AND (:end IS NULL OR COALESCE(b.settledAt, b.createdAt) <= :end) AND b.baoAmount IS NOT NULL")
     BigDecimal sumBaoAmountByFilters(@Param("status") SicboBet.Status status,
                                      @Param("start") Instant start,
                                      @Param("end") Instant end);
@@ -143,10 +149,67 @@ public interface SicboBetRepository extends JpaRepository<SicboBet, Long> {
     );
 
     @Query("""
+        SELECT COALESCE(SUM(b.winAmount - b.stake), 0) FROM SicboBet b
+        WHERE b.status = com.xsecret.entity.SicboBet$Status.WON
+          AND (:start IS NULL OR b.createdAt >= :start)
+          AND (:end IS NULL OR b.createdAt <= :end)
+    """)
+    BigDecimal sumWinProfitByCreatedAtFilters(
+            @Param("start") Instant start,
+            @Param("end") Instant end
+    );
+
+    @Query("""
         SELECT COALESCE(SUM(b.winAmount), 0) FROM SicboBet b
         WHERE b.user = :user AND b.status = com.xsecret.entity.SicboBet$Status.WON
     """)
     BigDecimal sumWinAmountByUser(@Param("user") User user);
+
+    @Query("""
+        SELECT COALESCE(SUM(b.winAmount), 0) FROM SicboBet b
+        WHERE b.user = :user 
+          AND b.status = com.xsecret.entity.SicboBet$Status.WON
+          AND (:start IS NULL OR b.createdAt >= :start)
+          AND (:end IS NULL OR b.createdAt <= :end)
+    """)
+    BigDecimal sumWinAmountByUserAndDateRange(
+            @Param("user") User user,
+            @Param("start") Instant start,
+            @Param("end") Instant end
+    );
+
+    @Query("""
+        SELECT COALESCE(SUM(b.winAmount - b.stake), 0) FROM SicboBet b
+        WHERE b.user = :user 
+          AND b.status = com.xsecret.entity.SicboBet$Status.WON
+          AND (:start IS NULL OR b.createdAt >= :start)
+          AND (:end IS NULL OR b.createdAt <= :end)
+    """)
+    BigDecimal sumWinProfitByUserAndDateRange(
+            @Param("user") User user,
+            @Param("start") Instant start,
+            @Param("end") Instant end
+    );
+
+    @Query("""
+        SELECT COALESCE(SUM(b.winAmount - b.stake), 0) FROM SicboBet b
+        WHERE b.user = :user 
+          AND b.status = com.xsecret.entity.SicboBet$Status.WON
+    """)
+    BigDecimal sumWinProfitByUser(@Param("user") User user);
+
+    @Query("""
+        SELECT COALESCE(SUM(b.stake), 0) FROM SicboBet b
+        WHERE b.user = :user 
+          AND b.status = com.xsecret.entity.SicboBet$Status.LOST
+          AND (:start IS NULL OR b.createdAt >= :start)
+          AND (:end IS NULL OR b.createdAt <= :end)
+    """)
+    BigDecimal sumLostStakeByUserAndDateRange(
+            @Param("user") User user,
+            @Param("start") Instant start,
+            @Param("end") Instant end
+    );
 
     @Query("""
         SELECT COALESCE(SUM(b.stake), 0) FROM SicboBet b

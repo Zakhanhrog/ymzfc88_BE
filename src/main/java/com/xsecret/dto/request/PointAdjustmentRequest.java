@@ -20,4 +20,8 @@ public class PointAdjustmentRequest {
     
     @NotBlank(message = "Description is required")
     private String description;
+    
+    // Loại tiền: PROMOTIONAL (Tiền khuyến mại) hoặc MANUAL (Tiền thủ công)
+    // Chỉ áp dụng khi type = ADD
+    private String moneyType; // PROMOTIONAL or MANUAL
 }

@@ -319,9 +319,14 @@ public class TransactionService {
     /**
      * Admin: Xử lý transaction (approve/reject)
      */
+    @Transactional
     public TransactionResponseDto processTransaction(ProcessTransactionRequestDto request, String adminUsername) {
+        // Load transaction với các relationships cần thiết
         Transaction transaction = transactionRepository.findById(request.getTransactionId())
                 .orElseThrow(() -> new RuntimeException("Transaction not found"));
+        
+        // Load user để tránh LazyInitializationException
+        transaction.getUser().getUsername();
         
         User admin = userRepository.findByUsername(adminUsername)
                 .orElseThrow(() -> new RuntimeException("Admin not found"));
@@ -401,6 +406,12 @@ public class TransactionService {
         }
         
         Transaction processedTransaction = transactionRepository.save(transaction);
+        
+        // Đảm bảo processedBy được load trước khi map sang DTO
+        if (processedTransaction.getProcessedBy() != null) {
+            processedTransaction.getProcessedBy().getUsername();
+        }
+        
         log.info("Admin {} {} transaction {}", adminUsername, 
                 request.getAction().name().toLowerCase(), transaction.getTransactionCode());
         
@@ -466,6 +477,15 @@ public class TransactionService {
      * Helper method để enrich payment method data cho withdraw transactions
      */
     private TransactionResponseDto enrichTransactionWithPaymentMethod(Transaction transaction) {
+        // Đảm bảo processedBy được load để tránh LazyInitializationException
+        try {
+            if (transaction.getProcessedBy() != null) {
+                transaction.getProcessedBy().getUsername();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load processedBy for transaction {}: {}", transaction.getId(), e.getMessage());
+        }
+        
         // Nếu là withdraw transaction và chưa có payment method, tìm và set data
         if (transaction.getType() == Transaction.TransactionType.WITHDRAW && 
             transaction.getPaymentMethod() == null && 
@@ -565,13 +585,13 @@ public class TransactionService {
     /**
      * Tính toán thống kê giao dịch của user
      */
-    public Map<String, Double> calculateUserTransactionStats(String username) {
+    public Map<String, Object> calculateUserTransactionStats(String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
         List<Transaction> userTransactions = transactionRepository.findByUserOrderByCreatedAtDesc(user);
         
-        Map<String, Double> stats = new HashMap<>();
+        Map<String, Object> stats = new HashMap<>();
         
         double totalDeposit = userTransactions.stream()
                 .filter(t -> t.getType() == Transaction.TransactionType.DEPOSIT && 
@@ -585,8 +605,20 @@ public class TransactionService {
                 .mapToDouble(t -> t.getAmount().doubleValue())
                 .sum();
         
+        double totalBonus = userTransactions.stream()
+                .filter(t -> t.getType() == Transaction.TransactionType.BONUS && 
+                           t.getStatus() == Transaction.TransactionStatus.APPROVED)
+                .mapToDouble(t -> t.getAmount().doubleValue())
+                .sum();
+        
+        long pendingCount = userTransactions.stream()
+                .filter(t -> t.getStatus() == Transaction.TransactionStatus.PENDING)
+                .count();
+        
         stats.put("totalDeposit", totalDeposit);
         stats.put("totalWithdraw", totalWithdraw);
+        stats.put("totalBonus", totalBonus);
+        stats.put("pendingCount", pendingCount);
         
         return stats;
     }

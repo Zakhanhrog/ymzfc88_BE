@@ -17,11 +17,14 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 
 import org.springframework.util.StringUtils;
@@ -169,6 +172,17 @@ public class UserService {
         if (request.getStatus() != null) {
             user.setStatus(request.getStatus());
         }
+        if (request.getReferralCode() != null) {
+            String normalizedCode = normalizeCode(request.getReferralCode());
+            if (normalizedCode != null && !normalizedCode.isEmpty()) {
+                // Kiểm tra mã đại lý đã tồn tại chưa (trừ chính user này)
+                Optional<User> existingUser = userRepository.findByReferralCode(normalizedCode);
+                if (existingUser.isPresent() && !existingUser.get().getId().equals(userId)) {
+                    throw new RuntimeException("Mã đại lý đã tồn tại: " + normalizedCode);
+                }
+                user.setReferralCode(normalizedCode);
+            }
+        }
 
         return userRepository.save(user);
     }
@@ -247,6 +261,26 @@ public class UserService {
         int size = filters.getSize() != null ? filters.getSize() : 10;
         Pageable pageable = PageRequest.of(page, size, sort);
 
+        // Parse date range
+        LocalDateTime startDate = null;
+        LocalDateTime endDate = null;
+        if (filters.getStartDate() != null && !filters.getStartDate().trim().isEmpty()) {
+            try {
+                LocalDate date = LocalDate.parse(filters.getStartDate(), DateTimeFormatter.ISO_DATE);
+                startDate = date.atStartOfDay();
+            } catch (Exception e) {
+                log.warn("Invalid startDate format: {}", filters.getStartDate());
+            }
+        }
+        if (filters.getEndDate() != null && !filters.getEndDate().trim().isEmpty()) {
+            try {
+                LocalDate date = LocalDate.parse(filters.getEndDate(), DateTimeFormatter.ISO_DATE);
+                endDate = date.atTime(23, 59, 59);
+            } catch (Exception e) {
+                log.warn("Invalid endDate format: {}", filters.getEndDate());
+            }
+        }
+
         // Không hiển thị admin trong bất kỳ danh sách nào
         if (filters.getRole() != null) {
             User.Role requestedRole = User.Role.valueOf(filters.getRole());
@@ -261,6 +295,19 @@ public class UserService {
                 filters.getSearchTerm(),
                 filters.getRole() != null ? User.Role.valueOf(filters.getRole()) : null,
                 filters.getStatus() != null ? User.UserStatus.valueOf(filters.getStatus()) : null,
+                startDate,
+                endDate,
+                pageable
+            );
+        }
+
+        // Nếu có date range, sử dụng query với date filter
+        if (startDate != null || endDate != null) {
+            return userRepository.findByFiltersWithDateRange(
+                filters.getRole() != null ? User.Role.valueOf(filters.getRole()) : null,
+                filters.getStatus() != null ? User.UserStatus.valueOf(filters.getStatus()) : null,
+                startDate,
+                endDate,
                 pageable
             );
         }
@@ -388,8 +435,27 @@ public class UserService {
         return userRepository.findByStaffRole(staffRole, pageable);
     }
 
+    public Page<User> getUsersByRole(User.Role role, Pageable pageable) {
+        return userRepository.findByRole(role, pageable);
+    }
+
     public Page<User> getStaffMembers(Pageable pageable) {
         return userRepository.findByStaffRoleIn(STAFF_ONLY_ROLES, pageable);
+    }
+
+    /**
+     * Lấy danh sách nhân viên (các staff role) và cả ADMIN, loại bỏ đại lý
+     */
+    public Page<User> getStaffAndAdmins(Pageable pageable) {
+        return userRepository.findByRoleOrStaffRoleIn(User.Role.ADMIN, STAFF_ONLY_ROLES, pageable);
+    }
+
+    @Transactional
+    public User setAdminRole(Long userId) {
+        User user = getUserById(userId);
+        user.setRole(User.Role.ADMIN);
+        user.setStaffRole(null);
+        return userRepository.save(user);
     }
 
     @Transactional

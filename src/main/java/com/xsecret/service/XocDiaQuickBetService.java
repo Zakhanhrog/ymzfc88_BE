@@ -31,7 +31,17 @@ public class XocDiaQuickBetService {
     public List<XocDiaQuickBetResponse> getActiveConfigs() {
         return repository.findAllByIsActiveTrueOrderByDisplayOrderAsc()
                 .stream()
-                .map(XocDiaQuickBetResponse::fromEntity)
+                .map(config -> {
+                    XocDiaQuickBetResponse response = XocDiaQuickBetResponse.fromEntity(config);
+                    // Nếu có phế, trừ phế vào payout multiplier để hiển thị đúng tỷ lệ
+                    if (config.getFeeRate() != null && config.getFeeRate().compareTo(java.math.BigDecimal.ZERO) > 0) {
+                        java.math.BigDecimal adjustedMultiplier = config.getPayoutMultiplier()
+                                .subtract(config.getFeeRate())
+                                .max(java.math.BigDecimal.ZERO);
+                        response.setPayoutMultiplier(adjustedMultiplier.setScale(2, java.math.RoundingMode.HALF_UP));
+                    }
+                    return response;
+                })
                 .collect(Collectors.toList());
     }
 

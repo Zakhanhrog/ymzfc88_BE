@@ -87,6 +87,12 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
     BigDecimal sumWinAmountByUserId(@Param("userId") Long userId);
     
     /**
+     * Tính tổng lãi thắng của user (winAmount - totalAmount, không tính gốc)
+     */
+    @Query("SELECT COALESCE(SUM(b.winAmount - b.totalAmount), 0) FROM Bet b WHERE b.user.id = :userId AND b.status = com.xsecret.entity.Bet$BetStatus.WON")
+    BigDecimal sumWinProfitByUserId(@Param("userId") Long userId);
+    
+    /**
      * Tính tổng tiền thua của user
      */
     @Query("SELECT COALESCE(SUM(b.totalAmount), 0) FROM Bet b WHERE b.user.id = :userId AND b.status = com.xsecret.entity.Bet$BetStatus.LOST")
@@ -196,6 +202,10 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
     @Query("SELECT COALESCE(SUM(b.winAmount), 0) FROM Bet b WHERE (:status IS NULL OR b.status = :status) AND (:start IS NULL OR b.createdAt >= :start) AND (:end IS NULL OR b.createdAt <= :end)")
     BigDecimal sumWinAmountByFilters(@Param("status") Bet.BetStatus status,
                                      @Param("start") LocalDateTime start,
+                                     @Param("end") LocalDateTime end);
+
+    @Query("SELECT COALESCE(SUM(b.winAmount - b.totalAmount), 0) FROM Bet b WHERE b.status = com.xsecret.entity.Bet$BetStatus.WON AND (:start IS NULL OR b.createdAt >= :start) AND (:end IS NULL OR b.createdAt <= :end)")
+    BigDecimal sumWinProfitByFilters(@Param("start") LocalDateTime start,
                                      @Param("end") LocalDateTime end);
 
     @Query("SELECT COALESCE(SUM(b.totalAmount), 0) FROM Bet b WHERE b.status = :status AND (:start IS NULL OR b.createdAt >= :start) AND (:end IS NULL OR b.createdAt <= :end)")

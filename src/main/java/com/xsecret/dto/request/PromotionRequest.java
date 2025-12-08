@@ -21,7 +21,7 @@ public class PromotionRequest {
     @Size(max = 10000, message = "Description không được vượt quá 10000 ký tự")
     private String description;
     
-    @Size(max = 10000, message = "Details không được vượt quá 10000 ký tự")
+    @Size(max = 50000, message = "Details không được vượt quá 50000 ký tự")
     private String details;
     
     @Size(max = 500, message = "Image URL không được vượt quá 500 ký tự")

@@ -67,5 +67,10 @@ public class SystemSettings {
     public static final String XOC_DIA_REFUND_LOSS_PERCENTAGE = "xocdia_refund_loss_percentage";
     public static final String SICBO_REFUND_PAYOUT_TIME = "sicbo_refund_payout_time";
     public static final String XOC_DIA_REFUND_PAYOUT_TIME = "xocdia_refund_payout_time";
+    
+    // Daily loss refund settings
+    public static final String DAILY_LOSS_REFUND_PERCENTAGE = "daily_loss_refund_percentage";
+    public static final String DAILY_LOSS_REFUND_PAYOUT_TIME = "daily_loss_refund_payout_time";
+    public static final String DAILY_LOSS_REFUND_ENABLED = "daily_loss_refund_enabled";
 }
 

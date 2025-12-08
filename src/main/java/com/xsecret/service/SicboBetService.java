@@ -184,17 +184,13 @@ public class SicboBetService {
             BigDecimal stake = BigDecimal.valueOf(amount);
             totalStake = totalStake.add(stake);
 
-            // Tính payout multiplier và fee: nếu là bàn 1 và có phế, trừ phế
+            // Không tính phế khi đặt cược, chỉ điều chỉnh payout multiplier để hiển thị
             BigDecimal finalPayoutMultiplier = config.getPayoutMultiplier();
-            BigDecimal feeAmount = null;
             if (session.getTableNumber() != null && session.getTableNumber() == 1 
                     && config.getFeeRate() != null && config.getFeeRate().compareTo(BigDecimal.ZERO) > 0) {
                 finalPayoutMultiplier = config.getPayoutMultiplier()
                         .subtract(config.getFeeRate())
                         .max(BigDecimal.ZERO);
-                // Tính số tiền phế
-                feeAmount = stake.multiply(config.getFeeRate())
-                        .setScale(2, RoundingMode.DOWN);
             }
 
             SicboBet bet = SicboBet.builder()
@@ -203,7 +199,7 @@ public class SicboBetService {
                     .betCode(normalizedCode)
                     .stake(stake)
                     .payoutMultiplier(finalPayoutMultiplier)
-                    .feeAmount(feeAmount)
+                    .feeAmount(null) // Phế chỉ tính khi thắng, không tính khi đặt cược
                     .status(SicboBet.Status.PENDING)
                     .build();
 
@@ -260,12 +256,13 @@ public class SicboBetService {
         Integer tripleFace = null;
         SicboResultHistory.Category historyCategory = null;
         List<Integer> faces = parseFaces(resultCode);
+        Map<Integer, Long> faceCounts = new HashMap<>();
         if (faces.size() == 3) {
             resultSum = faces.stream().mapToInt(Integer::intValue).sum();
             isTripleSum = (resultSum == 3 || resultSum == 18);
-            Map<Integer, Long> counts = faces.stream()
+            faceCounts = faces.stream()
                     .collect(Collectors.groupingBy(face -> face, Collectors.counting()));
-            tripleFace = counts.entrySet().stream()
+            tripleFace = faceCounts.entrySet().stream()
                     .filter(entry -> entry.getValue() == 3L)
                     .map(Map.Entry::getKey)
                     .findFirst()
@@ -392,21 +389,69 @@ public class SicboBetService {
                             ? bet.getPayoutMultiplier().add(BigDecimal.ONE)
                             : BigDecimal.ONE;
                     BigDecimal winAmount = bet.getStake().multiply(multiplier);
+                    
+                    // Kiểm tra nếu là single dice bet và có 2 mặt lặp lại (count == 2)
+                    // Thì nhân đôi phần lãi (không tính gốc)
+                    if (betCode != null && betCode.startsWith("sicbo_single_")) {
+                        try {
+                            String faceStr = betCode.replace("sicbo_single_", "");
+                            int faceValue = Integer.parseInt(faceStr);
+                            Long count = faceCounts.get(faceValue);
+                            
+                            // Nếu có 2 mặt lặp lại (count == 2), nhân đôi phần lãi
+                            if (count != null && count == 2L) {
+                                BigDecimal baseMultiplier = bet.getPayoutMultiplier() != null
+                                        ? bet.getPayoutMultiplier()
+                                        : BigDecimal.ZERO;
+                                // winAmount = stake (gốc) + stake * baseMultiplier * 2 (lãi x2)
+                                winAmount = bet.getStake()
+                                        .add(bet.getStake().multiply(baseMultiplier).multiply(BigDecimal.valueOf(2)));
+                                
+                                pointService.addPoints(
+                                        bet.getUser(),
+                                        winAmount,
+                                        PointTransaction.PointTransactionType.BET_WIN,
+                                        String.format("Thắng cược Sicbo (x2) bàn %d phiên #%d (%s)",
+                                                session.getTableNumber(), session.getId(), bet.getBetCode()),
+                                        "SICBO",
+                                        session.getId(),
+                                        null
+                                );
+                                
+                                bet.setWinAmount(winAmount);
+                                bet.setStatus(SicboBet.Status.WON);
+                                
+                                // Tính phế: chỉ tính khi thắng, phế = (winAmount - stake) * feeRate
+                                calculateAndSetFeeAmount(bet, session);
+                                
+                                resolved = true;
+                            }
+                        } catch (NumberFormatException e) {
+                            // Nếu không parse được face value, xử lý bình thường
+                        }
+                    }
+                    
+                    // Nếu chưa resolved (không phải single với count == 2), xử lý bình thường
+                    if (!resolved) {
+                        pointService.addPoints(
+                                bet.getUser(),
+                                winAmount,
+                                PointTransaction.PointTransactionType.BET_WIN,
+                                String.format("Thắng cược Sicbo bàn %d phiên #%d (%s)",
+                                        session.getTableNumber(), session.getId(), bet.getBetCode()),
+                                "SICBO",
+                                session.getId(),
+                                null
+                        );
 
-                    pointService.addPoints(
-                            bet.getUser(),
-                            winAmount,
-                            PointTransaction.PointTransactionType.BET_WIN,
-                            String.format("Thắng cược Sicbo bàn %d phiên #%d (%s)",
-                                    session.getTableNumber(), session.getId(), bet.getBetCode()),
-                            "SICBO",
-                            session.getId(),
-                            null
-                    );
-
-                    bet.setWinAmount(winAmount);
-                    bet.setStatus(SicboBet.Status.WON);
-                    resolved = true;
+                        bet.setWinAmount(winAmount);
+                        bet.setStatus(SicboBet.Status.WON);
+                        
+                        // Tính phế: chỉ tính khi thắng, phế = (winAmount - stake) * feeRate
+                        calculateAndSetFeeAmount(bet, session);
+                        
+                        resolved = true;
+                    }
                 }
 
                 if (!resolved) {
@@ -435,6 +480,44 @@ public class SicboBetService {
         if (resultSum > 0 && historyCategory != null) {
             resultHistoryService.record(session, resultCode, resultSum, historyCategory, now);
         }
+    }
+
+    private void calculateAndSetFeeAmount(SicboBet bet, SicboSession session) {
+        // Chỉ tính phế cho bàn 1 và khi bet thắng
+        if (bet == null || bet.getStatus() != SicboBet.Status.WON 
+                || session == null || session.getTableNumber() == null || session.getTableNumber() != 1) {
+            return;
+        }
+
+        if (bet.getWinAmount() == null || bet.getStake() == null) {
+            return;
+        }
+
+        // Lấy config để lấy feeRate
+        String betCode = bet.getBetCode();
+        if (betCode == null) {
+            return;
+        }
+
+        SicboQuickBetConfig config = quickBetConfigRepository.findByCode(betCode)
+                .orElse(FALLBACK_CONFIGS.get(betCode));
+        
+        if (config == null || config.getFeeRate() == null 
+                || config.getFeeRate().compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        // Tính profit (tiền thắng - tiền gốc)
+        BigDecimal profit = bet.getWinAmount().subtract(bet.getStake());
+        if (profit.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        // Phế = profit * feeRate
+        BigDecimal feeAmount = profit.multiply(config.getFeeRate())
+                .setScale(2, RoundingMode.DOWN);
+        
+        bet.setFeeAmount(feeAmount);
     }
 
     private void applyCashbackIfApplicable(
@@ -553,15 +636,13 @@ public class SicboBetService {
         Set<String> winners = new HashSet<>();
         Map<Integer, Long> counts = faces.stream()
                 .collect(Collectors.groupingBy(face -> face, Collectors.counting()));
-        boolean isTriple = counts.values().stream().anyMatch(count -> count == 3);
         int total = faces.stream().mapToInt(Integer::intValue).sum();
 
-        if (!isTriple) {
+        // Tính Tài/Xỉu dựa trên tổng điểm, bao gồm cả trường hợp bộ 3
             if (total >= 4 && total <= 10) {
                 winners.add("sicbo_primary_small");
-            } else if (total >= 11 && total <= 17) {
+        } else if (total >= 11 && total <= 18) {
                 winners.add("sicbo_primary_big");
-            }
         }
 
         if (total >= 4 && total <= 17) {
@@ -663,15 +744,25 @@ public class SicboBetService {
     }
 
     @Transactional(readOnly = true)
-    public SicboBetHistoryPageResponse getUserBetHistory(User user, int page, int size) {
+    public SicboBetHistoryPageResponse getUserBetHistory(User user, int page, int size, Integer days) {
         if (user == null) {
             throw new IllegalArgumentException("Người dùng không hợp lệ");
         }
         int sanitizedPage = Math.max(page, 0);
         int sanitizedSize = Math.min(Math.max(size, 1), 100); // Tăng max lên 100 để FE có thể tự điều chỉnh
 
+        // Validate và tính toán date range
+        // Mặc định chỉ cho phép xem tối đa 14 ngày gần nhất
+        Instant endDate = Instant.now();
+        int daysToUse = (days != null && days > 0) ? days : 14;
+        if (daysToUse > 14) {
+                throw new IllegalArgumentException("Chỉ được xem lịch sử tối đa 14 ngày");
+            }
+        Instant startDate = endDate.minus(daysToUse, java.time.temporal.ChronoUnit.DAYS);
+
         Pageable pageable = PageRequest.of(sanitizedPage, sanitizedSize);
-        Page<SicboBet> betPage = betRepository.findByUserOrderByCreatedAtDesc(user, pageable);
+        Page<SicboBet> betPage = betRepository.findByUserAndCreatedAtBetweenOrderByCreatedAtDesc(
+                    user, startDate, endDate, pageable);
 
         // Lấy settings hoàn tiền
         BigDecimal winRefundPercent = systemSettingsService.getGameRefundPercentage(SystemSettings.SICBO_REFUND_WIN_PERCENTAGE);
@@ -743,10 +834,14 @@ public class SicboBetService {
                 })
                 .collect(Collectors.toList());
 
-        BigDecimal totalWinAmount = Optional.ofNullable(betRepository.sumWinAmountByUser(user))
-                .orElse(BigDecimal.ZERO);
-        BigDecimal totalLossAmount = Optional.ofNullable(betRepository.sumLostStakeByUser(user))
-                .orElse(BigDecimal.ZERO);
+        // Tính totalWinAmount chỉ là lãi (winAmount - stake), không bao gồm vốn
+        // Tính tổng thắng/thua theo date range (luôn có startDate vì mặc định 14 ngày)
+        BigDecimal totalWinAmount = Optional.ofNullable(
+                    betRepository.sumWinProfitByUserAndDateRange(user, startDate, endDate)
+            ).orElse(BigDecimal.ZERO);
+        BigDecimal totalLossAmount = Optional.ofNullable(
+                    betRepository.sumLostStakeByUserAndDateRange(user, startDate, endDate)
+            ).orElse(BigDecimal.ZERO);
 
         return SicboBetHistoryPageResponse.builder()
                 .items(items)

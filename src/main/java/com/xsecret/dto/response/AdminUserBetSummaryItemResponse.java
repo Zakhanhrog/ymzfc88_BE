@@ -17,7 +17,10 @@ public class AdminUserBetSummaryItemResponse {
     BigDecimal totalWinAmount;
     BigDecimal totalLossAmount;
     BigDecimal totalDepositAmount;
+    BigDecimal totalWithdrawAmount;
+    Long currentBalance; // Số dư điểm hiện tại (user.points)
     BigDecimal netProfitAmount;
+    String firstLoginIp; // IP lần đầu tiên đăng nhập
 }
 
 

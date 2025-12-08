@@ -57,6 +57,9 @@ public class PointTransaction {
     @JoinColumn(name = "created_by")
     private User createdBy; // Admin user nếu là manual adjustment
 
+    @Column(name = "money_type", length = 20)
+    private String moneyType; // PROMOTIONAL (Tiền khuyến mại) hoặc MANUAL (Tiền thủ công), chỉ áp dụng cho ADMIN_ADD
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

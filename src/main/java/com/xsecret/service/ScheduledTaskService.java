@@ -24,6 +24,7 @@ public class ScheduledTaskService {
     private final LotteryResultAutoImportService lotteryResultAutoImportService;
     private final LotteryResultService lotteryResultService;
     private final GameRefundService gameRefundService;
+    private final DailyLossRefundService dailyLossRefundService;
     
     // Timezone Vietnam
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
@@ -255,6 +256,34 @@ public class ScheduledTaskService {
             gameRefundService.processDueRefunds();
         } catch (Exception ex) {
             log.error("❌ Error while processing scheduled game refunds", ex);
+        }
+    }
+
+    /**
+     * Tính toán daily loss refund cho ngày hôm qua - chạy lúc 00:01 mỗi ngày
+     * Tính toán cho ngày hôm qua (00:00 - 23:59)
+     */
+    @Scheduled(cron = "0 1 0 * * ?", zone = "Asia/Ho_Chi_Minh")
+    public void calculateDailyLossRefunds() {
+        try {
+            log.info("🔄 Scheduled task [00:01]: Starting daily loss refund calculation for yesterday...");
+            java.time.LocalDate yesterday = java.time.LocalDate.now(VN_ZONE).minusDays(1);
+            dailyLossRefundService.calculateAndCreateDailyLossRefunds(yesterday);
+            log.info("✅ Scheduled task [00:01]: Daily loss refund calculation completed for date: {}", yesterday);
+        } catch (Exception ex) {
+            log.error("❌ Scheduled task [00:01]: Error during daily loss refund calculation", ex);
+        }
+    }
+
+    /**
+     * Xử lý hoàn trả daily loss refund đã đến hạn - chạy mỗi phút
+     */
+    @Scheduled(cron = "0 */1 * * * ?", zone = "Asia/Ho_Chi_Minh")
+    public void processDueDailyLossRefunds() {
+        try {
+            dailyLossRefundService.processDueDailyLossRefunds();
+        } catch (Exception ex) {
+            log.error("❌ Error while processing scheduled daily loss refunds", ex);
         }
     }
 }

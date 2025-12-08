@@ -36,6 +36,28 @@ public interface GameRefundAccrualRepository extends JpaRepository<GameRefundAcc
             @Param("gameType") GameRefundAccrual.GameType gameType,
             @Param("sessionIds") List<Long> sessionIds
     );
+    
+    // Tính tổng hoàn trả đã trả (PAID) theo date range
+    @Query("SELECT COALESCE(SUM(gra.amount), 0) FROM GameRefundAccrual gra " +
+           "WHERE gra.status = com.xsecret.entity.GameRefundAccrual$Status.PAID " +
+           "AND (:start IS NULL OR gra.paidAt >= :start) " +
+           "AND (:end IS NULL OR gra.paidAt <= :end)")
+    BigDecimal sumPaidRefundByDateRange(
+            @Param("start") Instant start,
+            @Param("end") Instant end
+    );
+    
+    // Tính tổng hoàn trả đã trả (PAID) theo user
+    @Query("SELECT COALESCE(SUM(gra.amount), 0) FROM GameRefundAccrual gra " +
+           "WHERE gra.user = :user AND gra.status = com.xsecret.entity.GameRefundAccrual$Status.PAID")
+    BigDecimal sumPaidRefundByUser(@Param("user") User user);
+    
+    // Tính tổng hoàn trả đã trả (PAID) theo user - CHỈ tính cho lệnh cược thua
+    @Query("SELECT COALESCE(SUM(gra.amount), 0) FROM GameRefundAccrual gra " +
+           "WHERE gra.user = :user " +
+           "AND gra.status = com.xsecret.entity.GameRefundAccrual$Status.PAID " +
+           "AND gra.description LIKE '%(thua)%'")
+    BigDecimal sumPaidLossRefundByUser(@Param("user") User user);
 }
 
 

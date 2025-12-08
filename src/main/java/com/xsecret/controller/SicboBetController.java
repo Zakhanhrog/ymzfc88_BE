@@ -51,12 +51,13 @@ public class SicboBetController {
     public ResponseEntity<ApiResponse<SicboBetHistoryPageResponse>> getBetHistory(
             Authentication authentication,
             @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "days", required = false) Integer days
     ) {
         try {
             String username = authentication.getName();
             User user = userService.getUserByUsername(username);
-            SicboBetHistoryPageResponse response = betService.getUserBetHistory(user, page, size);
+            SicboBetHistoryPageResponse response = betService.getUserBetHistory(user, page, size, days);
             return ResponseEntity.ok(ApiResponse.success(response));
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));

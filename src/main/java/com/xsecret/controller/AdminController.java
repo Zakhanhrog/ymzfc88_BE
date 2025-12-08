@@ -20,13 +20,19 @@ import com.xsecret.entity.User;
 import com.xsecret.exception.UserAlreadyExistsException;
 import com.xsecret.mapper.UserMapper;
 import com.xsecret.security.UserPrincipal;
+import com.xsecret.dto.UserPaymentMethodRequestDto;
+import com.xsecret.dto.UserPaymentMethodResponseDto;
+import com.xsecret.dto.request.PointAdjustmentRequest;
+import com.xsecret.dto.response.PointTransactionResponse;
 import com.xsecret.service.AnalyticsService;
 import com.xsecret.service.AuthService;
 import com.xsecret.service.DashboardService;
 import com.xsecret.service.PaymentMethodService;
+import com.xsecret.service.PointService;
 import com.xsecret.service.SystemSettingsService;
 import com.xsecret.service.TransactionService;
 import com.xsecret.service.UserLoginHistoryService;
+import com.xsecret.service.UserPaymentMethodService;
 import com.xsecret.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -67,6 +73,8 @@ public class AdminController {
     private final DashboardService dashboardService;
     private final AnalyticsService analyticsService;
     private final UserLoginHistoryService userLoginHistoryService;
+    private final UserPaymentMethodService userPaymentMethodService;
+    private final PointService pointService;
 
     @PostMapping("/login")
     @PreAuthorize("permitAll()")
@@ -150,19 +158,17 @@ public class AdminController {
         Pageable pageable = PageRequest.of(Math.max(page, 0), Math.max(1, Math.min(size, 200)));
 
         String normalizedRole = staffRole == null || staffRole.isBlank()
-                ? "ALL"
+                ? "STAFF"
                 : staffRole.trim().toUpperCase(Locale.ROOT);
 
         Page<User> userPage;
         switch (normalizedRole) {
-            case "ALL":
-                userPage = userService.getAllUsers(pageable);
-                break;
+            case "ALL": // giữ tương thích cũ, nhưng vẫn chỉ trả staff + admin
             case "STAFF":
-                userPage = userService.getStaffMembers(pageable);
+                userPage = userService.getStaffAndAdmins(pageable);
                 break;
-            case "AGENT":
-                userPage = userService.getUsersByStaffRole(User.StaffRole.AGENT, pageable);
+            case "ADMIN":
+                userPage = userService.getUsersByRole(User.Role.ADMIN, pageable);
                 break;
             default:
                 User.StaffRole roleEnum = parseStaffRole(normalizedRole);
@@ -196,6 +202,12 @@ public class AdminController {
             @PathVariable Long id,
             @RequestBody(required = false) UpdateStaffRoleRequest request) {
         String rawRole = request != null ? request.getStaffRole() : null;
+        if ("ADMIN".equalsIgnoreCase(rawRole)) {
+            log.info("Updating user {} to ADMIN role", id);
+            User updated = userService.setAdminRole(id);
+            return ResponseEntity.ok(ApiResponse.success("Cập nhật phân quyền thành công", userMapper.toUserResponse(updated)));
+        }
+
         User.StaffRole staffRole = parseStaffRole(rawRole);
         log.info("Updating staff role for user {} to {}", id, staffRole);
 
@@ -252,9 +264,12 @@ public class AdminController {
             @RequestParam(required = false) String searchTerm,
             @RequestParam(required = false) String sortBy,
             @RequestParam(required = false) String sortDirection,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        log.info("Getting users with filters - role: {}, status: {}, search: {}", role, status, searchTerm);
+        log.info("Getting users with filters - role: {}, status: {}, search: {}, startDate: {}, endDate: {}", 
+                role, status, searchTerm, startDate, endDate);
         
         UserFilterRequestDto filters = UserFilterRequestDto.builder()
                 .role(role)
@@ -262,6 +277,8 @@ public class AdminController {
                 .searchTerm(searchTerm)
                 .sortBy(sortBy)
                 .sortDirection(sortDirection)
+                .startDate(startDate)
+                .endDate(endDate)
                 .page(page)
                 .size(size)
                 .build();
@@ -986,6 +1003,65 @@ public class AdminController {
         } catch (IllegalArgumentException ex) {
             log.warn("Invalid staff role provided: {}", rawRole);
             return null;
+        }
+    }
+
+    // ======================== USER PAYMENT METHOD MANAGEMENT ========================
+    
+    /**
+     * Lấy danh sách phương thức thanh toán của user
+     */
+    @GetMapping("/users/{userId}/payment-methods")
+    public ResponseEntity<ApiResponse<List<UserPaymentMethodResponseDto>>> getUserPaymentMethods(
+            @PathVariable Long userId) {
+        try {
+            User user = userService.getUserById(userId);
+            List<UserPaymentMethodResponseDto> paymentMethods = userPaymentMethodService.getUserPaymentMethods(user);
+            return ResponseEntity.ok(ApiResponse.success(paymentMethods));
+        } catch (Exception e) {
+            log.error("Error getting user payment methods", e);
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
+    }
+    
+    /**
+     * Cập nhật phương thức thanh toán của user bởi admin
+     */
+    @PutMapping("/users/{userId}/payment-methods/{paymentMethodId}")
+    public ResponseEntity<ApiResponse<UserPaymentMethodResponseDto>> updateUserPaymentMethod(
+            @PathVariable Long userId,
+            @PathVariable Long paymentMethodId,
+            @Valid @RequestBody UserPaymentMethodRequestDto requestDto) {
+        try {
+            User user = userService.getUserById(userId);
+            UserPaymentMethodResponseDto paymentMethod = userPaymentMethodService.updateUserPaymentMethod(
+                    user, paymentMethodId, requestDto);
+            return ResponseEntity.ok(ApiResponse.success("Cập nhật thông tin ngân hàng thành công", paymentMethod));
+        } catch (Exception e) {
+            log.error("Error updating user payment method", e);
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
+    }
+    
+    // ======================== POINT MANAGEMENT ========================
+    
+    /**
+     * Cộng/Trừ điểm cho user bởi admin
+     */
+    @PostMapping("/users/{userId}/points/adjust")
+    public ResponseEntity<ApiResponse<PointTransactionResponse>> adjustUserPoints(
+            @PathVariable Long userId,
+            @Valid @RequestBody PointAdjustmentRequest request,
+            @AuthenticationPrincipal UserPrincipal adminPrincipal) {
+        try {
+            // Đảm bảo userId trong request khớp với path variable
+            request.setUserId(userId);
+            User adminUser = userService.getUserById(adminPrincipal.getId());
+            PointTransactionResponse response = pointService.adjustPointsByAdmin(request, adminUser);
+            return ResponseEntity.ok(ApiResponse.success("Điều chỉnh điểm thành công", response));
+        } catch (Exception e) {
+            log.error("Error adjusting user points", e);
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }
     }
 

@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.YearMonth;
+import java.util.List;
 
 @RestController
 @RequestMapping("/admin/agent/report")
@@ -35,10 +36,11 @@ public class AdminAgentReportController {
     @GetMapping
     public ResponseEntity<ApiResponse<AdminAgentCommissionReportResponse>> getMonthlyReport(
             @RequestParam(value = "month", required = false)
-            @DateTimeFormat(pattern = "yyyy-MM") YearMonth month
+            @DateTimeFormat(pattern = "yyyy-MM") YearMonth month,
+            @RequestParam(value = "ip", required = false) String ipSearch
     ) {
-        log.info("Admin requesting agent commission report for {}", month);
-        AdminAgentCommissionReportResponse response = adminAgentReportService.getMonthlyReport(month);
+        log.info("Admin requesting agent commission report for {}, ipSearch={}", month, ipSearch);
+        AdminAgentCommissionReportResponse response = adminAgentReportService.getMonthlyReport(month, ipSearch);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -52,6 +54,28 @@ public class AdminAgentReportController {
         AdminAgentCommissionReportRowResponse response = adminAgentReportService
                 .payoutCommission(agentId, request, adminPrincipal.getId());
         return ResponseEntity.ok(ApiResponse.success("Chia hoa hồng thành công", response));
+    }
+
+    @GetMapping("/{agentId}/payout-history")
+    public ResponseEntity<ApiResponse<List<com.xsecret.entity.AgentCommissionPayout>>> getPayoutHistory(
+            @PathVariable Long agentId,
+            @RequestParam(value = "month", required = false) String periodMonth
+    ) {
+        log.info("Getting payout history for agent {}, month={}", agentId, periodMonth);
+        List<com.xsecret.entity.AgentCommissionPayout> history = adminAgentReportService.getAgentPayoutHistory(agentId, periodMonth);
+        return ResponseEntity.ok(ApiResponse.success(history));
+    }
+
+    @PostMapping("/{agentId}/note")
+    public ResponseEntity<ApiResponse<String>> saveAgentNote(
+            @PathVariable Long agentId,
+            @RequestParam(value = "month", required = true) String periodMonth,
+            @RequestBody java.util.Map<String, String> request
+    ) {
+        log.info("Saving note for agent {} in month {}", agentId, periodMonth);
+        String note = request.getOrDefault("note", "");
+        adminAgentReportService.saveAgentNote(agentId, periodMonth, note);
+        return ResponseEntity.ok(ApiResponse.success("Lưu ghi chú thành công"));
     }
 }
 

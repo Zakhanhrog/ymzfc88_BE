@@ -16,6 +16,7 @@ com/xsecret/repository/SicboQuickBetConfigRepository.class
 com/xsecret/entity/XocDiaBet$XocDiaBetBuilder.class
 com/xsecret/repository/UserLoginHistoryRepository.class
 com/xsecret/dto/response/LotteryResultResponse.class
+com/xsecret/service/AnalyticsService$FinancialSummary.class
 com/xsecret/controller/TestController.class
 com/xsecret/service/BettingOddsService.class
 com/xsecret/entity/LotteryResult$LotteryResultBuilder.class
@@ -306,6 +307,7 @@ com/xsecret/controller/MarqueeNotificationController.class
 com/xsecret/config/AsyncConfig.class
 com/xsecret/dto/response/UserPointResponse$UserPointResponseBuilder.class
 com/xsecret/entity/AgentCommissionPayout.class
+com/xsecret/dto/response/CasinoBetStatisticsResponse.class
 com/xsecret/dto/request/MarqueeNotificationRequest$MarqueeNotificationRequestBuilder.class
 com/xsecret/config/FileUploadConfig.class
 com/xsecret/dto/response/AdminAgentCommissionReportResponse.class
@@ -345,6 +347,7 @@ com/xsecret/dto/response/SicboBetHistoryItemResponse.class
 com/xsecret/config/SecurityConfig.class
 com/xsecret/dto/request/XocDiaQuickBetRequest.class
 com/xsecret/entity/SicboSession$SicboSessionBuilder.class
+com/xsecret/dto/response/CasinoBetStatisticsResponse$CasinoBetStatisticsResponseBuilder.class
 com/xsecret/repository/BettingOddsRepository.class
 com/xsecret/controller/KycController.class
 com/xsecret/dto/response/StaffMktTransactionResponse.class

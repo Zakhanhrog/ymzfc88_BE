@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/admin/game-history")
@@ -53,11 +54,14 @@ public class AdminGameHistoryController {
     @GetMapping("/user-summary")
     public ResponseEntity<ApiResponse<AdminUserBetSummaryResponse>> getUserBetSummary(
             @RequestParam(value = "search", required = false) String search,
+            @RequestParam(value = "agentCode", required = false) String agentCode,
+            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "20") int size
     ) {
-        log.info("Admin request user bet summary - search={}, page={}, size={}", search, page, size);
-        AdminUserBetSummaryResponse response = adminGameHistoryService.getUserBetSummaries(search, page, size);
+        log.info("Admin request user bet summary - search={}, agentCode={}, startDate={}, endDate={}, page={}, size={}", search, agentCode, startDate, endDate, page, size);
+        AdminUserBetSummaryResponse response = adminGameHistoryService.getUserBetSummaries(search, agentCode, startDate, endDate, page, size);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

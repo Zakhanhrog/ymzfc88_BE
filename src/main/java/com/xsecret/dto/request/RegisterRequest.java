@@ -14,7 +14,6 @@ public class RegisterRequest {
     @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "Tên đăng nhập chỉ được chứa chữ cái, số và dấu gạch dưới")
     private String username;
 
-    @NotBlank(message = "Email là bắt buộc")
     @Email(message = "Email không hợp lệ")
     private String email;
 

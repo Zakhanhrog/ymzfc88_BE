@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -212,16 +213,12 @@ public class XocDiaBetService {
             BigDecimal stake = BigDecimal.valueOf(amount);
             totalStake = totalStake.add(stake);
 
-            // Tính payout multiplier và fee: nếu có phế, trừ phế
+            // Không tính phế khi đặt cược, chỉ điều chỉnh payout multiplier để hiển thị
             BigDecimal finalPayoutMultiplier = config.getPayoutMultiplier();
-            BigDecimal feeAmount = null;
             if (config.getFeeRate() != null && config.getFeeRate().compareTo(BigDecimal.ZERO) > 0) {
                 finalPayoutMultiplier = config.getPayoutMultiplier()
                         .subtract(config.getFeeRate())
                         .max(BigDecimal.ZERO);
-                // Tính số tiền phế
-                feeAmount = stake.multiply(config.getFeeRate())
-                        .setScale(2, RoundingMode.DOWN);
             }
 
             XocDiaBet bet = XocDiaBet.builder()
@@ -230,7 +227,7 @@ public class XocDiaBetService {
                     .betCode(normalizedCode)
                     .stake(stake)
                     .payoutMultiplier(finalPayoutMultiplier)
-                    .feeAmount(feeAmount)
+                    .feeAmount(null) // Phế chỉ tính khi thắng, không tính khi đặt cược
                     .status(XocDiaBet.Status.PENDING)
                     .build();
 
@@ -314,6 +311,10 @@ public class XocDiaBetService {
                 );
                 bet.setWinAmount(winAmount);
                 bet.setStatus(XocDiaBet.Status.WON);
+                
+                // Tính phế: chỉ tính khi thắng, phế = (winAmount - stake) * feeRate
+                calculateAndSetFeeAmount(bet);
+                
                 totalWinAmount = totalWinAmount.add(winAmount);
                 winningBets++;
             } else if ("two-two".equals(normalizedResultCode)
@@ -382,6 +383,43 @@ public class XocDiaBetService {
         }
 
         betRepository.saveAll(pendingBets);
+    }
+
+    private void calculateAndSetFeeAmount(XocDiaBet bet) {
+        // Chỉ tính phế khi bet thắng
+        if (bet == null || bet.getStatus() != XocDiaBet.Status.WON) {
+            return;
+        }
+
+        if (bet.getWinAmount() == null || bet.getStake() == null) {
+            return;
+        }
+
+        // Lấy config để lấy feeRate
+        String betCode = bet.getBetCode();
+        if (betCode == null) {
+            return;
+        }
+
+        XocDiaQuickBetConfig config = quickBetConfigRepository.findByCode(betCode)
+                .orElse(FALLBACK_CONFIGS.get(betCode));
+        
+        if (config == null || config.getFeeRate() == null 
+                || config.getFeeRate().compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        // Tính profit (tiền thắng - tiền gốc)
+        BigDecimal profit = bet.getWinAmount().subtract(bet.getStake());
+        if (profit.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        // Phế = profit * feeRate
+        BigDecimal feeAmount = profit.multiply(config.getFeeRate())
+                .setScale(2, RoundingMode.DOWN);
+        
+        bet.setFeeAmount(feeAmount);
     }
 
     private void applyCashbackIfApplicable(
@@ -493,15 +531,25 @@ public class XocDiaBetService {
     }
 
     @Transactional(readOnly = true)
-    public XocDiaBetHistoryPageResponse getUserBetHistory(User user, int page, int size) {
+    public XocDiaBetHistoryPageResponse getUserBetHistory(User user, int page, int size, Integer days) {
         if (user == null) {
             throw new IllegalArgumentException("Người dùng không hợp lệ");
         }
         int sanitizedPage = Math.max(page, 0);
         int sanitizedSize = Math.min(Math.max(size, 1), 100); // Tăng max lên 100 để FE có thể tự điều chỉnh
 
+        // Validate và tính toán date range
+        // Mặc định chỉ cho phép xem tối đa 14 ngày gần nhất
+        Instant endDate = Instant.now();
+        int daysToUse = (days != null && days > 0) ? days : 14;
+        if (daysToUse > 14) {
+            throw new IllegalArgumentException("Chỉ được xem lịch sử tối đa 14 ngày");
+        }
+        Instant startDate = endDate.minus(daysToUse, ChronoUnit.DAYS);
+
         Pageable pageable = PageRequest.of(sanitizedPage, sanitizedSize);
-        Page<XocDiaBet> betPage = betRepository.findByUserOrderByCreatedAtDesc(user, pageable);
+        Page<XocDiaBet> betPage = betRepository.findByUserAndCreatedAtBetweenOrderByCreatedAtDesc(
+                user, startDate, endDate, pageable);
 
         // Lấy settings hoàn tiền
         BigDecimal winRefundPercent = systemSettingsService.getGameRefundPercentage(SystemSettings.XOC_DIA_REFUND_WIN_PERCENTAGE);
@@ -573,10 +621,13 @@ public class XocDiaBetService {
                 })
                 .collect(Collectors.toList());
 
-        BigDecimal totalWinAmount = Optional.ofNullable(betRepository.sumWinAmountByUser(user))
-                .orElse(BigDecimal.ZERO);
-        BigDecimal totalLossAmount = Optional.ofNullable(betRepository.sumLostStakeByUser(user))
-                .orElse(BigDecimal.ZERO);
+        // Tính tổng thắng/thua theo date range (luôn có startDate vì mặc định 14 ngày)
+        BigDecimal totalWinAmount = Optional.ofNullable(
+                betRepository.sumWinProfitByUserAndDateRange(user, startDate, endDate)
+        ).orElse(BigDecimal.ZERO);
+        BigDecimal totalLossAmount = Optional.ofNullable(
+                betRepository.sumLostStakeByUserAndDateRange(user, startDate, endDate)
+        ).orElse(BigDecimal.ZERO);
 
         return XocDiaBetHistoryPageResponse.builder()
                 .items(items)

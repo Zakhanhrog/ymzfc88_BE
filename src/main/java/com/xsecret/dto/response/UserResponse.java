@@ -35,4 +35,7 @@ public class UserResponse {
     private String invitedByCode;
     private Boolean hasC2Password;
     private LocalDateTime c2PasswordUpdatedAt;
+    private String firstLoginIp; // IP lần đầu tiên đăng nhập
+    private java.math.BigDecimal totalRefund; // Tổng hoàn trả (hoàn trả cược thua)
+    private java.math.BigDecimal totalDailyLossRefund; // Tổng hoàn thua theo ngày
 }

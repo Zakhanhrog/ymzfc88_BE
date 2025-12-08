@@ -5,6 +5,7 @@ import com.xsecret.dto.response.PointTransactionResponse;
 import com.xsecret.dto.response.UserPointResponse;
 import com.xsecret.entity.*;
 import com.xsecret.repository.PointTransactionRepository;
+import com.xsecret.repository.PromotionalMoneyRepository;
 import com.xsecret.repository.UserPointRepository;
 import com.xsecret.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ public class PointService {
     private final UserPointRepository userPointRepository;
     private final PointTransactionRepository pointTransactionRepository;
     private final UserRepository userRepository;
+    private final PromotionalMoneyRepository promotionalMoneyRepository;
 
     @Transactional
     public void initializeUserPoints(User user) {
@@ -129,6 +131,14 @@ public class PointService {
         PointTransaction.PointTransactionType type = "ADD".equals(request.getType()) ? 
             PointTransaction.PointTransactionType.ADMIN_ADD : 
             PointTransaction.PointTransactionType.ADMIN_SUBTRACT;
+        
+        // Xác định moneyType: chỉ áp dụng khi type = ADD, mặc định là MANUAL nếu không có
+        String moneyType = null;
+        if ("ADD".equals(request.getType())) {
+            moneyType = (request.getMoneyType() != null && !request.getMoneyType().trim().isEmpty()) 
+                    ? request.getMoneyType().trim().toUpperCase() 
+                    : "MANUAL";
+        }
             
         PointTransaction transaction = PointTransaction.builder()
                 .user(user)
@@ -141,14 +151,28 @@ public class PointService {
                 .referenceType("ADMIN_ADJUSTMENT")
                 .referenceId(null)
                 .createdBy(adminUser)
+                .moneyType(moneyType)
                 .build();
         
-        pointTransactionRepository.save(transaction);
+        transaction = pointTransactionRepository.save(transaction);
         
-        log.info("Admin {} adjusted {} points for user {}. Points: {} -> {}", 
+        // Nếu là tiền khuyến mại, tạo record trong bảng PromotionalMoney
+        if ("ADD".equals(request.getType()) && "PROMOTIONAL".equals(moneyType)) {
+            PromotionalMoney promotionalMoney = PromotionalMoney.builder()
+                    .user(user)
+                    .pointTransaction(transaction)
+                    .amount(BigDecimal.valueOf(pointsToAdjust))
+                    .description(request.getDescription())
+                    .createdBy(adminUser)
+                    .build();
+            promotionalMoneyRepository.save(promotionalMoney);
+            log.info("Created promotional money record for user {}: {} points", user.getUsername(), pointsToAdjust);
+        }
+        
+        log.info("Admin {} adjusted {} points for user {}. Points: {} -> {}, MoneyType: {}", 
                 adminUser.getUsername(), 
                 "ADD".equals(request.getType()) ? "+" + pointsToAdjust : "-" + pointsToAdjust,
-                user.getUsername(), currentPoints, newPoints);
+                user.getUsername(), currentPoints, newPoints, moneyType);
 
         return mapToResponse(transaction);
     }

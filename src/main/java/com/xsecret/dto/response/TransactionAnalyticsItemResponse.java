@@ -23,6 +23,7 @@ public class TransactionAnalyticsItemResponse {
     private LocalDateTime createdAt;
     private LocalDateTime processedAt;
     private String paymentMethod;
+    private String processedByUsername;
 }
 
 
