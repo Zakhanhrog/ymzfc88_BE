@@ -112,7 +112,12 @@ public class DailyLossRefundService {
                 BigDecimal totalLoss = sicboLoss.add(xocDiaLoss);
 
                 // Tính net loss = totalWin - totalLoss
+                // Theo công thức: Net Loss = Tổng thắng - Tổng thua
+                // Nếu Net Loss < 0 (âm): Hoàn trả = |Net Loss| × Tỷ lệ %
                 BigDecimal netLoss = totalWin.subtract(totalLoss);
+                
+                log.debug("Daily loss refund calculation for user {} on date {}: sicboWin={}, sicboLoss={}, xocDiaWin={}, xocDiaLoss={}, totalWin={}, totalLoss={}, netLoss={}", 
+                        user.getId(), targetDate, sicboWinAmount, sicboLoss, xocDiaWinAmount, xocDiaLoss, totalWin, totalLoss, netLoss);
 
                 // Tính refund amount
                 BigDecimal refundAmount = BigDecimal.ZERO;
@@ -182,7 +187,10 @@ public class DailyLossRefundService {
     public void processDueDailyLossRefunds() {
         Instant now = Instant.now();
         List<DailyLossRefund> batch;
-        int batchSize = 500;
+        int totalProcessed = 0;
+        int totalFailed = 0;
+        
+        log.info("Starting to process due daily loss refunds at {}", now);
         
         do {
             batch = dailyLossRefundRepository.findTop500ByStatusAndPayoutAtLessThanEqualOrderByPayoutAtAsc(
@@ -194,14 +202,20 @@ public class DailyLossRefundService {
                 break;
             }
 
+            log.info("Processing batch of {} pending daily loss refunds", batch.size());
+
             for (DailyLossRefund refund : batch) {
                 try {
-                    if (refund.getRefundAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                    if (refund.getRefundAmount() == null || refund.getRefundAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                        log.warn("Skipping daily loss refund {} with zero or null amount", refund.getId());
                         refund.setStatus(DailyLossRefund.Status.SKIPPED);
                         refund.setDescription(refund.getDescription() + " (không có số tiền để hoàn)");
                         dailyLossRefundRepository.save(refund);
                         continue;
                     }
+
+                    log.info("Processing daily loss refund {}: user={}, amount={}", 
+                            refund.getId(), refund.getUser().getUsername(), refund.getRefundAmount());
 
                     // Thêm điểm vào tài khoản
                     pointService.addPoints(
@@ -221,17 +235,21 @@ public class DailyLossRefundService {
                     
                     notifyRefundPaid(refund);
                     
-                    log.info("Processed daily loss refund {} for user {}: amount = {}", 
-                            refund.getId(), refund.getUser().getId(), refund.getRefundAmount());
+                    totalProcessed++;
+                    log.info("Successfully processed daily loss refund {} for user {}: amount = {}, paidAt = {}", 
+                            refund.getId(), refund.getUser().getUsername(), refund.getRefundAmount(), refund.getPaidAt());
 
                 } catch (Exception ex) {
                     refund.setStatus(DailyLossRefund.Status.FAILED);
                     refund.setFailureReason(ex.getMessage());
                     dailyLossRefundRepository.save(refund);
+                    totalFailed++;
                     log.error("Failed to process daily loss refund {}: {}", refund.getId(), ex.getMessage(), ex);
                 }
             }
-        } while (batch.size() == batchSize);
+        } while (batch.size() == 500);
+        
+        log.info("Finished processing daily loss refunds: processed={}, failed={}", totalProcessed, totalFailed);
     }
 
     private Instant resolvePayoutInstant(LocalDate targetDate) {

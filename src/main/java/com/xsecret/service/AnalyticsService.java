@@ -10,7 +10,10 @@ import com.xsecret.entity.Transaction;
 import com.xsecret.entity.XocDiaBet;
 import com.xsecret.repository.AgentCommissionPayoutRepository;
 import com.xsecret.repository.BetRepository;
+import com.xsecret.repository.DailyLossRefundRepository;
 import com.xsecret.repository.GameRefundAccrualRepository;
+import com.xsecret.repository.PointTransactionRepository;
+import com.xsecret.repository.PromotionalMoneyRepository;
 import com.xsecret.repository.SicboBetRepository;
 import com.xsecret.repository.TransactionRepository;
 import com.xsecret.repository.XocDiaBetRepository;
@@ -39,14 +42,17 @@ import java.util.stream.Collectors;
 public class AnalyticsService {
 
     private static final int MAX_PAGE_SIZE = 200;
-    private static final ZoneId SYSTEM_ZONE = ZoneId.systemDefault();
+    private static final ZoneId SYSTEM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final BetRepository betRepository;
     private final SicboBetRepository sicboBetRepository;
     private final XocDiaBetRepository xocDiaBetRepository;
     private final TransactionRepository transactionRepository;
     private final GameRefundAccrualRepository gameRefundAccrualRepository;
+    private final DailyLossRefundRepository dailyLossRefundRepository;
     private final AgentCommissionPayoutRepository agentCommissionPayoutRepository;
+    private final PromotionalMoneyRepository promotionalMoneyRepository;
+    private final PointTransactionRepository pointTransactionRepository;
 
     public BetAnalyticsResponse getBetAnalytics(String rawGameType,
                                                 String rawStatus,
@@ -84,11 +90,15 @@ public class AnalyticsService {
         Transaction.TransactionType type = parseTransactionType(rawType);
         Transaction.TransactionStatus status = parseTransactionStatus(rawStatus);
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Transaction> transactionPage = transactionRepository.findAnalytics(type, status, start, end, pageable);
+        // Đảm bảo start là start of day và end là end of day
+        LocalDateTime startDate = start != null ? start.toLocalDate().atStartOfDay() : null;
+        LocalDateTime endDate = end != null ? end.toLocalDate().atTime(23, 59, 59, 999_999_999) : null;
 
-        BigDecimal totalAmount = safeBigDecimal(transactionRepository.sumAmountByFilters(type, status, start, end));
-        BigDecimal totalNetAmount = safeBigDecimal(transactionRepository.sumNetAmountByFilters(type, status, start, end));
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Transaction> transactionPage = transactionRepository.findAnalytics(type, status, startDate, endDate, pageable);
+
+        BigDecimal totalAmount = safeBigDecimal(transactionRepository.sumAmountByFilters(type, status, startDate, endDate));
+        BigDecimal totalNetAmount = safeBigDecimal(transactionRepository.sumNetAmountByFilters(type, status, startDate, endDate));
 
         List<TransactionAnalyticsItemResponse> items = transactionPage.getContent().stream()
                 .map(this::mapTransaction)
@@ -113,28 +123,32 @@ public class AnalyticsService {
                                                        LocalDateTime end,
                                                        int page,
                                                        int size) {
+        // Đảm bảo start là start of day và end là end of day
+        LocalDateTime startDate = start != null ? start.toLocalDate().atStartOfDay() : null;
+        LocalDateTime endDate = end != null ? end.toLocalDate().atTime(23, 59, 59, 999_999_999) : null;
+        
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Bet> betPage = betRepository.findForAnalytics(status, start, end, pageable);
+        Page<Bet> betPage = betRepository.findForAnalytics(status, startDate, endDate, pageable);
 
-        BigDecimal totalStake = safeBigDecimal(betRepository.sumTotalAmountByFilters(status, start, end));
+        BigDecimal totalStake = safeBigDecimal(betRepository.sumTotalAmountByFilters(status, startDate, endDate));
         // Tính totalWinAmount là profit (winAmount - stake), không bao gồm tiền cược gốc
         BigDecimal totalWinAmount;
         if (status == null || status == Bet.BetStatus.WON) {
             // Chỉ tính profit cho các bet WON
-            totalWinAmount = safeBigDecimal(betRepository.sumWinProfitByFilters(start, end));
+            totalWinAmount = safeBigDecimal(betRepository.sumWinProfitByFilters(startDate, endDate));
         } else {
             // Nếu filter theo status khác (LOST, PENDING), thì không có win
             totalWinAmount = BigDecimal.ZERO;
         }
         BigDecimal totalLostAmount = shouldCalculateLoss(status)
-                ? safeBigDecimal(betRepository.sumTotalAmountByStatusAndDate(Bet.BetStatus.LOST, start, end))
+                ? safeBigDecimal(betRepository.sumTotalAmountByStatusAndDate(Bet.BetStatus.LOST, startDate, endDate))
                 : BigDecimal.ZERO;
 
         List<BetAnalyticsItemResponse> items = betPage.getContent().stream()
                 .map(this::mapLotteryBet)
                 .collect(Collectors.toList());
 
-        FinancialSummary financial = calculateFinancialSummary(start, end);
+        FinancialSummary financial = calculateFinancialSummary(startDate, endDate);
         
         return BetAnalyticsResponse.builder()
                 .items(items)
@@ -153,7 +167,11 @@ public class AnalyticsService {
                         .totalDeposit(financial.totalDeposit)
                         .totalWithdraw(financial.totalWithdraw)
                         .totalRefund(financial.totalRefund)
+                        .totalDailyLossRefund(financial.totalDailyLossRefund)
                         .totalAgentCommission(financial.totalAgentCommission)
+                        .totalPromotionalMoney(financial.totalPromotionalMoney)
+                        .lotteryWinAmount(totalWinAmount)
+                        .lotteryLostAmount(totalLostAmount)
                         .build())
                 .build();
     }
@@ -163,8 +181,8 @@ public class AnalyticsService {
                                                      LocalDateTime end,
                                                      int page,
                                                      int size) {
-        Instant startInstant = toInstant(start);
-        Instant endInstant = toInstant(end);
+        Instant startInstant = start != null ? toInstant(start.toLocalDate().atStartOfDay()) : null;
+        Instant endInstant = end != null ? toInstantEndOfDay(end) : null;
         // Sort đã được xử lý trong query, không cần Pageable sort
         Pageable pageable = PageRequest.of(page, size);
 
@@ -190,6 +208,8 @@ public class AnalyticsService {
                 .map(this::mapSicboBet)
                 .collect(Collectors.toList());
 
+        FinancialSummary financial = calculateFinancialSummary(start, end);
+
         return BetAnalyticsResponse.builder()
                 .items(items)
                 .totalItems(betPage.getTotalElements())
@@ -204,6 +224,14 @@ public class AnalyticsService {
                         .sicboTotalFee(totalFee) // Sicbo fee
                         .xocDiaTotalFee(BigDecimal.ZERO) // XocDia không có fee trong Sicbo analytics
                         .totalBao(totalBao)
+                        .totalDeposit(financial.totalDeposit)
+                        .totalWithdraw(financial.totalWithdraw)
+                        .totalRefund(financial.totalRefund)
+                        .totalDailyLossRefund(financial.totalDailyLossRefund)
+                        .totalAgentCommission(financial.totalAgentCommission)
+                        .totalPromotionalMoney(financial.totalPromotionalMoney)
+                        .lotteryWinAmount(BigDecimal.ZERO)
+                        .lotteryLostAmount(BigDecimal.ZERO)
                         .build())
                 .build();
     }
@@ -279,7 +307,11 @@ public class AnalyticsService {
                         .totalDeposit(financial.totalDeposit)
                         .totalWithdraw(financial.totalWithdraw)
                         .totalRefund(financial.totalRefund)
+                        .totalDailyLossRefund(financial.totalDailyLossRefund)
                         .totalAgentCommission(financial.totalAgentCommission)
+                        .totalPromotionalMoney(financial.totalPromotionalMoney)
+                        .lotteryWinAmount(lotteryResponse.getSummary().getTotalWinAmount())
+                        .lotteryLostAmount(lotteryResponse.getSummary().getTotalLostAmount())
                         .build())
                 .build();
     }
@@ -289,8 +321,8 @@ public class AnalyticsService {
                                                       LocalDateTime end,
                                                       int page,
                                                       int size) {
-        Instant startInstant = toInstant(start);
-        Instant endInstant = toInstant(end);
+        Instant startInstant = start != null ? toInstant(start.toLocalDate().atStartOfDay()) : null;
+        Instant endInstant = end != null ? toInstantEndOfDay(end) : null;
         // Sort đã được xử lý trong query, không cần Pageable sort
         Pageable pageable = PageRequest.of(page, size);
 
@@ -334,7 +366,11 @@ public class AnalyticsService {
                         .totalDeposit(financial.totalDeposit)
                         .totalWithdraw(financial.totalWithdraw)
                         .totalRefund(financial.totalRefund)
+                        .totalDailyLossRefund(financial.totalDailyLossRefund)
                         .totalAgentCommission(financial.totalAgentCommission)
+                        .totalPromotionalMoney(financial.totalPromotionalMoney)
+                        .lotteryWinAmount(BigDecimal.ZERO)
+                        .lotteryLostAmount(BigDecimal.ZERO)
                         .build())
                 .build();
     }
@@ -503,7 +539,24 @@ public class AnalyticsService {
     }
 
     private Instant toInstant(LocalDateTime dateTime) {
-        return dateTime == null ? null : dateTime.atZone(SYSTEM_ZONE).toInstant();
+        if (dateTime == null) {
+            return null;
+        }
+        // Nếu dateTime đã có timezone info (từ ISO string), parse trực tiếp
+        // Nếu không, giả định là local time trong SYSTEM_ZONE
+        return dateTime.atZone(SYSTEM_ZONE).toInstant();
+    }
+    
+    /**
+     * Convert LocalDateTime to Instant, đảm bảo endDate bao gồm cả ngày cuối (end of day)
+     */
+    private Instant toInstantEndOfDay(LocalDateTime dateTime) {
+        if (dateTime == null) {
+            return null;
+        }
+        // Set về end of day để bao gồm cả ngày cuối
+        LocalDateTime endOfDay = dateTime.toLocalDate().atTime(23, 59, 59, 999_999_999);
+        return endOfDay.atZone(SYSTEM_ZONE).toInstant();
     }
 
     private BigDecimal safeBigDecimal(Object value) {
@@ -520,61 +573,99 @@ public class AnalyticsService {
      * Tính tổng nạp, tổng rút, tổng hoàn trả, tổng hoa hồng đại lý theo date range
      */
     private FinancialSummary calculateFinancialSummary(LocalDateTime start, LocalDateTime end) {
-        Instant startInstant = toInstant(start);
-        Instant endInstant = end != null ? end.atZone(SYSTEM_ZONE).toInstant() : null;
+        // Đảm bảo start là start of day và end là end of day
+        LocalDateTime startDate = start != null ? start.toLocalDate().atStartOfDay() : null;
+        LocalDateTime endDate = end != null ? end.toLocalDate().atTime(23, 59, 59, 999_999_999) : null;
+        
+        Instant startInstant = toInstant(startDate);
+        Instant endInstant = toInstantEndOfDay(endDate);
         
         // Tổng nạp (DEPOSIT với status APPROVED hoặc COMPLETED)
         BigDecimal totalDeposit = safeBigDecimal(transactionRepository.sumNetAmountByFilters(
                 Transaction.TransactionType.DEPOSIT,
                 Transaction.TransactionStatus.APPROVED,
-                start,
-                end
+                startDate,
+                endDate
         )).add(safeBigDecimal(transactionRepository.sumNetAmountByFilters(
                 Transaction.TransactionType.DEPOSIT,
                 Transaction.TransactionStatus.COMPLETED,
-                start,
-                end
+                startDate,
+                endDate
         )));
         
         // Tổng rút (WITHDRAW với status APPROVED hoặc COMPLETED)
         BigDecimal totalWithdraw = safeBigDecimal(transactionRepository.sumNetAmountByFilters(
                 Transaction.TransactionType.WITHDRAW,
                 Transaction.TransactionStatus.APPROVED,
-                start,
-                end
+                startDate,
+                endDate
         )).add(safeBigDecimal(transactionRepository.sumNetAmountByFilters(
                 Transaction.TransactionType.WITHDRAW,
                 Transaction.TransactionStatus.COMPLETED,
-                start,
-                end
+                startDate,
+                endDate
         )));
         
-        // Tổng hoàn trả (GameRefundAccrual với status PAID)
-        BigDecimal totalRefund = safeBigDecimal(gameRefundAccrualRepository.sumPaidRefundByDateRange(
+        // Tổng hoàn trả từ GameRefundAccrual (hoàn trả theo lịch - status PAID)
+        BigDecimal scheduledRefund = safeBigDecimal(gameRefundAccrualRepository.sumPaidRefundByDateRange(
                 startInstant,
                 endInstant
         ));
         
-        // Tổng hoa hồng đại lý (AgentCommissionPayout với status PAID)
-        BigDecimal totalAgentCommission = safeBigDecimal(agentCommissionPayoutRepository.sumPaidCommissionByDateRange(
-                start,
-                end
+        // Tổng hoàn trả instant (từ PointTransaction với type BET_REFUND và referenceType SICBO_CASHBACK hoặc XOC_DIA_CASHBACK)
+        BigDecimal instantRefund = safeBigDecimal(pointTransactionRepository.sumInstantGameRefundByDateRange(
+                startDate,
+                endDate
         ));
         
-        return new FinancialSummary(totalDeposit, totalWithdraw, totalRefund, totalAgentCommission);
+        // Tổng hoàn trả = scheduled + instant
+        BigDecimal totalRefund = scheduledRefund.add(instantRefund);
+        
+        log.debug("Calculated totalRefund: scheduled={}, instant={}, total={} for date range: {} to {}", 
+                scheduledRefund, instantRefund, totalRefund, startDate, endDate);
+        
+        // Tổng hoa hồng đại lý (AgentCommissionPayout với status PAID)
+        BigDecimal totalAgentCommission = safeBigDecimal(agentCommissionPayoutRepository.sumPaidCommissionByDateRange(
+                startDate,
+                endDate
+        ));
+        
+        // Tổng hoàn thua theo ngày (DailyLossRefund với status PAID)
+        // Filter theo paidAt (thời gian thực tế hoàn trả) để đảm bảo tính đúng
+        BigDecimal totalDailyLossRefund = safeBigDecimal(dailyLossRefundRepository.sumPaidRefundByDateRange(
+                startInstant,
+                endInstant
+        ));
+        
+        log.debug("Calculated totalDailyLossRefund: {} for date range: {} to {} (instants: {} to {})", 
+                totalDailyLossRefund, startDate, endDate, startInstant, endInstant);
+        
+        // Tổng khuyến mãi (PromotionalMoney)
+        BigDecimal totalPromotionalMoney = safeBigDecimal(promotionalMoneyRepository.sumAmountByDateRange(
+                startDate,
+                endDate
+        ));
+        log.debug("Calculated totalPromotionalMoney: {} for date range: {} to {}", 
+                totalPromotionalMoney, startDate, endDate);
+        
+        return new FinancialSummary(totalDeposit, totalWithdraw, totalRefund, totalDailyLossRefund, totalAgentCommission, totalPromotionalMoney);
     }
 
     private static class FinancialSummary {
         final BigDecimal totalDeposit;
         final BigDecimal totalWithdraw;
         final BigDecimal totalRefund;
+        final BigDecimal totalDailyLossRefund;
         final BigDecimal totalAgentCommission;
+        final BigDecimal totalPromotionalMoney;
 
-        FinancialSummary(BigDecimal totalDeposit, BigDecimal totalWithdraw, BigDecimal totalRefund, BigDecimal totalAgentCommission) {
+        FinancialSummary(BigDecimal totalDeposit, BigDecimal totalWithdraw, BigDecimal totalRefund, BigDecimal totalDailyLossRefund, BigDecimal totalAgentCommission, BigDecimal totalPromotionalMoney) {
             this.totalDeposit = totalDeposit;
             this.totalWithdraw = totalWithdraw;
             this.totalRefund = totalRefund;
+            this.totalDailyLossRefund = totalDailyLossRefund;
             this.totalAgentCommission = totalAgentCommission;
+            this.totalPromotionalMoney = totalPromotionalMoney;
         }
     }
 }

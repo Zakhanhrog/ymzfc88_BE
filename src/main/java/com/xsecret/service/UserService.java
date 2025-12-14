@@ -46,7 +46,7 @@ public class UserService {
     );
 
     public List<User> getAllUsers() {
-        return userRepository.findByRoleNot(User.Role.ADMIN);
+        return userRepository.findNonAdminNonStaff(PageRequest.of(0, Integer.MAX_VALUE)).getContent();
     }
 
     public Page<User> getAllUsers(Pageable pageable) {
@@ -171,6 +171,13 @@ public class UserService {
         }
         if (request.getStatus() != null) {
             user.setStatus(request.getStatus());
+        }
+        // Chỉ cho phép staffRole = AGENT (hoặc null) từ luồng quản lý user
+        if (request.getStaffRole() != null) {
+            user.setStaffRole(request.getStaffRole());
+        } else if (request.getRole() != null && request.getRole() == User.Role.USER) {
+            // Nếu đổi về USER mà không gửi staffRole, bỏ gán staffRole cũ
+            user.setStaffRole(null);
         }
         if (request.getReferralCode() != null) {
             String normalizedCode = normalizeCode(request.getReferralCode());
@@ -314,23 +321,22 @@ public class UserService {
 
         // Filter theo role và status
         if (filters.getRole() != null && filters.getStatus() != null) {
-            return userRepository.findByRoleAndStatus(
+            return userRepository.findByRoleAndStatusExcludingStaff(
                 User.Role.valueOf(filters.getRole()),
                 User.UserStatus.valueOf(filters.getStatus()),
                 pageable
             );
         } else if (filters.getRole() != null) {
-            return userRepository.findByRole(User.Role.valueOf(filters.getRole()), pageable);
+            return userRepository.findByRoleExcludingStaff(User.Role.valueOf(filters.getRole()), pageable);
         } else if (filters.getStatus() != null) {
-            return userRepository.findByStatusAndRoleNot(
+            return userRepository.findByStatusExcludingAdminAndStaff(
                 User.UserStatus.valueOf(filters.getStatus()),
-                User.Role.ADMIN,
                 pageable
             );
         }
 
         // Trả về tất cả
-        return userRepository.findByRoleNot(User.Role.ADMIN, pageable);
+        return userRepository.findNonAdminNonStaff(pageable);
     }
 
     /**

@@ -19,6 +19,7 @@ import com.xsecret.repository.XocDiaQuickBetConfigRepository;
 import com.xsecret.repository.XocDiaResultHistoryRepository;
 import com.xsecret.repository.XocDiaSessionRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -43,6 +44,7 @@ import java.text.NumberFormat;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class XocDiaBetService {
 
     private static final Set<XocDiaSession.Phase> LOCKED_PHASES = EnumSet.of(
@@ -312,7 +314,7 @@ public class XocDiaBetService {
                 bet.setWinAmount(winAmount);
                 bet.setStatus(XocDiaBet.Status.WON);
                 
-                // Tính phế: chỉ tính khi thắng, phế = (winAmount - stake) * feeRate
+                // Tính phế: chỉ tính khi thắng, phế = stake * feeRate
                 calculateAndSetFeeAmount(bet);
                 
                 totalWinAmount = totalWinAmount.add(winAmount);
@@ -391,7 +393,7 @@ public class XocDiaBetService {
             return;
         }
 
-        if (bet.getWinAmount() == null || bet.getStake() == null) {
+        if (bet.getStake() == null) {
             return;
         }
 
@@ -409,14 +411,9 @@ public class XocDiaBetService {
             return;
         }
 
-        // Tính profit (tiền thắng - tiền gốc)
-        BigDecimal profit = bet.getWinAmount().subtract(bet.getStake());
-        if (profit.compareTo(BigDecimal.ZERO) <= 0) {
-            return;
-        }
-
-        // Phế = profit * feeRate
-        BigDecimal feeAmount = profit.multiply(config.getFeeRate())
+        // Phế = stake (tiền cược gốc) * feeRate
+        // Ví dụ: đánh 1000 điểm, phế 3% => phế = 1000 * 0.03 = 30
+        BigDecimal feeAmount = bet.getStake().multiply(config.getFeeRate())
                 .setScale(2, RoundingMode.DOWN);
         
         bet.setFeeAmount(feeAmount);
@@ -457,13 +454,49 @@ public class XocDiaBetService {
             description.append(" phiên #").append(session.getId());
         }
 
-        gameRefundService.accrueRefund(
-                bet.getUser(),
-                GameRefundAccrual.GameType.XOC_DIA,
-                cashbackAmount,
-                description.toString(),
-                session != null ? session.getId() : null
-        );
+        // Kiểm tra nếu là lệnh thua và instant refund được bật
+        boolean isLoss = status == XocDiaBet.Status.LOST;
+        boolean instantRefundEnabled = false;
+        if (isLoss) {
+            String instantRefundStr = systemSettingsService.getSettingValue(
+                    SystemSettings.XOC_DIA_REFUND_INSTANT, "false");
+            instantRefundEnabled = "true".equalsIgnoreCase(instantRefundStr) || "1".equals(instantRefundStr);
+        }
+
+        if (isLoss && instantRefundEnabled) {
+            // Hoàn trả ngay lập tức cho lệnh thua
+            // Dùng referenceType khác để phân biệt với scheduled refund
+            log.info("Instant refund for XocDia bet {}: user={}, amount={}, status=LOST", 
+                    bet.getId(), bet.getUser().getUsername(), cashbackAmount);
+            
+            pointService.addPoints(
+                    bet.getUser(),
+                    cashbackAmount,
+                    PointTransaction.PointTransactionType.BET_REFUND,
+                    description.toString(),
+                    "XOC_DIA_INSTANT_CASHBACK", // Dùng referenceType khác để phân biệt
+                    session != null ? session.getId() : null,
+                    null
+            );
+            
+            log.info("Successfully processed instant refund for XocDia bet {}: amount={}", bet.getId(), cashbackAmount);
+        } else {
+            // Hoàn trả theo lịch (mặc định)
+            log.info("Accruing refund for XocDia bet {}: user={}, amount={}, status={}, percent={}, instant={}", 
+                    bet.getId(), bet.getUser().getUsername(), cashbackAmount, 
+                    status == XocDiaBet.Status.WON ? "WON" : "LOST",
+                    applicablePercent, instantRefundEnabled);
+            
+            gameRefundService.accrueRefund(
+                    bet.getUser(),
+                    GameRefundAccrual.GameType.XOC_DIA,
+                    cashbackAmount,
+                    description.toString(),
+                    session != null ? session.getId() : null
+            );
+            
+            log.info("Successfully accrued refund for XocDia bet {}: amount={}", bet.getId(), cashbackAmount);
+        }
     }
 
     private void recordResultHistory(

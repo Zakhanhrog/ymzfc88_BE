@@ -43,6 +43,10 @@ public class UserPaymentMethodService {
     public UserPaymentMethodResponseDto createUserPaymentMethod(User user, UserPaymentMethodRequestDto requestDto) {
         log.info("Creating payment method for user: {}", user.getId());
         
+        // Normalize accountNumber (strip spaces/dots/dashes for validation)
+        String normalizedAccountNumber = normalizeAccountNumber(requestDto.getAccountNumber(), requestDto.getType());
+        requestDto.setAccountNumber(normalizedAccountNumber);
+
         // Validate input
         validatePaymentMethodRequest(requestDto);
         
@@ -93,6 +97,9 @@ public class UserPaymentMethodService {
         log.info("Updating payment method ID: {} for user: {}", paymentMethodId, user.getId());
         
         // Validate input
+        String normalizedAccountNumber = normalizeAccountNumber(requestDto.getAccountNumber(), requestDto.getType());
+        requestDto.setAccountNumber(normalizedAccountNumber);
+
         validatePaymentMethodRequest(requestDto);
         
         // Tìm phương thức thanh toán
@@ -258,6 +265,16 @@ public class UserPaymentMethodService {
                 throw new RuntimeException("Số điện thoại không đúng định dạng. Vui lòng nhập số điện thoại Việt Nam (10 số bắt đầu bằng 0, hoặc 9 số không có số 0 đầu)");
             }
         }
+    }
+
+    /**
+     * Chuẩn hóa số tài khoản/điện thoại: bỏ khoảng trắng, dấu chấm, gạch
+     */
+    private String normalizeAccountNumber(String raw, PaymentMethod.PaymentType type) {
+        if (raw == null) return null;
+        String cleaned = raw.replaceAll("[\\s\\-\\.]", "");
+        // Với ngân hàng giữ nguyên chuỗi số đã làm sạch, với MoMo/ZaloPay cũng dùng số đã làm sạch
+        return cleaned;
     }
     
     /**

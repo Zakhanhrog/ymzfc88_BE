@@ -12,6 +12,7 @@ import com.xsecret.service.PaymentMethodService;
 import com.xsecret.service.TransactionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -24,6 +25,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/transactions")
 @RequiredArgsConstructor
+@Slf4j
 public class TransactionController {
     
     private final TransactionService transactionService;
@@ -79,12 +81,20 @@ public class TransactionController {
             @Valid @RequestBody UserWithdrawRequestDto request,
             Authentication authentication) {
         try {
+            log.info("Creating user withdraw request for user: {}, amount: {}, points: {}, paymentMethodId: {}", 
+                    authentication.getName(), request.getAmount(), request.getPoints(), request.getUserPaymentMethodId());
+            
             TransactionResponseDto transaction = transactionService.createUserWithdrawRequest(
                     request, authentication.getName());
             return ResponseEntity.ok(ApiResponse.success("User withdraw request created successfully", transaction));
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
+            log.error("Error creating user withdraw request: {}", e.getMessage(), e);
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("Unexpected error creating user withdraw request: {}", e.getMessage(), e);
+            return ResponseEntity.status(500)
+                    .body(ApiResponse.error("Lỗi khi tạo lệnh rút tiền: " + e.getMessage()));
         }
     }
     

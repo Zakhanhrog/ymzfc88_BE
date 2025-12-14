@@ -33,6 +33,9 @@ public class UpdateUserRequestDto {
     
     private User.UserStatus status;
 
+    // Phân loại đại lý (AGENT) – chỉ dùng cho hiển thị / quản lý, không dành cho nhân viên
+    private User.StaffRole staffRole;
+
     private String c2Password;
     
     @Size(max = 10, message = "Mã đại lý không được vượt quá 10 ký tự")

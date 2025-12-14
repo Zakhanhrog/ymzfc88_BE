@@ -14,6 +14,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Component
 @RequiredArgsConstructor
@@ -44,20 +45,33 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void initializeAdminUser() {
-        if (!userRepository.existsByUsername(defaultAdminUsername)) {
-            User admin = User.builder()
+        User admin = userRepository.findByUsername(defaultAdminUsername).orElse(null);
+        
+        if (admin == null) {
+            // Tạo admin user mới
+            admin = User.builder()
                     .username(defaultAdminUsername)
                     .email(defaultAdminEmail)
                     .password(passwordEncoder.encode(defaultAdminPassword))
+                    .c2PasswordHash(passwordEncoder.encode(defaultAdminPassword)) // C2 password giống password chính
+                    .c2PasswordUpdatedAt(LocalDateTime.now())
                     .fullName("Administrator")
                     .role(User.Role.ADMIN)
                     .status(User.UserStatus.ACTIVE)
                     .build();
 
             userRepository.save(admin);
-            log.info("Default admin user created: {}", defaultAdminUsername);
+            log.info("Default admin user created: {} with C2 password", defaultAdminUsername);
         } else {
-            log.info("Admin user already exists: {}", defaultAdminUsername);
+            // Kiểm tra và cập nhật C2 password nếu chưa có
+            if (admin.getC2PasswordHash() == null || admin.getC2PasswordHash().isBlank()) {
+                admin.setC2PasswordHash(passwordEncoder.encode(defaultAdminPassword));
+                admin.setC2PasswordUpdatedAt(LocalDateTime.now());
+                userRepository.save(admin);
+                log.info("C2 password added to existing admin user: {}", defaultAdminUsername);
+            } else {
+                log.info("Admin user already exists with C2 password: {}", defaultAdminUsername);
+            }
         }
     }
     

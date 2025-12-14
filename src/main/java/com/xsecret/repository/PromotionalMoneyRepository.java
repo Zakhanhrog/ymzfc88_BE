@@ -41,6 +41,17 @@ public interface PromotionalMoneyRepository extends JpaRepository<PromotionalMon
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate
     );
+    
+    /**
+     * Tính tổng tiền khuyến mại theo date range (tất cả users)
+     */
+    @Query("SELECT COALESCE(SUM(pm.amount), 0) FROM PromotionalMoney pm WHERE " +
+           "(:startDate IS NULL OR pm.createdAt >= :startDate) AND " +
+           "(:endDate IS NULL OR pm.createdAt <= :endDate)")
+    BigDecimal sumAmountByDateRange(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
 
     /**
      * Đếm số lượng khuyến mại của user

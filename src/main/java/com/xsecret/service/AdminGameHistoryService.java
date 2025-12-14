@@ -47,6 +47,8 @@ import java.util.stream.Collectors;
 @Slf4j
 public class AdminGameHistoryService {
 
+    private static final ZoneId SYSTEM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+
     private final BetRepository betRepository;
     private final XocDiaBetRepository xocDiaBetRepository;
     private final SicboBetRepository sicboBetRepository;
@@ -344,8 +346,8 @@ public class AdminGameHistoryService {
     }
 
     private UserBetAggregate computeAggregate(User user, LocalDateTime startDate, LocalDateTime endDate) {
-        Instant startInstant = startDate != null ? startDate.atZone(ZoneId.systemDefault()).toInstant() : null;
-        Instant endInstant = endDate != null ? endDate.atZone(ZoneId.systemDefault()).toInstant() : null;
+        Instant startInstant = startDate != null ? startDate.atZone(SYSTEM_ZONE).toInstant() : null;
+        Instant endInstant = endDate != null ? toInstantEndOfDay(endDate) : null;
         
         // Tính tổng cược: bao gồm TẤT CẢ bets (kể cả REFUNDED) - giống user betting history
         // Lottery: chỉ filter CANCELLED
@@ -381,7 +383,7 @@ public class AdminGameHistoryService {
                         .filter(bet -> {
                             LocalDateTime betTime = bet.getCreatedAt();
                             if (betTime == null) return false;
-                            Instant betInstant = betTime.atZone(ZoneId.systemDefault()).toInstant();
+                            Instant betInstant = betTime.atZone(SYSTEM_ZONE).toInstant();
                             if (startInstant != null && betInstant.isBefore(startInstant)) return false;
                             if (endInstant != null && betInstant.isAfter(endInstant)) return false;
                             return true;
@@ -700,21 +702,28 @@ public class AdminGameHistoryService {
         if (date == null) {
             return null;
         }
-        return date.atStartOfDay(ZoneId.systemDefault()).toInstant();
+        return date.atStartOfDay(SYSTEM_ZONE).toInstant();
     }
 
     private Instant toInstantEnd(LocalDate date) {
         if (date == null) {
             return null;
         }
-        return date.atTime(LocalTime.MAX).atZone(ZoneId.systemDefault()).toInstant();
+        return date.atTime(LocalTime.MAX).atZone(SYSTEM_ZONE).toInstant();
+    }
+
+    private Instant toInstantEndOfDay(LocalDateTime dateTime) {
+        if (dateTime == null) {
+            return null;
+        }
+        return dateTime.toLocalDate().atTime(LocalTime.MAX).atZone(SYSTEM_ZONE).toInstant();
     }
 
     private Instant toInstant(LocalDateTime dateTime) {
         if (dateTime == null) {
             return null;
         }
-        return dateTime.atZone(ZoneId.systemDefault()).toInstant();
+        return dateTime.atZone(SYSTEM_ZONE).toInstant();
     }
 
     private BigDecimal safe(BigDecimal value) {

@@ -73,6 +73,11 @@ public class GameRefundService {
     public void processDueRefunds() {
         Instant now = Instant.now();
         List<GameRefundAccrual> batch;
+        int totalProcessed = 0;
+        int totalFailed = 0;
+        
+        log.info("Starting to process due game refunds at {}", now);
+        
         do {
             batch = accrualRepository.findTop500ByStatusAndPayoutAtLessThanEqualOrderByPayoutAtAsc(
                     GameRefundAccrual.Status.PENDING,
@@ -83,11 +88,24 @@ public class GameRefundService {
                 break;
             }
 
+            log.info("Processing batch of {} pending refunds", batch.size());
+
             for (GameRefundAccrual accrual : batch) {
                 try {
+                    if (accrual.getAmount() == null || accrual.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                        log.warn("Skipping refund accrual {} with zero or null amount", accrual.getId());
+                        accrual.setStatus(GameRefundAccrual.Status.FAILED);
+                        accrual.setFailureReason("Zero or null amount");
+                        accrualRepository.save(accrual);
+                        continue;
+                    }
+                    
                     String referenceType = accrual.getGameType() == GameRefundAccrual.GameType.SICBO
                             ? "SICBO_CASHBACK"
                             : "XOC_DIA_CASHBACK";
+
+                    log.info("Processing refund accrual {}: user={}, amount={}, gameType={}", 
+                            accrual.getId(), accrual.getUser().getUsername(), accrual.getAmount(), accrual.getGameType());
 
                     pointService.addPoints(
                             accrual.getUser(),
@@ -104,14 +122,21 @@ public class GameRefundService {
                     accrual.setFailureReason(null);
                     accrualRepository.save(accrual);
                     notifyRefundPaid(accrual);
+                    
+                    totalProcessed++;
+                    log.info("Successfully processed refund accrual {}: user={}, amount={}", 
+                            accrual.getId(), accrual.getUser().getUsername(), accrual.getAmount());
                 } catch (Exception ex) {
                     accrual.setStatus(GameRefundAccrual.Status.FAILED);
                     accrual.setFailureReason(ex.getMessage());
                     accrualRepository.save(accrual);
+                    totalFailed++;
                     log.error("Failed to process game refund accrual {}: {}", accrual.getId(), ex.getMessage(), ex);
                 }
             }
         } while (batch.size() == 500);
+        
+        log.info("Finished processing game refunds: processed={}, failed={}", totalProcessed, totalFailed);
     }
 
     private Instant resolveNextPayoutInstant(GameRefundAccrual.GameType gameType) {

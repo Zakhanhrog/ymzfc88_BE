@@ -39,5 +39,17 @@ public interface DailyLossRefundRepository extends JpaRepository<DailyLossRefund
     @Query("SELECT COALESCE(SUM(d.refundAmount), 0) FROM DailyLossRefund d " +
            "WHERE d.user = :user AND d.status = com.xsecret.entity.DailyLossRefund$Status.PAID")
     BigDecimal sumPaidRefundByUser(@Param("user") User user);
+    
+    // Tính tổng hoàn thua theo ngày đã trả (PAID) theo date range
+    // Filter theo paidAt (thời gian thực tế hoàn trả) chứ không phải payoutAt (thời gian dự kiến)
+    @Query("SELECT COALESCE(SUM(d.refundAmount), 0) FROM DailyLossRefund d " +
+           "WHERE d.status = com.xsecret.entity.DailyLossRefund$Status.PAID " +
+           "AND d.paidAt IS NOT NULL " +
+           "AND (:startInstant IS NULL OR d.paidAt >= :startInstant) " +
+           "AND (:endInstant IS NULL OR d.paidAt <= :endInstant)")
+    BigDecimal sumPaidRefundByDateRange(
+            @Param("startInstant") Instant startInstant,
+            @Param("endInstant") Instant endInstant
+    );
 }
 

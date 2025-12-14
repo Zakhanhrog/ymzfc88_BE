@@ -35,7 +35,11 @@ public class BetAnalyticsResponse {
         private BigDecimal totalDeposit;
         private BigDecimal totalWithdraw;
         private BigDecimal totalRefund;
+        private BigDecimal totalDailyLossRefund;
         private BigDecimal totalAgentCommission;
+        private BigDecimal totalPromotionalMoney;
+        private BigDecimal lotteryWinAmount;
+        private BigDecimal lotteryLostAmount;
     }
 }
 

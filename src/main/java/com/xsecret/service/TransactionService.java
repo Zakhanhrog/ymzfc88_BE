@@ -206,28 +206,37 @@ public class TransactionService {
         savedTransaction.setPaymentMethod(displayPaymentMethod);
         
         // Trừ điểm ngay lập tức khi tạo withdraw request (để tránh abuse)
-        if (request.getPoints() != null) {
-            try {
-                // Trừ điểm trực tiếp từ user
-                long currentPoints = user.getPoints() != null ? user.getPoints() : 0L;
-                long pointsToDeduct = request.getPoints() != null ? request.getPoints() : pointsRequired.longValue();
-                
-                if (currentPoints < pointsToDeduct) {
-                    transactionRepository.delete(savedTransaction);
-                    throw new RuntimeException("Insufficient points. Available: " + currentPoints + ", Required: " + pointsToDeduct);
-                }
-                
-                long newPoints = currentPoints - pointsToDeduct;
-                user.setPoints(newPoints);
-                userRepository.save(user);
-                
-                log.info("Deducted {} points from user {} for withdraw request {}. Points: {} -> {}", 
-                        request.getPoints(), username, transactionCode, currentPoints, newPoints);
-            } catch (Exception e) {
-                // Rollback transaction nếu trừ điểm thất bại
+        // Sử dụng points từ request nếu có, nếu không thì tính từ amount
+        long pointsToDeduct = request.getPoints() != null ? request.getPoints() : pointsRequired.longValue();
+        
+        try {
+            // Trừ điểm trực tiếp từ user
+            long currentPoints = user.getPoints() != null ? user.getPoints() : 0L;
+            
+            if (currentPoints < pointsToDeduct) {
                 transactionRepository.delete(savedTransaction);
-                throw new RuntimeException("Failed to deduct points: " + e.getMessage());
+                throw new RuntimeException("Insufficient points. Available: " + currentPoints + ", Required: " + pointsToDeduct);
             }
+            
+            long newPoints = currentPoints - pointsToDeduct;
+            user.setPoints(newPoints);
+            userRepository.save(user);
+            
+            log.info("Deducted {} points from user {} for withdraw request {}. Points: {} -> {}", 
+                    pointsToDeduct, username, transactionCode, currentPoints, newPoints);
+        } catch (RuntimeException e) {
+            // Rollback transaction nếu trừ điểm thất bại
+            if (savedTransaction != null && savedTransaction.getId() != null) {
+                transactionRepository.delete(savedTransaction);
+            }
+            throw e; // Re-throw để controller xử lý
+        } catch (Exception e) {
+            // Rollback transaction nếu có lỗi khác
+            if (savedTransaction != null && savedTransaction.getId() != null) {
+                transactionRepository.delete(savedTransaction);
+            }
+            log.error("Failed to deduct points for user {} withdraw request {}: {}", username, transactionCode, e.getMessage(), e);
+            throw new RuntimeException("Failed to deduct points: " + e.getMessage());
         }
         
         log.info("Created user withdraw request: {} for user: {} amount: {} points: {} using payment method: {}", 

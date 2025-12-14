@@ -65,6 +65,7 @@ com/xsecret/service/FileStorageService.class
 com/xsecret/controller/WalletController.class
 com/xsecret/dto/response/TransactionResponseDto$TransactionResponseDtoBuilder.class
 com/xsecret/dto/response/SystemSettingsResponse.class
+com/xsecret/repository/AgentNoteRepository.class
 com/xsecret/dto/response/SicboBetHistoryPageResponse$SicboBetHistoryPageResponseBuilder.class
 com/xsecret/dto/response/PointTransactionResponse$PointTransactionResponseBuilder.class
 com/xsecret/XSecretBackendApplication.class
@@ -100,6 +101,7 @@ com/xsecret/dto/response/SicboQuickBetResponse$SicboQuickBetResponseBuilder.clas
 com/xsecret/service/AdminAgentReportService.class
 com/xsecret/entity/TelegramConfig.class
 com/xsecret/repository/BetRepository.class
+com/xsecret/repository/DailyLossRefundRepository.class
 com/xsecret/dto/response/AgentCustomerListResponse.class
 com/xsecret/entity/PaymentMethod$PaymentMethodBuilder.class
 com/xsecret/controller/BannerController.class
@@ -125,6 +127,7 @@ com/xsecret/entity/Transaction.class
 com/xsecret/service/GameRefundService.class
 com/xsecret/entity/Notification.class
 com/xsecret/service/SystemSettingsService.class
+com/xsecret/entity/DailyLossRefund.class
 com/xsecret/service/XocDiaQuickBetService.class
 com/xsecret/entity/XocDiaBet$Status.class
 com/xsecret/dto/response/AdminUserBetSummaryItemResponse.class
@@ -139,6 +142,8 @@ com/xsecret/dto/response/TelegramConfigResponse$TelegramConfigResponseBuilder.cl
 com/xsecret/controller/XocDiaSessionAdminController.class
 com/xsecret/repository/PaymentMethodRepository.class
 com/xsecret/security/UserPrincipal.class
+com/xsecret/entity/DailyLossRefund$DailyLossRefundBuilder.class
+com/xsecret/service/DailyLossRefundService.class
 com/xsecret/dto/vnlottery/VnLotteryProvinceResponse.class
 com/xsecret/dto/response/PaymentMethodResponseDto$PaymentMethodResponseDtoBuilder.class
 com/xsecret/entity/Banner$BannerBuilder.class
@@ -192,6 +197,7 @@ com/xsecret/dto/response/LoginHistoryResponse.class
 com/xsecret/repository/BannerRepository.class
 com/xsecret/entity/AgentCommissionPayout$Status.class
 com/xsecret/dto/response/StaffMktBetResponse$StaffMktBetResponseBuilder.class
+com/xsecret/entity/AgentNote.class
 com/xsecret/controller/XocDiaQuickBetPublicController.class
 com/xsecret/dto/response/UserResponse.class
 com/xsecret/repository/projections/AgentCustomerSummaryProjection.class
@@ -201,6 +207,7 @@ com/xsecret/entity/LotteryResult.class
 com/xsecret/dto/response/AgentDashboardSummaryResponse.class
 com/xsecret/dto/response/DashboardOverviewResponse.class
 com/xsecret/repository/SicboBetRepository.class
+com/xsecret/entity/AgentNote$AgentNoteBuilder.class
 com/xsecret/dto/request/UserPasswordChangeRequest.class
 com/xsecret/config/TimezoneConfig.class
 com/xsecret/dto/response/DashboardOverviewResponse$ChartPoint$ChartPointBuilder.class
@@ -248,6 +255,7 @@ com/xsecret/service/SicboResultHistoryService.class
 com/xsecret/controller/SicboBetController.class
 com/xsecret/controller/LotteryResultController.class
 com/xsecret/entity/XocDiaSession$XocDiaSessionBuilder.class
+com/xsecret/entity/DailyLossRefund$Status.class
 com/xsecret/entity/GameRefundAccrual.class
 com/xsecret/controller/SicboQuickBetAdminController.class
 com/xsecret/controller/StreamConfigController.class
@@ -300,6 +308,7 @@ com/xsecret/controller/XocDiaSessionPublicController.class
 com/xsecret/controller/UserPaymentMethodController.class
 com/xsecret/entity/User.class
 com/xsecret/dto/request/XocDiaBetRequest.class
+com/xsecret/repository/PromotionalMoneyRepository.class
 com/xsecret/dto/request/MarqueeNotificationRequest.class
 com/xsecret/dto/response/StreamConfigResponse.class
 com/xsecret/security/JwtUtils.class
@@ -349,6 +358,7 @@ com/xsecret/dto/request/XocDiaQuickBetRequest.class
 com/xsecret/entity/SicboSession$SicboSessionBuilder.class
 com/xsecret/dto/response/CasinoBetStatisticsResponse$CasinoBetStatisticsResponseBuilder.class
 com/xsecret/repository/BettingOddsRepository.class
+com/xsecret/entity/PromotionalMoney$PromotionalMoneyBuilder.class
 com/xsecret/controller/KycController.class
 com/xsecret/dto/response/StaffMktTransactionResponse.class
 com/xsecret/entity/DepositGatewayConfig.class
@@ -418,6 +428,7 @@ com/xsecret/service/bet/checker/SpecialResultChecker.class
 com/xsecret/config/DataInitializer.class
 com/xsecret/service/bet/checker/DatabaseLotteryResultProvider.class
 com/xsecret/service/lottery/LotteryResultAutoImportService.class
+com/xsecret/entity/PromotionalMoney.class
 com/xsecret/dto/UserPaymentMethodRequestDto.class
 com/xsecret/dto/request/PromotionRequest$PromotionRequestBuilder.class
 com/xsecret/entity/SicboBet$SicboBetBuilder.class

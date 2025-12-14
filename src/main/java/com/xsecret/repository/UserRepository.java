@@ -64,6 +64,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
            "(:status IS NULL OR u.status = :status) AND " +
            "(:startDate IS NULL OR DATE(u.createdAt) >= DATE(:startDate)) AND " +
            "(:endDate IS NULL OR DATE(u.createdAt) <= DATE(:endDate)) AND " +
+           "(u.staffRole IS NULL OR u.staffRole = 'AGENT') AND " +
            "u.role <> 'ADMIN'")
     Page<User> findBySearchTermWithFilters(@Param("searchTerm") String searchTerm,
                                          @Param("role") User.Role role,
@@ -151,10 +152,44 @@ public interface UserRepository extends JpaRepository<User, Long> {
            "(:role IS NULL OR u.role = :role) AND " +
            "(:status IS NULL OR u.status = :status) AND " +
            "(:startDate IS NULL OR u.createdAt >= :startDate) AND " +
-           "(:endDate IS NULL OR u.createdAt <= :endDate)")
+           "(:endDate IS NULL OR u.createdAt <= :endDate) AND " +
+           "(u.staffRole IS NULL OR u.staffRole = 'AGENT')")
     Page<User> findByFiltersWithDateRange(@Param("role") User.Role role,
                                          @Param("status") User.UserStatus status,
                                          @Param("startDate") LocalDateTime startDate,
                                          @Param("endDate") LocalDateTime endDate,
                                          Pageable pageable);
+
+    // Exclude staff roles (trừ AGENT)
+    @Query("""
+        SELECT u FROM User u
+        WHERE u.role = :role
+          AND (u.staffRole IS NULL OR u.staffRole = 'AGENT')
+    """)
+    Page<User> findByRoleExcludingStaff(@Param("role") User.Role role, Pageable pageable);
+
+    @Query("""
+        SELECT u FROM User u
+        WHERE u.role = :role
+          AND u.status = :status
+          AND (u.staffRole IS NULL OR u.staffRole = 'AGENT')
+    """)
+    Page<User> findByRoleAndStatusExcludingStaff(@Param("role") User.Role role,
+                                                 @Param("status") User.UserStatus status,
+                                                 Pageable pageable);
+
+    @Query("""
+        SELECT u FROM User u
+        WHERE u.role <> 'ADMIN'
+          AND u.status = :status
+          AND (u.staffRole IS NULL OR u.staffRole = 'AGENT')
+    """)
+    Page<User> findByStatusExcludingAdminAndStaff(@Param("status") User.UserStatus status, Pageable pageable);
+
+    @Query("""
+        SELECT u FROM User u
+        WHERE u.role <> 'ADMIN'
+          AND (u.staffRole IS NULL OR u.staffRole = 'AGENT')
+    """)
+    Page<User> findNonAdminNonStaff(Pageable pageable);
 }

@@ -421,8 +421,9 @@ public class SicboBetService {
                                 bet.setWinAmount(winAmount);
                                 bet.setStatus(SicboBet.Status.WON);
                                 
-                                // Tính phế: chỉ tính khi thắng, phế = (winAmount - stake) * feeRate
-                                calculateAndSetFeeAmount(bet, session);
+                                // Tính phế: chỉ tính khi thắng
+                                // Nếu ra 2 mặt (count == 2), phế = stake * feeRate * 2
+                                calculateAndSetFeeAmount(bet, session, faceCounts);
                                 
                                 resolved = true;
                             }
@@ -447,8 +448,8 @@ public class SicboBetService {
                         bet.setWinAmount(winAmount);
                         bet.setStatus(SicboBet.Status.WON);
                         
-                        // Tính phế: chỉ tính khi thắng, phế = (winAmount - stake) * feeRate
-                        calculateAndSetFeeAmount(bet, session);
+                        // Tính phế: chỉ tính khi thắng
+                        calculateAndSetFeeAmount(bet, session, faceCounts);
                         
                         resolved = true;
                     }
@@ -482,14 +483,14 @@ public class SicboBetService {
         }
     }
 
-    private void calculateAndSetFeeAmount(SicboBet bet, SicboSession session) {
+    private void calculateAndSetFeeAmount(SicboBet bet, SicboSession session, Map<Integer, Long> faceCounts) {
         // Chỉ tính phế cho bàn 1 và khi bet thắng
         if (bet == null || bet.getStatus() != SicboBet.Status.WON 
                 || session == null || session.getTableNumber() == null || session.getTableNumber() != 1) {
             return;
         }
 
-        if (bet.getWinAmount() == null || bet.getStake() == null) {
+        if (bet.getStake() == null) {
             return;
         }
 
@@ -507,16 +508,28 @@ public class SicboBetService {
             return;
         }
 
-        // Tính profit (tiền thắng - tiền gốc)
-        BigDecimal profit = bet.getWinAmount().subtract(bet.getStake());
-        if (profit.compareTo(BigDecimal.ZERO) <= 0) {
-            return;
-        }
-
-        // Phế = profit * feeRate
-        BigDecimal feeAmount = profit.multiply(config.getFeeRate())
-                .setScale(2, RoundingMode.DOWN);
+        // Phế = stake (tiền cược gốc) * feeRate
+        // Ví dụ: đánh 1000 điểm, phế 3% => phế = 1000 * 0.03 = 30
+        BigDecimal feeAmount = bet.getStake().multiply(config.getFeeRate());
         
+        // Nếu là cược theo mặt (single dice bet) và ra 2 mặt đó, phế x2
+        if (betCode != null && betCode.startsWith("sicbo_single_") && faceCounts != null) {
+            try {
+                String faceStr = betCode.replace("sicbo_single_", "");
+                int faceValue = Integer.parseInt(faceStr);
+                Long count = faceCounts.get(faceValue);
+                
+                // Nếu có 2 mặt lặp lại (count == 2), nhân đôi phế
+                if (count != null && count == 2L) {
+                    feeAmount = feeAmount.multiply(BigDecimal.valueOf(2));
+                    log.info("Phế x2 cho cược mặt {} với count = 2, phế = {}", faceValue, feeAmount);
+                }
+            } catch (NumberFormatException e) {
+                // Nếu không parse được face value, xử lý bình thường
+            }
+        }
+        
+        feeAmount = feeAmount.setScale(2, RoundingMode.DOWN);
         bet.setFeeAmount(feeAmount);
     }
 
@@ -558,13 +571,49 @@ public class SicboBetService {
             description.append(" phiên #").append(session.getId());
         }
 
-        gameRefundService.accrueRefund(
-                bet.getUser(),
-                GameRefundAccrual.GameType.SICBO,
-                cashbackAmount,
-                description.toString(),
-                session != null ? session.getId() : null
-        );
+        // Kiểm tra nếu là lệnh thua và instant refund được bật
+        boolean isLoss = status == SicboBet.Status.LOST;
+        boolean instantRefundEnabled = false;
+        if (isLoss) {
+            String instantRefundStr = systemSettingsService.getSettingValue(
+                    SystemSettings.SICBO_REFUND_INSTANT, "false");
+            instantRefundEnabled = "true".equalsIgnoreCase(instantRefundStr) || "1".equals(instantRefundStr);
+        }
+
+        if (isLoss && instantRefundEnabled) {
+            // Hoàn trả ngay lập tức cho lệnh thua
+            // Dùng referenceType khác để phân biệt với scheduled refund
+            log.info("Instant refund for Sicbo bet {}: user={}, amount={}, status=LOST", 
+                    bet.getId(), bet.getUser().getUsername(), cashbackAmount);
+            
+            pointService.addPoints(
+                    bet.getUser(),
+                    cashbackAmount,
+                    PointTransaction.PointTransactionType.BET_REFUND,
+                    description.toString(),
+                    "SICBO_INSTANT_CASHBACK", // Dùng referenceType khác để phân biệt
+                    session != null ? session.getId() : null,
+                    null
+            );
+            
+            log.info("Successfully processed instant refund for Sicbo bet {}: amount={}", bet.getId(), cashbackAmount);
+        } else {
+            // Hoàn trả theo lịch (mặc định)
+            log.info("Accruing refund for Sicbo bet {}: user={}, amount={}, status={}, percent={}, instant={}", 
+                    bet.getId(), bet.getUser().getUsername(), cashbackAmount, 
+                    status == SicboBet.Status.WON ? "WON" : "LOST",
+                    applicablePercent, instantRefundEnabled);
+            
+            gameRefundService.accrueRefund(
+                    bet.getUser(),
+                    GameRefundAccrual.GameType.SICBO,
+                    cashbackAmount,
+                    description.toString(),
+                    session != null ? session.getId() : null
+            );
+            
+            log.info("Successfully accrued refund for Sicbo bet {}: amount={}", bet.getId(), cashbackAmount);
+        }
     }
 
     @Transactional
@@ -639,13 +688,16 @@ public class SicboBetService {
         int total = faces.stream().mapToInt(Integer::intValue).sum();
 
         // Tính Tài/Xỉu dựa trên tổng điểm, bao gồm cả trường hợp bộ 3
-            if (total >= 4 && total <= 10) {
-                winners.add("sicbo_primary_small");
+        // Bộ ba nhỏ (111,222,333) có tổng = 3 → Xỉu
+        // Bộ ba lớn (444,555,666) có tổng = 18 → Tài
+        if (total >= 3 && total <= 10) {
+            winners.add("sicbo_primary_small");
         } else if (total >= 11 && total <= 18) {
-                winners.add("sicbo_primary_big");
+            winners.add("sicbo_primary_big");
         }
 
-        if (total >= 4 && total <= 17) {
+        // Tổng điểm từ 3 đến 17 (bao gồm cả bộ ba nhỏ và lớn)
+        if (total >= 3 && total <= 17) {
             winners.add("sicbo_total_" + total);
         }
 
