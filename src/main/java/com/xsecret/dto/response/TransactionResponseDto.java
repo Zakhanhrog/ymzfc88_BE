@@ -1,5 +1,6 @@
 package com.xsecret.dto.response;
 
+import com.xsecret.entity.PaymentMethod;
 import com.xsecret.entity.Transaction;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -46,6 +47,7 @@ public class TransactionResponseDto {
         // Parse account info từ note field nếu có
         String accountName = null;
         String bankCode = null;
+        PaymentMethodResponseDto paymentMethodDto = null;
         
         if (entity.getNote() != null && entity.getType() == Transaction.TransactionType.WITHDRAW) {
             String note = entity.getNote();
@@ -59,16 +61,67 @@ public class TransactionResponseDto {
                     accountName = accountInfo.substring(0, dashIndex).trim();
                 }
                 
-                // Parse bank code từ "- VCB" hoặc "- MOMO"
-                if (note.contains(" - ") && note.lastIndexOf(" - ") != note.indexOf(" - ")) {
-                    String lastPart = note.substring(note.lastIndexOf(" - ") + 3);
-                    if (lastPart.contains(" |")) {
-                        bankCode = lastPart.substring(0, lastPart.indexOf(" |")).trim();
-                    } else {
-                        bankCode = lastPart.trim();
+                // Parse bank code và type từ note
+                // Format: "Account: ... - ... (BANK) - VCB | Points: ..." hoặc "Account: ... - ... (E_WALLET) - MOMO | Points: ..."
+                if (note.contains("(") && note.contains(")")) {
+                    int typeStart = note.indexOf("(");
+                    int typeEnd = note.indexOf(")");
+                    if (typeStart < typeEnd) {
+                        String typeStr = note.substring(typeStart + 1, typeEnd).trim();
+                        try {
+                            PaymentMethod.PaymentType paymentType = PaymentMethod.PaymentType.valueOf(typeStr);
+                            
+                            // Parse bank code nếu có
+                            if (note.contains(" - ") && note.lastIndexOf(" - ") != note.indexOf(" - ")) {
+                                String afterType = note.substring(typeEnd + 1);
+                                if (afterType.contains(" - ")) {
+                                    String lastPart = afterType.substring(afterType.indexOf(" - ") + 3);
+                                    if (lastPart.contains(" |")) {
+                                        bankCode = lastPart.substring(0, lastPart.indexOf(" |")).trim();
+                                    } else {
+                                        bankCode = lastPart.trim();
+                                    }
+                                }
+                            }
+                            
+                            // Tạo PaymentMethodResponseDto từ thông tin đã parse
+                            // Nếu paymentMethod null (trường hợp dùng UserPaymentMethod), tạo DTO từ note
+                            if (entity.getPaymentMethod() == null) {
+                                String methodName = paymentType.getDisplayName();
+                                if (PaymentMethod.PaymentType.BANK.equals(paymentType) && bankCode != null) {
+                                    methodName = "Ngân hàng " + bankCode;
+                                }
+                                
+                                paymentMethodDto = PaymentMethodResponseDto.builder()
+                                        .type(paymentType)
+                                        .typeName(paymentType.getDisplayName())
+                                        .name(methodName)
+                                        .accountNumber(entity.getMethodAccount())
+                                        .accountName(accountName)
+                                        .bankCode(bankCode)
+                                        .build();
+                            }
+                        } catch (IllegalArgumentException e) {
+                            // Type không hợp lệ, bỏ qua
+                        }
+                    }
+                } else {
+                    // Fallback: Parse bank code từ format cũ
+                    if (note.contains(" - ") && note.lastIndexOf(" - ") != note.indexOf(" - ")) {
+                        String lastPart = note.substring(note.lastIndexOf(" - ") + 3);
+                        if (lastPart.contains(" |")) {
+                            bankCode = lastPart.substring(0, lastPart.indexOf(" |")).trim();
+                        } else {
+                            bankCode = lastPart.trim();
+                        }
                     }
                 }
             }
+        }
+        
+        // Nếu paymentMethod đã có từ entity, dùng nó; nếu không, dùng paymentMethodDto đã parse từ note
+        if (entity.getPaymentMethod() != null) {
+            paymentMethodDto = PaymentMethodResponseDto.fromEntity(entity.getPaymentMethod());
         }
         
         return TransactionResponseDto.builder()
@@ -83,8 +136,7 @@ public class TransactionResponseDto {
                 .netAmount(entity.getNetAmount())
                 .status(entity.getStatus())
                 .statusName(entity.getStatus().getDisplayName())
-                .paymentMethod(entity.getPaymentMethod() != null ? 
-                    PaymentMethodResponseDto.fromEntity(entity.getPaymentMethod()) : null)
+                .paymentMethod(paymentMethodDto)
                 .methodAccount(entity.getMethodAccount())
                 .accountName(accountName)
                 .bankCode(bankCode)

@@ -24,8 +24,12 @@ public class UserPaymentMethodRequestDto {
     private PaymentMethod.PaymentType type;
     
     @NotBlank(message = "Số tài khoản không được để trống")
-    @Size(max = 50, message = "Số tài khoản không được vượt quá 50 ký tự")
+    @Size(max = 60, message = "Số tài khoản không được vượt quá 60 ký tự")
     private String accountNumber;
+    
+    @NotBlank(message = "Số điện thoại không được để trống")
+    @Size(max = 20, message = "Số điện thoại không được vượt quá 20 ký tự")
+    private String phoneNumber;
     
     @NotBlank(message = "Tên chủ tài khoản không được để trống")
     @Size(max = 255, message = "Tên chủ tài khoản không được vượt quá 255 ký tự")

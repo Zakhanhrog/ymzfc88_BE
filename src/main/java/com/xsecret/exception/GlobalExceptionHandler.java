@@ -43,7 +43,16 @@ public class GlobalExceptionHandler {
             message.contains("WITHDRAWAL_LOCKED") ||
             message.contains("mismatch") ||
             message.contains("Invalid") ||
-            message.contains("required")
+            message.contains("required") ||
+            message.contains("không được để trống") ||
+            message.contains("không đúng định dạng") ||
+            message.contains("đã được đăng ký") ||
+            message.contains("chỉ được thêm") ||
+            message.contains("không được phép") ||
+            message.contains("Chỉ được phép") ||
+            message.contains("Số điện thoại") ||
+            message.contains("Số tài khoản") ||
+            message.contains("Mã ngân hàng")
         )) {
             log.warn("Business logic error: {}", message);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)

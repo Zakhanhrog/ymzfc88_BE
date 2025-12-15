@@ -18,6 +18,7 @@ public class UserPaymentMethodResponseDto {
     private String name;
     private PaymentMethod.PaymentType type;
     private String accountNumber;
+    private String phoneNumber;
     private String accountName;
     private String bankCode;
     private String note;

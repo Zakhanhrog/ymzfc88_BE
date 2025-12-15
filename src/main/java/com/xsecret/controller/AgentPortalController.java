@@ -4,7 +4,9 @@ import com.xsecret.dto.response.AgentCommissionChartPointResponse;
 import com.xsecret.dto.response.AgentCommissionPayoutResponse;
 import com.xsecret.dto.response.AgentCommissionSummaryResponse;
 import com.xsecret.dto.response.AgentCustomerBetHistoryResponse;
+import com.xsecret.dto.response.AgentCustomerDetailResponse;
 import com.xsecret.dto.response.AgentCustomerListResponse;
+import com.xsecret.dto.response.AgentCustomerStatisticsResponse;
 import com.xsecret.dto.response.AgentDashboardSummaryResponse;
 import com.xsecret.dto.response.AgentInviteInfoResponse;
 import com.xsecret.dto.response.ApiResponse;
@@ -65,6 +67,44 @@ public class AgentPortalController {
                 endDate,
                 page,
                 size
+        );
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/customers/statistics")
+    public ResponseEntity<ApiResponse<AgentCustomerStatisticsResponse>> getAgentCustomerStatistics(
+            @AuthenticationPrincipal UserPrincipal agentPrincipal,
+            @RequestParam(value = "startDate", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(value = "endDate", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
+    ) {
+        log.info("Agent {} fetching customer statistics with startDate={}, endDate={}",
+                agentPrincipal.getUsername(), startDate, endDate);
+        AgentCustomerStatisticsResponse response = agentPortalService.getAgentCustomerStatistics(
+                agentPrincipal.getId(),
+                startDate,
+                endDate
+        );
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/customers/{customerId}/detail")
+    public ResponseEntity<ApiResponse<AgentCustomerDetailResponse>> getAgentCustomerDetail(
+            @AuthenticationPrincipal UserPrincipal agentPrincipal,
+            @PathVariable Long customerId,
+            @RequestParam(value = "startDate", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(value = "endDate", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
+    ) {
+        log.info("Agent {} fetching customer detail for customer {} with startDate={}, endDate={}",
+                agentPrincipal.getUsername(), customerId, startDate, endDate);
+        AgentCustomerDetailResponse response = agentPortalService.getAgentCustomerDetail(
+                agentPrincipal.getId(),
+                customerId,
+                startDate,
+                endDate
         );
         return ResponseEntity.ok(ApiResponse.success(response));
     }

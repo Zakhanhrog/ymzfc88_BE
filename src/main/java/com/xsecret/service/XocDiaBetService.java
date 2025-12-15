@@ -486,14 +486,14 @@ public class XocDiaBetService {
                     bet.getId(), bet.getUser().getUsername(), cashbackAmount, 
                     status == XocDiaBet.Status.WON ? "WON" : "LOST",
                     applicablePercent, instantRefundEnabled);
-            
-            gameRefundService.accrueRefund(
-                    bet.getUser(),
-                    GameRefundAccrual.GameType.XOC_DIA,
-                    cashbackAmount,
-                    description.toString(),
-                    session != null ? session.getId() : null
-            );
+
+        gameRefundService.accrueRefund(
+                bet.getUser(),
+                GameRefundAccrual.GameType.XOC_DIA,
+                cashbackAmount,
+                description.toString(),
+                session != null ? session.getId() : null
+        );
             
             log.info("Successfully accrued refund for XocDia bet {}: amount={}", bet.getId(), cashbackAmount);
         }

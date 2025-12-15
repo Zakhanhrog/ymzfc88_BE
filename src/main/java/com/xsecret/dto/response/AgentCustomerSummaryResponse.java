@@ -16,6 +16,7 @@ public class AgentCustomerSummaryResponse {
     private String username;
     private User.UserStatus status;
     private LocalDateTime joinedAt;
+    private Long currentBalance; // Số dư hiện tại (points)
     private BigDecimal totalBetAmount;
     private BigDecimal totalLostAmount;
     private BigDecimal commissionAmount;

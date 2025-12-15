@@ -6,24 +6,37 @@ import com.xsecret.dto.response.AgentCommissionPayoutResponse;
 import com.xsecret.dto.response.AgentCommissionSummaryResponse;
 import com.xsecret.dto.response.AgentCustomerBetHistoryItemResponse;
 import com.xsecret.dto.response.AgentCustomerBetHistoryResponse;
+import com.xsecret.dto.response.AgentCustomerDetailResponse;
 import com.xsecret.dto.response.AgentCustomerListResponse;
+import com.xsecret.dto.response.AgentCustomerStatisticsResponse;
 import com.xsecret.dto.response.AgentCustomerSummaryResponse;
 import com.xsecret.dto.response.AgentDashboardSummaryResponse;
 import com.xsecret.dto.response.AgentInviteInfoResponse;
 import com.xsecret.dto.response.AgentInviteReferralResponse;
+import com.xsecret.dto.response.TransactionResponseDto;
 import com.xsecret.entity.AgentCommissionPayout;
 import com.xsecret.entity.Bet;
+import com.xsecret.entity.DailyLossRefund;
+import com.xsecret.entity.GameRefundAccrual;
+import com.xsecret.entity.PromotionalMoney;
 import com.xsecret.entity.SicboBet;
+import com.xsecret.entity.Transaction;
 import com.xsecret.entity.User;
 import com.xsecret.entity.XocDiaBet;
 import com.xsecret.repository.AgentCommissionPayoutRepository;
 import com.xsecret.repository.BetRepository;
+import com.xsecret.repository.DailyLossRefundRepository;
+import com.xsecret.repository.GameRefundAccrualRepository;
+import com.xsecret.repository.PointTransactionRepository;
+import com.xsecret.repository.PromotionalMoneyRepository;
 import com.xsecret.repository.SicboBetRepository;
+import com.xsecret.repository.TransactionRepository;
 import com.xsecret.repository.UserRepository;
 import com.xsecret.repository.XocDiaBetRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
@@ -57,6 +70,12 @@ public class AgentPortalService {
     private final SicboBetRepository sicboBetRepository;
     private final AgentCommissionPayoutRepository agentCommissionPayoutRepository;
     private final SystemSettingsService systemSettingsService;
+    private final TransactionRepository transactionRepository;
+    private final TransactionService transactionService;
+    private final PromotionalMoneyRepository promotionalMoneyRepository;
+    private final GameRefundAccrualRepository gameRefundAccrualRepository;
+    private final DailyLossRefundRepository dailyLossRefundRepository;
+    private final PointTransactionRepository pointTransactionRepository;
 
     @Transactional(readOnly = true)
     public AgentCustomerListResponse getAgentCustomers(
@@ -158,6 +177,7 @@ public class AgentPortalService {
                     response.setUsername(customer.getUsername());
                     response.setStatus(customer.getStatus());
                     response.setJoinedAt(customer.getCreatedAt());
+                    response.setCurrentBalance(customer.getPoints() != null ? customer.getPoints() : 0L);
                     response.setTotalBetAmount(totalBet);
                     response.setTotalLostAmount(totalLost);
                     response.setCommissionAmount(commissionAmount);
@@ -602,6 +622,354 @@ public class AgentPortalService {
             return;
         }
         map.merge(userId, amount, BigDecimal::add);
+    }
+
+    @Transactional(readOnly = true)
+    public AgentCustomerStatisticsResponse getAgentCustomerStatistics(
+            Long agentId,
+            LocalDate startDate,
+            LocalDate endDate
+    ) {
+        User agent = userService.getUserById(agentId);
+        if (agent.getStaffRole() != User.StaffRole.AGENT) {
+            throw new AccessDeniedException("Chỉ đại lý mới được phép xem thống kê khách hàng.");
+        }
+
+        String referralCode = agent.getReferralCode();
+        if (referralCode == null || referralCode.isBlank()) {
+            throw new IllegalStateException("Đại lý chưa được cấp mã giới thiệu, không thể tải thống kê khách hàng.");
+        }
+
+        // Lấy tất cả khách hàng của đại lý
+        List<User> customers = userRepository.findByInvitedByCodeIgnoreCase(referralCode);
+        long totalCustomers = customers.size();
+
+        if (customers.isEmpty()) {
+            double commissionRate = systemSettingsService.getAgentCommissionPercentage();
+            return new AgentCustomerStatisticsResponse(
+                    0L,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    commissionRate
+            );
+        }
+
+        LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : null;
+        LocalDateTime endDateTime = endDate != null ? endDate.atTime(LocalTime.MAX) : null;
+        Instant startInstant = startDateTime != null ? startDateTime.atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant() : null;
+        Instant endInstant = endDateTime != null ? endDateTime.atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant() : null;
+
+        // Tổng nạp
+        List<Transaction.TransactionStatus> depositStatuses = List.of(
+                Transaction.TransactionStatus.COMPLETED
+        );
+        BigDecimal totalDeposit = safeBigDecimal(transactionRepository.sumDepositAmountByUsersAndStatuses(
+                customers,
+                depositStatuses,
+                startDateTime,
+                endDateTime
+        ));
+
+        // Tổng rút
+        List<Transaction.TransactionStatus> withdrawStatuses = List.of(
+                Transaction.TransactionStatus.APPROVED,
+                Transaction.TransactionStatus.COMPLETED
+        );
+        BigDecimal totalWithdraw = safeBigDecimal(transactionRepository.sumWithdrawAmountByUsersAndStatuses(
+                customers,
+                withdrawStatuses,
+                startDateTime,
+                endDateTime
+        ));
+
+        // Tổng cược, tổng thắng, tổng thua
+        List<Long> customerIds = customers.stream().map(User::getId).toList();
+        BigDecimal totalBet = BigDecimal.ZERO;
+        BigDecimal totalWin = BigDecimal.ZERO;
+        BigDecimal totalLoss = BigDecimal.ZERO;
+
+        // Lottery bets
+        List<Object[]> betAggregates = betRepository.aggregateTotalsByUsers(
+                customerIds,
+                startDateTime,
+                endDateTime,
+                Bet.BetStatus.CANCELLED,
+                Bet.BetStatus.LOST
+        );
+        for (Object[] row : betAggregates) {
+            totalBet = totalBet.add(toBigDecimal(row[1]));
+            totalLoss = totalLoss.add(toBigDecimal(row[2]));
+        }
+
+        // XocDia bets
+        List<Object[]> xocDiaAggregates = xocDiaBetRepository.aggregateTotalsByUsers(
+                customerIds,
+                startInstant,
+                endInstant,
+                XocDiaBet.Status.REFUNDED,
+                XocDiaBet.Status.LOST
+        );
+        for (Object[] row : xocDiaAggregates) {
+            totalBet = totalBet.add(toBigDecimal(row[1]));
+            totalLoss = totalLoss.add(toBigDecimal(row[2]));
+        }
+
+        // Sicbo bets
+        List<Object[]> sicboAggregates = sicboBetRepository.aggregateTotalsByUsers(
+                customerIds,
+                startInstant,
+                endInstant,
+                SicboBet.Status.REFUNDED,
+                SicboBet.Status.LOST
+        );
+        for (Object[] row : sicboAggregates) {
+            totalBet = totalBet.add(toBigDecimal(row[1]));
+            totalLoss = totalLoss.add(toBigDecimal(row[2]));
+        }
+
+        // Tính tổng thắng từ winAmount - lặp qua từng user
+        for (User customer : customers) {
+            // Lottery: sum winAmount where status = WON
+            BigDecimal lotteryWin = safeBigDecimal(betRepository.sumWinAmountByUserAndDateRange(
+                    customer,
+                    startDateTime,
+                    endDateTime
+            ));
+            totalWin = totalWin.add(lotteryWin);
+
+            // XocDia: sum winAmount where status = WON
+            BigDecimal xocDiaWin = safeBigDecimal(xocDiaBetRepository.sumWinAmountByUserAndDateRange(
+                    customer,
+                    startInstant,
+                    endInstant
+            ));
+            totalWin = totalWin.add(xocDiaWin);
+
+            // Sicbo: sum winAmount where status = WON
+            BigDecimal sicboWin = safeBigDecimal(sicboBetRepository.sumWinAmountByUserAndDateRange(
+                    customer,
+                    startInstant,
+                    endInstant
+            ));
+            totalWin = totalWin.add(sicboWin);
+        }
+
+        // Tổng khuyến mãi
+        BigDecimal totalPromotionalMoney = safeBigDecimal(promotionalMoneyRepository.sumAmountByUsersAndDateRange(
+                customers,
+                startDateTime,
+                endDateTime
+        ));
+
+        // Tổng hoàn cược (game refund - scheduled + instant)
+        BigDecimal scheduledRefund = safeBigDecimal(gameRefundAccrualRepository.sumPaidRefundByUsersAndDateRange(
+                customers,
+                startInstant,
+                endInstant
+        ));
+        // Instant refund - lặp qua từng user
+        BigDecimal instantRefund = BigDecimal.ZERO;
+        for (Long userId : customerIds) {
+            // Query instant refund cho từng user
+            BigDecimal userInstantRefund = safeBigDecimal(pointTransactionRepository.sumInstantGameRefundByUserAndDateRange(
+                    userId,
+                    startDateTime,
+                    endDateTime
+            ));
+            instantRefund = instantRefund.add(userInstantRefund);
+        }
+        BigDecimal totalGameRefund = scheduledRefund.add(instantRefund);
+
+        // Tổng hoàn thua (daily loss refund)
+        BigDecimal totalDailyLossRefund = safeBigDecimal(dailyLossRefundRepository.sumPaidRefundByUsersAndDateRange(
+                customers,
+                startInstant,
+                endInstant
+        ));
+
+        // Hoa hồng hiện tại = Tổng thua * tỷ lệ hoa hồng
+        double commissionRate = systemSettingsService.getAgentCommissionPercentage();
+        BigDecimal commissionMultiplier = BigDecimal.valueOf(commissionRate)
+                .divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
+        BigDecimal currentCommission = totalLoss.multiply(commissionMultiplier)
+                .setScale(0, RoundingMode.HALF_UP);
+
+        return new AgentCustomerStatisticsResponse(
+                totalCustomers,
+                totalDeposit,
+                totalWithdraw,
+                totalBet,
+                totalWin,
+                totalLoss,
+                totalPromotionalMoney,
+                totalGameRefund,
+                totalDailyLossRefund,
+                currentCommission,
+                commissionRate
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public AgentCustomerDetailResponse getAgentCustomerDetail(
+            Long agentId,
+            Long customerId,
+            LocalDate startDate,
+            LocalDate endDate
+    ) {
+        User agent = userService.getUserById(agentId);
+        if (agent.getStaffRole() != User.StaffRole.AGENT) {
+            throw new AccessDeniedException("Chỉ đại lý mới được phép xem chi tiết khách hàng.");
+        }
+
+        User customer = userService.getUserById(customerId);
+        String agentReferral = agent.getReferralCode();
+        if (agentReferral == null || agentReferral.isBlank()
+                || customer.getInvitedByCode() == null
+                || !agentReferral.equalsIgnoreCase(customer.getInvitedByCode())) {
+            throw new AccessDeniedException("Người dùng này không thuộc đại lý của bạn.");
+        }
+
+        LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : null;
+        LocalDateTime endDateTime = endDate != null ? endDate.atTime(LocalTime.MAX) : null;
+        Instant startInstant = startDateTime != null ? startDateTime.atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant() : null;
+        Instant endInstant = endDateTime != null ? endDateTime.atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant() : null;
+
+        // Số dư hiện tại
+        Long currentBalance = customer.getPoints() != null ? customer.getPoints() : 0L;
+
+        // Tổng nạp
+        List<Transaction.TransactionStatus> depositStatuses = List.of(
+                Transaction.TransactionStatus.COMPLETED
+        );
+        BigDecimal totalDeposit = safeBigDecimal(transactionRepository.sumDepositAmountByUserAndStatuses(
+                customer,
+                depositStatuses
+        ));
+
+        // Tổng rút
+        List<Transaction.TransactionStatus> withdrawStatuses = List.of(
+                Transaction.TransactionStatus.APPROVED,
+                Transaction.TransactionStatus.COMPLETED
+        );
+        BigDecimal totalWithdraw = safeBigDecimal(transactionRepository.sumWithdrawAmountByUserAndStatuses(
+                customer,
+                withdrawStatuses
+        ));
+
+        // Tổng cược, tổng thắng, tổng thua
+        BigDecimal totalBet = BigDecimal.ZERO;
+        BigDecimal totalWin = BigDecimal.ZERO;
+        BigDecimal totalLoss = BigDecimal.ZERO;
+
+        // Lottery bets
+        List<Object[]> betAggregates = betRepository.aggregateTotalsByUsers(
+                List.of(customer.getId()),
+                startDateTime,
+                endDateTime,
+                Bet.BetStatus.CANCELLED,
+                Bet.BetStatus.LOST
+        );
+        for (Object[] row : betAggregates) {
+            totalBet = totalBet.add(toBigDecimal(row[1]));
+            totalLoss = totalLoss.add(toBigDecimal(row[2]));
+        }
+
+        // XocDia bets
+        List<Object[]> xocDiaAggregates = xocDiaBetRepository.aggregateTotalsByUsers(
+                List.of(customer.getId()),
+                startInstant,
+                endInstant,
+                XocDiaBet.Status.REFUNDED,
+                XocDiaBet.Status.LOST
+        );
+        for (Object[] row : xocDiaAggregates) {
+            totalBet = totalBet.add(toBigDecimal(row[1]));
+            totalLoss = totalLoss.add(toBigDecimal(row[2]));
+        }
+
+        // Sicbo bets
+        List<Object[]> sicboAggregates = sicboBetRepository.aggregateTotalsByUsers(
+                List.of(customer.getId()),
+                startInstant,
+                endInstant,
+                SicboBet.Status.REFUNDED,
+                SicboBet.Status.LOST
+        );
+        for (Object[] row : sicboAggregates) {
+            totalBet = totalBet.add(toBigDecimal(row[1]));
+            totalLoss = totalLoss.add(toBigDecimal(row[2]));
+        }
+
+        // Tính tổng thắng
+        BigDecimal lotteryWin = safeBigDecimal(betRepository.sumWinAmountByUserAndDateRange(
+                customer,
+                startDateTime,
+                endDateTime
+        ));
+        totalWin = totalWin.add(lotteryWin);
+
+        BigDecimal xocDiaWin = safeBigDecimal(xocDiaBetRepository.sumWinAmountByUserAndDateRange(
+                customer,
+                startInstant,
+                endInstant
+        ));
+        totalWin = totalWin.add(xocDiaWin);
+
+        BigDecimal sicboWin = safeBigDecimal(sicboBetRepository.sumWinAmountByUserAndDateRange(
+                customer,
+                startInstant,
+                endInstant
+        ));
+        totalWin = totalWin.add(sicboWin);
+
+        // Tổng Thắng/Thua
+        BigDecimal totalWinLoss = totalWin.subtract(totalLoss);
+
+        // Tổng khuyến mãi
+        BigDecimal totalPromotionalMoney = safeBigDecimal(promotionalMoneyRepository.sumAmountByUserAndDateRange(
+                customer,
+                startDateTime,
+                endDateTime
+        ));
+
+        // Tổng hoàn cược (game refund)
+        BigDecimal scheduledRefund = safeBigDecimal(gameRefundAccrualRepository.sumPaidRefundByUser(customer));
+        BigDecimal instantRefund = safeBigDecimal(pointTransactionRepository.sumInstantGameRefundByUserAndDateRange(
+                customer.getId(),
+                startDateTime,
+                endDateTime
+        ));
+        BigDecimal totalGameRefund = scheduledRefund.add(instantRefund);
+
+        // Tổng hoàn thua (daily loss refund)
+        BigDecimal totalDailyLossRefund = safeBigDecimal(dailyLossRefundRepository.sumPaidRefundByUser(customer));
+
+        return new AgentCustomerDetailResponse(
+                customer.getId(),
+                customer.getUsername(),
+                customer.getStatus().name(),
+                currentBalance,
+                totalDeposit,
+                totalWithdraw,
+                totalBet,
+                totalWin,
+                totalLoss,
+                totalWinLoss,
+                totalGameRefund,
+                totalDailyLossRefund,
+                totalPromotionalMoney
+        );
+    }
+
+    private BigDecimal safeBigDecimal(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
     }
 
     private BigDecimal toBigDecimal(Object value) {

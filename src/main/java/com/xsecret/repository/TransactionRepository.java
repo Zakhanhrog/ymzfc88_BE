@@ -84,6 +84,16 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
                                                           @Param("startDate") LocalDateTime startDate,
                                                           @Param("endDate") LocalDateTime endDate);
 
+    @Query("SELECT COALESCE(SUM(t.netAmount), 0) FROM Transaction t WHERE " +
+           "t.type = :type AND t.status IN :statuses AND " +
+           "t.createdAt BETWEEN :startDate AND :endDate")
+    BigDecimal sumNetAmountByTypeAndStatusesAndCreatedAtBetween(
+            @Param("type") Transaction.TransactionType type,
+            @Param("statuses") List<Transaction.TransactionStatus> statuses,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+
     long countByStatusInAndCreatedAtBetween(List<Transaction.TransactionStatus> statuses,
                                             LocalDateTime startDate,
                                             LocalDateTime endDate);
@@ -147,5 +157,35 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     BigDecimal sumWithdrawAmountByUserAndStatuses(
             @Param("user") User user,
             @Param("statuses") List<Transaction.TransactionStatus> statuses
+    );
+
+    @Query("""
+        SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t
+        WHERE t.user IN :users
+          AND t.type = com.xsecret.entity.Transaction$TransactionType.DEPOSIT
+          AND t.status IN :statuses
+          AND (:startDate IS NULL OR t.createdAt >= :startDate)
+          AND (:endDate IS NULL OR t.createdAt <= :endDate)
+    """)
+    BigDecimal sumDepositAmountByUsersAndStatuses(
+            @Param("users") List<User> users,
+            @Param("statuses") List<Transaction.TransactionStatus> statuses,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+
+    @Query("""
+        SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t
+        WHERE t.user IN :users
+          AND t.type = com.xsecret.entity.Transaction$TransactionType.WITHDRAW
+          AND t.status IN :statuses
+          AND (:startDate IS NULL OR t.createdAt >= :startDate)
+          AND (:endDate IS NULL OR t.createdAt <= :endDate)
+    """)
+    BigDecimal sumWithdrawAmountByUsersAndStatuses(
+            @Param("users") List<User> users,
+            @Param("statuses") List<Transaction.TransactionStatus> statuses,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
     );
 }

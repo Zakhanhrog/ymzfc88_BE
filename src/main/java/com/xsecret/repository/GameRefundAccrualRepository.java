@@ -58,6 +58,18 @@ public interface GameRefundAccrualRepository extends JpaRepository<GameRefundAcc
            "AND gra.status = com.xsecret.entity.GameRefundAccrual$Status.PAID " +
            "AND gra.description LIKE '%(thua)%'")
     BigDecimal sumPaidLossRefundByUser(@Param("user") User user);
+
+    // Tính tổng hoàn trả đã trả (PAID) theo list users và date range
+    @Query("SELECT COALESCE(SUM(gra.amount), 0) FROM GameRefundAccrual gra " +
+           "WHERE gra.user IN :users " +
+           "AND gra.status = com.xsecret.entity.GameRefundAccrual$Status.PAID " +
+           "AND (:start IS NULL OR gra.paidAt >= :start) " +
+           "AND (:end IS NULL OR gra.paidAt <= :end)")
+    BigDecimal sumPaidRefundByUsersAndDateRange(
+            @Param("users") List<User> users,
+            @Param("start") Instant start,
+            @Param("end") Instant end
+    );
 }
 
 

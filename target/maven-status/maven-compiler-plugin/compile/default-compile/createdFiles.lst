@@ -20,7 +20,6 @@ com/xsecret/service/AnalyticsService$FinancialSummary.class
 com/xsecret/controller/TestController.class
 com/xsecret/service/BettingOddsService.class
 com/xsecret/entity/LotteryResult$LotteryResultBuilder.class
-com/xsecret/controller/SicboSessionPublicController.class
 com/xsecret/dto/response/MarqueeNotificationResponse$MarqueeNotificationResponseBuilder.class
 com/xsecret/dto/request/NotificationRequest$NotificationRequestBuilder.class
 com/xsecret/repository/NotificationRepository.class
@@ -220,7 +219,6 @@ com/xsecret/entity/SicboSession$Phase.class
 com/xsecret/service/SicboQuickBetService.class
 com/xsecret/dto/response/StaffMktUserResponse.class
 com/xsecret/entity/PointTransaction.class
-com/xsecret/service/SicboBetService.class
 com/xsecret/dto/response/TransactionAnalyticsResponse.class
 com/xsecret/entity/SystemSettings.class
 com/xsecret/dto/request/WithdrawalLockRequest.class
@@ -252,7 +250,6 @@ com/xsecret/service/XocDiaSessionService.class
 com/xsecret/dto/response/AdminAgentCommissionReportResponse$AdminAgentCommissionReportResponseBuilder.class
 com/xsecret/dto/response/StaffMktFinanceOverviewResponse.class
 com/xsecret/service/SicboResultHistoryService.class
-com/xsecret/controller/SicboBetController.class
 com/xsecret/controller/LotteryResultController.class
 com/xsecret/entity/XocDiaSession$XocDiaSessionBuilder.class
 com/xsecret/entity/DailyLossRefund$Status.class
@@ -264,7 +261,6 @@ com/xsecret/dto/response/SicboBetHistoryItemResponse$SicboBetHistoryItemResponse
 com/xsecret/entity/XocDiaResultHistory$XocDiaResultHistoryBuilder.class
 com/xsecret/dto/request/LotteryResultRequest.class
 com/xsecret/controller/SicboResultHistoryController.class
-com/xsecret/service/SicboSessionService.class
 com/xsecret/dto/response/AdminUserBetSummaryItemResponse$AdminUserBetSummaryItemResponseBuilder.class
 com/xsecret/service/AdminGameHistoryService$UserBetAggregate.class
 com/xsecret/dto/response/StaffMktGameOverviewResponse$StaffMktGameOverviewResponseBuilder.class
@@ -280,7 +276,6 @@ com/xsecret/dto/request/UpdateUserRequestDto$UpdateUserRequestDtoBuilder.class
 com/xsecret/entity/Bet$BetBuilder.class
 com/xsecret/dto/response/JwtResponse$JwtResponseBuilder.class
 com/xsecret/controller/DepositGatewayConfigController.class
-com/xsecret/controller/SicboSessionAdminController.class
 com/xsecret/dto/request/WithdrawRequestDto.class
 com/xsecret/dto/response/BettingOddsResponse$BettingOddsResponseBuilder.class
 com/xsecret/dto/response/XocDiaResultHistoryResponse.class

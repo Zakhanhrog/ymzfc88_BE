@@ -32,6 +32,8 @@ public class DashboardOverviewResponse {
         private BigDecimal revenueToday;
         private long transactionsTodayCount;
         private BigDecimal transactionsTodayAmount;
+        private BigDecimal depositsTodayAmount;
+        private BigDecimal withdrawalsTodayAmount;
     }
 
     @Data

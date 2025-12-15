@@ -85,6 +85,30 @@ public class DashboardService {
         BigDecimal transactionsTodayAmount = safeBigDecimal(
                 transactionRepository.sumNetAmountByStatusInAndCreatedAtBetween(completedStatuses, startOfDay, endOfDay));
 
+        // Tổng nạp hôm nay (DEPOSIT với status COMPLETED)
+        BigDecimal depositsTodayAmount = safeBigDecimal(
+                transactionRepository.sumAmountByTypeAndStatusAndCreatedAtBetween(
+                        Transaction.TransactionType.DEPOSIT,
+                        Transaction.TransactionStatus.COMPLETED,
+                        startOfDay,
+                        endOfDay
+                )
+        );
+
+        // Tổng rút hôm nay (WITHDRAW với status APPROVED hoặc COMPLETED)
+        List<Transaction.TransactionStatus> withdrawStatuses = List.of(
+                Transaction.TransactionStatus.APPROVED,
+                Transaction.TransactionStatus.COMPLETED
+        );
+        BigDecimal withdrawalsTodayAmount = safeBigDecimal(
+                transactionRepository.sumNetAmountByTypeAndStatusesAndCreatedAtBetween(
+                        Transaction.TransactionType.WITHDRAW,
+                        withdrawStatuses,
+                        startOfDay,
+                        endOfDay
+                )
+        );
+
         Map<LocalDate, DashboardOverviewResponse.ChartPoint> chartMap = initChartMap(chartStartDate);
 
         populateBetChartData(chartMap, chartStartDateTime, chartEndDateTime);
@@ -102,6 +126,8 @@ public class DashboardService {
                 .revenueToday(revenueToday)
                 .transactionsTodayCount(transactionsTodayCount)
                 .transactionsTodayAmount(transactionsTodayAmount)
+                .depositsTodayAmount(depositsTodayAmount)
+                .withdrawalsTodayAmount(withdrawalsTodayAmount)
                 .build();
 
         return DashboardOverviewResponse.builder()

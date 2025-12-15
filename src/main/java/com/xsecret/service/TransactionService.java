@@ -191,38 +191,28 @@ public class TransactionService {
                      (request.getPoints() != null ? " | Points: " + request.getPoints() : ""))
                 .build();
         
+        // Không set paymentMethod vì đây là UserPaymentMethod, không phải PaymentMethod
+        // Thông tin đã được lưu trong methodAccount và note
         Transaction savedTransaction = transactionRepository.save(transaction);
-        
-        // Sau khi save, set payment method info để hiển thị trong admin (không save lại)
-        // Tạo transient PaymentMethod object để mapping
-        PaymentMethod displayPaymentMethod = new PaymentMethod();
-        displayPaymentMethod.setId(userPaymentMethod.getId());
-        displayPaymentMethod.setType(userPaymentMethod.getType());
-        displayPaymentMethod.setName(userPaymentMethod.getName());
-        displayPaymentMethod.setAccountNumber(userPaymentMethod.getAccountNumber());
-        displayPaymentMethod.setAccountName(userPaymentMethod.getAccountName());
-        displayPaymentMethod.setBankCode(userPaymentMethod.getBankCode());
-        
-        savedTransaction.setPaymentMethod(displayPaymentMethod);
         
         // Trừ điểm ngay lập tức khi tạo withdraw request (để tránh abuse)
         // Sử dụng points từ request nếu có, nếu không thì tính từ amount
         long pointsToDeduct = request.getPoints() != null ? request.getPoints() : pointsRequired.longValue();
         
-        try {
-            // Trừ điểm trực tiếp từ user
-            long currentPoints = user.getPoints() != null ? user.getPoints() : 0L;
-            
-            if (currentPoints < pointsToDeduct) {
-                transactionRepository.delete(savedTransaction);
-                throw new RuntimeException("Insufficient points. Available: " + currentPoints + ", Required: " + pointsToDeduct);
-            }
-            
-            long newPoints = currentPoints - pointsToDeduct;
-            user.setPoints(newPoints);
-            userRepository.save(user);
-            
-            log.info("Deducted {} points from user {} for withdraw request {}. Points: {} -> {}", 
+            try {
+                // Trừ điểm trực tiếp từ user
+                long currentPoints = user.getPoints() != null ? user.getPoints() : 0L;
+                
+                if (currentPoints < pointsToDeduct) {
+                    transactionRepository.delete(savedTransaction);
+                    throw new RuntimeException("Insufficient points. Available: " + currentPoints + ", Required: " + pointsToDeduct);
+                }
+                
+                long newPoints = currentPoints - pointsToDeduct;
+                user.setPoints(newPoints);
+                userRepository.save(user);
+                
+                log.info("Deducted {} points from user {} for withdraw request {}. Points: {} -> {}", 
                     pointsToDeduct, username, transactionCode, currentPoints, newPoints);
         } catch (RuntimeException e) {
             // Rollback transaction nếu trừ điểm thất bại
@@ -230,7 +220,7 @@ public class TransactionService {
                 transactionRepository.delete(savedTransaction);
             }
             throw e; // Re-throw để controller xử lý
-        } catch (Exception e) {
+            } catch (Exception e) {
             // Rollback transaction nếu có lỗi khác
             if (savedTransaction != null && savedTransaction.getId() != null) {
                 transactionRepository.delete(savedTransaction);
@@ -495,44 +485,6 @@ public class TransactionService {
             log.warn("Failed to load processedBy for transaction {}: {}", transaction.getId(), e.getMessage());
         }
         
-        // Nếu là withdraw transaction và chưa có payment method, tìm và set data
-        if (transaction.getType() == Transaction.TransactionType.WITHDRAW && 
-            transaction.getPaymentMethod() == null && 
-            transaction.getNote() != null && 
-            transaction.getNote().contains("Account:")) {
-            
-            try {
-                // Extract UserPaymentMethod info từ note và methodAccount
-                String note = transaction.getNote();
-                String methodAccount = transaction.getMethodAccount();
-                
-                if (methodAccount != null) {
-                    // Tìm UserPaymentMethod dựa trên user và account number
-                    User transactionUser = transaction.getUser();
-                    List<UserPaymentMethod> userPaymentMethods = userPaymentMethodRepository.findByUserOrderByIsDefaultDescCreatedAtDesc(transactionUser);
-                    
-                    UserPaymentMethod matchingMethod = userPaymentMethods.stream()
-                        .filter(upm -> upm.getAccountNumber().equals(methodAccount))
-                        .findFirst()
-                        .orElse(null);
-                    
-                    if (matchingMethod != null) {
-                        // Tạo transient PaymentMethod object để hiển thị
-                        PaymentMethod displayPaymentMethod = new PaymentMethod();
-                        displayPaymentMethod.setId(matchingMethod.getId());
-                        displayPaymentMethod.setType(matchingMethod.getType());
-                        displayPaymentMethod.setName(matchingMethod.getName());
-                        displayPaymentMethod.setAccountNumber(matchingMethod.getAccountNumber());
-                        displayPaymentMethod.setAccountName(matchingMethod.getAccountName());
-                        displayPaymentMethod.setBankCode(matchingMethod.getBankCode());
-                        
-                        transaction.setPaymentMethod(displayPaymentMethod);
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("Failed to enrich payment method for transaction {}: {}", transaction.getId(), e.getMessage());
-            }
-        }
         
         return TransactionResponseDto.fromEntity(transaction);
     }

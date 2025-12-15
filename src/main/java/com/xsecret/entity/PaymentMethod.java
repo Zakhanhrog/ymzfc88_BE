@@ -80,7 +80,8 @@ public class PaymentMethod {
         BANK("Ngân hàng"),
         USDT("USDT"),
         ZALO_PAY("ZaloPay"),
-        VIET_QR("VietQR");
+        VIET_QR("VietQR"),
+        E_WALLET("Ví điện tử");
         
         private final String displayName;
         

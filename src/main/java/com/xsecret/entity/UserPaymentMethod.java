@@ -28,11 +28,14 @@ public class UserPaymentMethod {
     private String name;
     
     @Enumerated(EnumType.STRING)
-    @Column(name = "type", nullable = false)
+    @Column(name = "type", nullable = false, length = 20)
     private PaymentMethod.PaymentType type;
     
-    @Column(name = "account_number", nullable = false, length = 50)
+    @Column(name = "account_number", nullable = false, length = 60)
     private String accountNumber;
+    
+    @Column(name = "phone_number", nullable = false, length = 20)
+    private String phoneNumber;
     
     @Column(name = "account_name", nullable = false, length = 255)
     private String accountName;

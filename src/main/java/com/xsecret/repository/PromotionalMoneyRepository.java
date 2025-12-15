@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -57,5 +58,17 @@ public interface PromotionalMoneyRepository extends JpaRepository<PromotionalMon
      * Đếm số lượng khuyến mại của user
      */
     long countByUser(User user);
+
+    /**
+     * Tính tổng tiền khuyến mại theo list users và date range
+     */
+    @Query("SELECT COALESCE(SUM(pm.amount), 0) FROM PromotionalMoney pm WHERE pm.user IN :users " +
+           "AND (:startDate IS NULL OR pm.createdAt >= :startDate) " +
+           "AND (:endDate IS NULL OR pm.createdAt <= :endDate)")
+    BigDecimal sumAmountByUsersAndDateRange(
+            @Param("users") List<User> users,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
 }
 

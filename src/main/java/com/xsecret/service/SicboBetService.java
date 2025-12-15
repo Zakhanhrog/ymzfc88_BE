@@ -338,6 +338,11 @@ public class SicboBetService {
                         bet.setStatus(SicboBet.Status.WON);
                         resolved = true;
                     } else if (session.getTableNumber() != null && session.getTableNumber() == 2) {
+                        // Logic cho bàn thu bão (Bàn 2) khi ra triple
+                        boolean isEvenTriple = tripleFace != null && tripleFace % 2 == 0; // 2, 4, 6
+                        boolean isOddTriple = tripleFace != null && tripleFace % 2 == 1;  // 1, 3, 5
+                        
+                        // Xử lý Tài/Xỉu (giữ nguyên logic cũ)
                         if (isLowTriple && "sicbo_primary_small".equals(betCode)) {
                             pointService.addPoints(
                                     bet.getUser(),
@@ -381,10 +386,74 @@ public class SicboBetService {
                         );
                             resolved = true;
                         }
+                        // Xử lý Chẵn/Lẻ khi ra triple
+                        // KQ ra (222), (444), (666) - các số chẵn
+                        else if (isEvenTriple && "sicbo_parity_even".equals(betCode)) {
+                            // Đánh Chẵn → hoàn gốc
+                            pointService.addPoints(
+                                    bet.getUser(),
+                                    bet.getStake(),
+                                    PointTransaction.PointTransactionType.BET_REFUND,
+                                    String.format("Hoàn cược Sicbo bàn %d phiên #%d (%s) do ra bộ ba chẵn",
+                                            session.getTableNumber(), session.getId(), bet.getBetCode()),
+                                    "SICBO",
+                                    session.getId(),
+                                    null
+                            );
+
+                            bet.setWinAmount(bet.getStake());
+                            bet.setStatus(SicboBet.Status.REFUNDED);
+                            notifySicboRefund(
+                                    bet.getUser(),
+                                    bet.getStake(),
+                                    "do ra bộ ba chẵn",
+                                    session
+                            );
+                            resolved = true;
+                        }
+                        // KQ ra (111), (333), (555) - các số lẻ
+                        else if (isOddTriple && "sicbo_parity_odd".equals(betCode)) {
+                            // Đánh Lẻ → hoàn gốc
+                            pointService.addPoints(
+                                    bet.getUser(),
+                                    bet.getStake(),
+                                    PointTransaction.PointTransactionType.BET_REFUND,
+                                    String.format("Hoàn cược Sicbo bàn %d phiên #%d (%s) do ra bộ ba lẻ",
+                                            session.getTableNumber(), session.getId(), bet.getBetCode()),
+                                    "SICBO",
+                                    session.getId(),
+                                    null
+                            );
+
+                            bet.setWinAmount(bet.getStake());
+                            bet.setStatus(SicboBet.Status.REFUNDED);
+                            notifySicboRefund(
+                                    bet.getUser(),
+                                    bet.getStake(),
+                                    "do ra bộ ba lẻ",
+                                    session
+                            );
+                            resolved = true;
+                        }
                     }
                     }
 
+                // Xử lý Chẵn/Lẻ khi ra triple cho bàn 2 - cần xử lý trước phần thắng thông thường
+                // Nếu đã xử lý trong phần triple (resolved = true), không xử lý lại
                 if (!resolved && betCode != null && winningCodes.contains(betCode)) {
+                    // Nếu là bàn 2 và ra triple, và bet là Chẵn/Lẻ, thì không xử lý thắng thông thường
+                    // (đã được xử lý trong phần triple với logic hoàn gốc/bão)
+                    if (session.getTableNumber() != null && session.getTableNumber() == 2 && isTripleResult) {
+                        boolean isEvenTriple = tripleFace != null && tripleFace % 2 == 0;
+                        boolean isOddTriple = tripleFace != null && tripleFace % 2 == 1;
+                        if ((isEvenTriple && "sicbo_parity_even".equals(betCode)) ||
+                            (isOddTriple && "sicbo_parity_odd".equals(betCode))) {
+                            // Đã được xử lý trong phần triple, bỏ qua
+                            resolved = true;
+                        }
+                    }
+                    
+                    if (!resolved) {
                     BigDecimal multiplier = bet.getPayoutMultiplier() != null
                             ? bet.getPayoutMultiplier().add(BigDecimal.ONE)
                             : BigDecimal.ONE;
@@ -453,6 +522,7 @@ public class SicboBetService {
                         
                         resolved = true;
                     }
+                    }
                 }
 
                 if (!resolved) {
@@ -461,12 +531,23 @@ public class SicboBetService {
                     
                     // Tính tiền bão cho bàn 2
                     if (session.getTableNumber() != null && session.getTableNumber() == 2 && isTripleResult && betCode != null) {
+                        boolean isEvenTriple = tripleFace != null && tripleFace % 2 == 0; // 2, 4, 6
+                        boolean isOddTriple = tripleFace != null && tripleFace % 2 == 1;  // 1, 3, 5
+                        
                         // Ra bộ ba nhỏ (111,222,333) mà đánh Tài → bão
                         if (isLowTriple && "sicbo_primary_big".equals(betCode)) {
                             bet.setBaoAmount(bet.getStake());
                         }
                         // Ra bộ ba lớn (444,555,666) mà đánh Xỉu → bão
                         else if (isHighTriple && "sicbo_primary_small".equals(betCode)) {
+                            bet.setBaoAmount(bet.getStake());
+                        }
+                        // KQ ra (222), (444), (666) - các số chẵn mà đánh Lẻ → bão
+                        else if (isEvenTriple && "sicbo_parity_odd".equals(betCode)) {
+                            bet.setBaoAmount(bet.getStake());
+                        }
+                        // KQ ra (111), (333), (555) - các số lẻ mà đánh Chẵn → bão
+                        else if (isOddTriple && "sicbo_parity_even".equals(betCode)) {
                             bet.setBaoAmount(bet.getStake());
                         }
                     }
@@ -603,14 +684,14 @@ public class SicboBetService {
                     bet.getId(), bet.getUser().getUsername(), cashbackAmount, 
                     status == SicboBet.Status.WON ? "WON" : "LOST",
                     applicablePercent, instantRefundEnabled);
-            
-            gameRefundService.accrueRefund(
-                    bet.getUser(),
-                    GameRefundAccrual.GameType.SICBO,
-                    cashbackAmount,
-                    description.toString(),
-                    session != null ? session.getId() : null
-            );
+
+        gameRefundService.accrueRefund(
+                bet.getUser(),
+                GameRefundAccrual.GameType.SICBO,
+                cashbackAmount,
+                description.toString(),
+                session != null ? session.getId() : null
+        );
             
             log.info("Successfully accrued refund for Sicbo bet {}: amount={}", bet.getId(), cashbackAmount);
         }
@@ -691,9 +772,9 @@ public class SicboBetService {
         // Bộ ba nhỏ (111,222,333) có tổng = 3 → Xỉu
         // Bộ ba lớn (444,555,666) có tổng = 18 → Tài
         if (total >= 3 && total <= 10) {
-            winners.add("sicbo_primary_small");
+                winners.add("sicbo_primary_small");
         } else if (total >= 11 && total <= 18) {
-            winners.add("sicbo_primary_big");
+                winners.add("sicbo_primary_big");
         }
 
         // Tổng điểm từ 3 đến 17 (bao gồm cả bộ ba nhỏ và lớn)

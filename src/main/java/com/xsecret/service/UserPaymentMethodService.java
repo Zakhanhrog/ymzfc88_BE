@@ -43,8 +43,24 @@ public class UserPaymentMethodService {
     public UserPaymentMethodResponseDto createUserPaymentMethod(User user, UserPaymentMethodRequestDto requestDto) {
         log.info("Creating payment method for user: {}", user.getId());
         
-        // Normalize accountNumber (strip spaces/dots/dashes for validation)
-        String normalizedAccountNumber = normalizeAccountNumber(requestDto.getAccountNumber(), requestDto.getType());
+        // Chỉ cho phép BANK và E_WALLET
+        if (requestDto.getType() != PaymentMethod.PaymentType.BANK && 
+            requestDto.getType() != PaymentMethod.PaymentType.E_WALLET) {
+            throw new RuntimeException("Chỉ được phép thêm phương thức Ngân hàng hoặc Ví điện tử");
+        }
+        
+        // Normalize accountNumber: 
+        // - E_WALLET: chỉ trim, không normalize (giữ nguyên 10 số)
+        // - BANK: normalize (bỏ khoảng trắng, dấu chấm, gạch)
+        String originalAccountNumber = requestDto.getAccountNumber();
+        String normalizedAccountNumber;
+        if (PaymentMethod.PaymentType.E_WALLET.equals(requestDto.getType())) {
+            // E_WALLET: chỉ trim, không normalize
+            normalizedAccountNumber = originalAccountNumber != null ? originalAccountNumber.trim() : null;
+        } else {
+            // BANK: normalize (bỏ khoảng trắng, dấu chấm, gạch)
+            normalizedAccountNumber = normalizeAccountNumber(originalAccountNumber, requestDto.getType());
+        }
         requestDto.setAccountNumber(normalizedAccountNumber);
 
         // Validate input
@@ -56,11 +72,19 @@ public class UserPaymentMethodService {
             throw new RuntimeException("Số tài khoản này đã được đăng ký cho loại phương thức thanh toán này");
         }
         
-        // Kiểm tra số lượng phương thức thanh toán tối đa (giới hạn 10)
-        long currentCount = userPaymentMethodRepository.countByUser(user);
-        if (currentCount >= 10) {
-            throw new RuntimeException("Bạn chỉ có thể tạo tối đa 10 phương thức thanh toán");
+        // Kiểm tra mỗi loại chỉ được thêm 1 lần
+        List<UserPaymentMethod> existingMethods = userPaymentMethodRepository.findByUserAndType(user, requestDto.getType());
+        if (!existingMethods.isEmpty()) {
+            throw new RuntimeException("Bạn đã có phương thức " + 
+                (requestDto.getType() == PaymentMethod.PaymentType.BANK ? "Ngân hàng" : "Ví điện tử") + 
+                ". Mỗi loại chỉ được thêm 1 lần.");
         }
+        
+        // Đếm số lượng phương thức hiện tại
+        long currentCount = userPaymentMethodRepository.countByUser(user);
+        
+        // Normalize phoneNumber: chỉ trim, không normalize
+        String normalizedPhoneNumber = requestDto.getPhoneNumber() != null ? requestDto.getPhoneNumber().trim() : null;
         
         // Tạo entity mới
         UserPaymentMethod paymentMethod = UserPaymentMethod.builder()
@@ -68,6 +92,7 @@ public class UserPaymentMethodService {
             .name(requestDto.getName().trim())
             .type(requestDto.getType())
             .accountNumber(requestDto.getAccountNumber().trim())
+            .phoneNumber(normalizedPhoneNumber)
             .accountName(requestDto.getAccountName().trim())
             .bankCode(requestDto.getBankCode() != null ? requestDto.getBankCode().trim().toUpperCase() : null)
             .note(requestDto.getNote() != null ? requestDto.getNote().trim() : null)
@@ -90,48 +115,15 @@ public class UserPaymentMethodService {
     
     /**
      * Cập nhật phương thức thanh toán
+     * KHÔNG CHO PHÉP: Người dùng không được phép chỉnh sửa thông tin
      */
     @Transactional
     public UserPaymentMethodResponseDto updateUserPaymentMethod(
             User user, Long paymentMethodId, UserPaymentMethodRequestDto requestDto) {
         log.info("Updating payment method ID: {} for user: {}", paymentMethodId, user.getId());
         
-        // Validate input
-        String normalizedAccountNumber = normalizeAccountNumber(requestDto.getAccountNumber(), requestDto.getType());
-        requestDto.setAccountNumber(normalizedAccountNumber);
-
-        validatePaymentMethodRequest(requestDto);
-        
-        // Tìm phương thức thanh toán
-        UserPaymentMethod paymentMethod = userPaymentMethodRepository
-            .findByUserAndId(user, paymentMethodId)
-            .orElseThrow(() -> new RuntimeException("Không tìm thấy phương thức thanh toán"));
-        
-        // Kiểm tra trùng lặp số tài khoản (trừ chính nó)
-        boolean isDuplicate = userPaymentMethodRepository
-            .findByUserAndType(user, requestDto.getType())
-            .stream()
-            .anyMatch(pm -> !pm.getId().equals(paymentMethodId) && 
-                          pm.getAccountNumber().equals(requestDto.getAccountNumber()));
-        
-        if (isDuplicate) {
-            throw new RuntimeException("Số tài khoản này đã được đăng ký cho loại phương thức thanh toán này");
-        }
-        
-        // Cập nhật thông tin
-        paymentMethod.setName(requestDto.getName().trim());
-        paymentMethod.setType(requestDto.getType());
-        paymentMethod.setAccountNumber(requestDto.getAccountNumber().trim());
-        paymentMethod.setAccountName(requestDto.getAccountName().trim());
-        paymentMethod.setBankCode(requestDto.getBankCode() != null ? requestDto.getBankCode().trim().toUpperCase() : null);
-        paymentMethod.setNote(requestDto.getNote() != null ? requestDto.getNote().trim() : null);
-        paymentMethod.setUpdatedAt(LocalDateTime.now());
-        
-        UserPaymentMethod updatedMethod = userPaymentMethodRepository.save(paymentMethod);
-        
-        log.info("Updated payment method ID: {} for user: {}", paymentMethodId, user.getId());
-        
-        return convertToResponseDto(updatedMethod);
+        // Không cho phép người dùng chỉnh sửa thông tin
+        throw new RuntimeException("Bạn không được phép chỉnh sửa thông tin phương thức thanh toán. Vui lòng xóa và tạo mới nếu cần thay đổi.");
     }
     
     /**
@@ -219,8 +211,18 @@ public class UserPaymentMethodService {
             throw new RuntimeException("Số tài khoản không được để trống");
         }
         
+        if (requestDto.getPhoneNumber() == null || requestDto.getPhoneNumber().trim().isEmpty()) {
+            throw new RuntimeException("Số điện thoại không được để trống");
+        }
+        
         if (requestDto.getAccountName() == null || requestDto.getAccountName().trim().isEmpty()) {
             throw new RuntimeException("Tên chủ tài khoản không được để trống");
+        }
+        
+        // Validate phone number format: phải có đúng 10 số và bắt đầu bằng 0
+        String phoneNumber = requestDto.getPhoneNumber().trim();
+        if (!phoneNumber.matches("^0\\d{9}$")) {
+            throw new RuntimeException("Số điện thoại phải có đúng 10 số và bắt đầu bằng 0 (ví dụ: 0912345678)");
         }
         
         // Validate bank code for bank type
@@ -230,40 +232,14 @@ public class UserPaymentMethodService {
             }
         }
         
-        // Validate account number format
-        String accountNumber = requestDto.getAccountNumber().trim();
-        if (PaymentMethod.PaymentType.BANK.equals(requestDto.getType())) {
-            // Bank account: 8-20 digits
-            if (!accountNumber.matches("\\d{8,20}")) {
-                throw new RuntimeException("Số tài khoản ngân hàng phải có từ 8-20 chữ số");
-            }
-        } else if (PaymentMethod.PaymentType.MOMO.equals(requestDto.getType()) || 
-                   PaymentMethod.PaymentType.ZALO_PAY.equals(requestDto.getType())) {
-            // Mobile wallet: phone number format
-            // Normalize: remove spaces, dashes, and other non-digit characters except + at the start
-            String normalizedNumber = accountNumber.replaceAll("[\\s\\-\\.]", "");
-            
-            // Check if it's a valid Vietnamese phone number
-            // Format: 0xxxxxxxxx (10 digits) or +84xxxxxxxxx or 84xxxxxxxxx (11-12 digits)
-            boolean isValid = false;
-            
-            if (normalizedNumber.matches("^0[3-9]\\d{8}$")) {
-                // Format: 0xxxxxxxxx (10 digits starting with 0)
-                isValid = true;
-            } else if (normalizedNumber.matches("^\\+84[3-9]\\d{8}$")) {
-                // Format: +84xxxxxxxxx (international format)
-                isValid = true;
-            } else if (normalizedNumber.matches("^84[3-9]\\d{8}$")) {
-                // Format: 84xxxxxxxxx (without +)
-                isValid = true;
-            } else if (normalizedNumber.matches("^[3-9]\\d{8}$")) {
-                // Format: xxxxxxxxx (9 digits without leading 0)
-                isValid = true;
-            }
-            
-            if (!isValid) {
-                throw new RuntimeException("Số điện thoại không đúng định dạng. Vui lòng nhập số điện thoại Việt Nam (10 số bắt đầu bằng 0, hoặc 9 số không có số 0 đầu)");
-            }
+        // Validate account number format (số đã được normalize trước đó)
+        String accountNumber = requestDto.getAccountNumber(); // Đã được normalize, không cần trim nữa
+        // Cả 2 loại đều có thể có chữ và số, tối đa 60 ký tự
+        if (accountNumber.length() > 60) {
+            throw new RuntimeException("Số tài khoản không được vượt quá 60 ký tự");
+        }
+        if (accountNumber.isEmpty()) {
+            throw new RuntimeException("Số tài khoản không được để trống");
         }
     }
 
@@ -272,9 +248,15 @@ public class UserPaymentMethodService {
      */
     private String normalizeAccountNumber(String raw, PaymentMethod.PaymentType type) {
         if (raw == null) return null;
-        String cleaned = raw.replaceAll("[\\s\\-\\.]", "");
-        // Với ngân hàng giữ nguyên chuỗi số đã làm sạch, với MoMo/ZaloPay cũng dùng số đã làm sạch
-        return cleaned;
+        // Với E_WALLET, giữ nguyên dấu + ở đầu nếu có
+        if (PaymentMethod.PaymentType.E_WALLET.equals(type)) {
+            // Giữ dấu + ở đầu, bỏ khoảng trắng, dấu chấm, gạch ở giữa
+            String cleaned = raw.replaceAll("[\\s\\-\\.]", "");
+            return cleaned;
+        } else {
+            // Với BANK, chỉ bỏ khoảng trắng, dấu chấm, gạch
+            return raw.replaceAll("[\\s\\-\\.]", "");
+        }
     }
     
     /**
@@ -286,6 +268,7 @@ public class UserPaymentMethodService {
             .name(paymentMethod.getName())
             .type(paymentMethod.getType())
             .accountNumber(paymentMethod.getAccountNumber())
+            .phoneNumber(paymentMethod.getPhoneNumber())
             .accountName(paymentMethod.getAccountName())
             .bankCode(paymentMethod.getBankCode())
             .note(paymentMethod.getNote())

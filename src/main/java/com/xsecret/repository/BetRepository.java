@@ -86,6 +86,19 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
     @Query("SELECT COALESCE(SUM(b.winAmount), 0) FROM Bet b WHERE b.user.id = :userId AND b.status = com.xsecret.entity.Bet$BetStatus.WON")
     BigDecimal sumWinAmountByUserId(@Param("userId") Long userId);
     
+    @Query("""
+        SELECT COALESCE(SUM(b.winAmount), 0) FROM Bet b
+        WHERE b.user = :user
+          AND b.status = com.xsecret.entity.Bet$BetStatus.WON
+          AND (:startDate IS NULL OR b.createdAt >= :startDate)
+          AND (:endDate IS NULL OR b.createdAt <= :endDate)
+    """)
+    BigDecimal sumWinAmountByUserAndDateRange(
+            @Param("user") com.xsecret.entity.User user,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+    
     /**
      * Tính tổng lãi thắng của user (winAmount - totalAmount, không tính gốc)
      */

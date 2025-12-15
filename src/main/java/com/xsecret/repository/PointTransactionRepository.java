@@ -51,4 +51,17 @@ public interface PointTransactionRepository extends JpaRepository<PointTransacti
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate
     );
+
+    @Query("SELECT COALESCE(SUM(pt.points), 0) FROM PointTransaction pt " +
+           "WHERE pt.user.id = :userId " +
+           "AND pt.type = com.xsecret.entity.PointTransaction$PointTransactionType.BET_REFUND " +
+           "AND pt.referenceType IN ('SICBO_INSTANT_CASHBACK', 'XOC_DIA_INSTANT_CASHBACK') " +
+           "AND pt.points > 0 " +
+           "AND (:startDate IS NULL OR pt.createdAt >= :startDate) " +
+           "AND (:endDate IS NULL OR pt.createdAt <= :endDate)")
+    java.math.BigDecimal sumInstantGameRefundByUserAndDateRange(
+            @Param("userId") Long userId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
 }
