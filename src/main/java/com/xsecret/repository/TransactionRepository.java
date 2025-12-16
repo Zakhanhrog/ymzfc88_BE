@@ -188,4 +188,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate
     );
+
+    // Count transactions by payment method
+    long countByPaymentMethod(com.xsecret.entity.PaymentMethod paymentMethod);
 }

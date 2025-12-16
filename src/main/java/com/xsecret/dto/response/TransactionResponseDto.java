@@ -43,6 +43,13 @@ public class TransactionResponseDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     
+    // Gateway fields for auto deposit
+    private Boolean isAutoDeposit;
+    private String gatewayOrderNo;
+    private String gatewayTransactionId;
+    private String gatewayType;
+    private String gatewayPayUrl;
+    
     public static TransactionResponseDto fromEntity(Transaction entity) {
         // Parse account info từ note field nếu có
         String accountName = null;
@@ -107,15 +114,15 @@ public class TransactionResponseDto {
                     }
                 } else {
                     // Fallback: Parse bank code từ format cũ
-                    if (note.contains(" - ") && note.lastIndexOf(" - ") != note.indexOf(" - ")) {
-                        String lastPart = note.substring(note.lastIndexOf(" - ") + 3);
-                        if (lastPart.contains(" |")) {
-                            bankCode = lastPart.substring(0, lastPart.indexOf(" |")).trim();
-                        } else {
-                            bankCode = lastPart.trim();
-                        }
+                if (note.contains(" - ") && note.lastIndexOf(" - ") != note.indexOf(" - ")) {
+                    String lastPart = note.substring(note.lastIndexOf(" - ") + 3);
+                    if (lastPart.contains(" |")) {
+                        bankCode = lastPart.substring(0, lastPart.indexOf(" |")).trim();
+                    } else {
+                        bankCode = lastPart.trim();
                     }
                 }
+            }
             }
         }
         
@@ -152,6 +159,11 @@ public class TransactionResponseDto {
                 .processedAt(entity.getProcessedAt())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
+                .isAutoDeposit(entity.getIsAutoDeposit())
+                .gatewayOrderNo(entity.getGatewayOrderNo())
+                .gatewayTransactionId(entity.getGatewayTransactionId())
+                .gatewayType(entity.getGatewayType())
+                .gatewayPayUrl(entity.getGatewayPayUrl())
                 .build();
     }
 }

@@ -13,6 +13,7 @@ import com.xsecret.repository.PaymentMethodRepository;
 import com.xsecret.repository.TransactionRepository;
 import com.xsecret.repository.UserRepository;
 import com.xsecret.repository.UserPaymentMethodRepository;
+import com.xsecret.service.OkdpayService.OkdpayCreateOrderResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -29,6 +30,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Value;
 
 @Service
 @RequiredArgsConstructor
@@ -43,14 +45,28 @@ public class TransactionService {
     private final FileStorageService fileStorageService;
     private final PointService pointService;
     private final TelegramNotificationService telegramNotificationService;
+    private final OkdpayService okdpayService;
+    
+    @Value("${app.okdpay.merchant-id:9182}")
+    private String okdpayMerchantId;
+
+    @Value("${app.okdpay.api-key}")
+    private String okdpayApiKey;
+
+    @Value("${app.okdpay.default-channel-code:1001}")
+    private String okdpayDefaultChannelCode; // Mã kênh mặc định: 1001 - Chuyển khoản ngân hàng Việt Nam
+
+    @Value("${app.okdpay.callback-base-url:https://api.tathiet168.com}")
+    private String okdpayCallbackBaseUrl;
+
+    @Value("${app.okdpay.frontend-base-url:https://tathiet168.com}")
+    private String okdpayFrontendBaseUrl;
     
     /**
      * Tạo yêu cầu nạp tiền
+     * Ưu tiên gateway tự động trước, nếu không có thì fallback về manual
      */
     public TransactionResponseDto createDepositRequest(DepositRequestDto request, String username) {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-        
         PaymentMethod paymentMethod = paymentMethodRepository.findById(request.getPaymentMethodId())
                 .orElseThrow(() -> new RuntimeException("Payment method not found"));
         
@@ -67,6 +83,208 @@ public class TransactionService {
         if (request.getAmount().compareTo(paymentMethod.getMaxAmount()) > 0) {
             throw new RuntimeException("Amount exceeds maximum limit: " + paymentMethod.getMaxAmount());
         }
+        
+        // Ưu tiên: Kiểm tra auto deposit nếu Payment Method có bankCode (loại BANK)
+        // ChannelCode có thể dùng mặc định (1001) nếu PaymentMethod không có
+        if (paymentMethod.getType() == PaymentMethod.PaymentType.BANK 
+                && paymentMethod.getBankCode() != null && !paymentMethod.getBankCode().trim().isEmpty()) {
+            
+            String channelCodeToUse = (paymentMethod.getChannelCode() != null && !paymentMethod.getChannelCode().trim().isEmpty())
+                    ? paymentMethod.getChannelCode().trim()
+                    : okdpayDefaultChannelCode + " (default)";
+            
+            log.info("Payment method has bankCode: {} and channelCode: {}. Attempting auto deposit.", 
+                    paymentMethod.getBankCode(), channelCodeToUse);
+            
+            try {
+                TransactionResponseDto result = createAutoDepositRequest(request, username, paymentMethod);
+                log.info("Successfully created auto deposit order for user: {}, amount: {}, bankCode: {}, channelCode: {}", 
+                        username, request.getAmount(), paymentMethod.getBankCode(), channelCodeToUse);
+                return result;
+            } catch (Exception e) {
+                String errorMsg = e.getMessage();
+                // Kiểm tra nếu là lỗi channel bảo trì
+                if (errorMsg != null && errorMsg.contains("CHANNEL_MAINTENANCE")) {
+                    log.warn("Channel {} is under maintenance for payment method {}. Falling back to manual deposit.", 
+                            channelCodeToUse, paymentMethod.getName());
+                } else {
+                    log.error("Failed to create auto deposit order, falling back to manual. Error: {}", errorMsg, e);
+                }
+                // Fallback về manual nếu tự động thất bại
+            }
+        } else {
+            log.info("Payment method does not support auto deposit (type: {}, bankCode: {}). Using manual deposit.", 
+                    paymentMethod.getType(), 
+                    paymentMethod.getBankCode() != null ? paymentMethod.getBankCode() : "N/A");
+        }
+        
+        // Fallback: Tạo đơn nạp thủ công
+        return createManualDepositRequest(request, username, paymentMethod);
+    }
+    
+    /**
+     * Tạo đơn nạp tiền tự động qua gateway OKDPAY
+     */
+    private TransactionResponseDto createAutoDepositRequest(
+            DepositRequestDto request, 
+            String username, 
+            PaymentMethod paymentMethod) {
+        
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        // Tạo transaction code
+        String transactionCode = generateTransactionCode("DEP");
+        
+        // Tính fee (có thể không có fee cho auto deposit hoặc tính từ gateway config)
+        BigDecimal fee = BigDecimal.ZERO; // Auto deposit thường không có fee
+        BigDecimal netAmount = request.getAmount().subtract(fee);
+        
+        // Tạo transaction với flag auto deposit
+        Transaction transaction = Transaction.builder()
+                .transactionCode(transactionCode)
+                .user(user)
+                .type(Transaction.TransactionType.DEPOSIT)
+                .amount(request.getAmount())
+                .fee(fee)
+                .netAmount(netAmount)
+                .status(Transaction.TransactionStatus.PENDING)
+                .paymentMethod(paymentMethod)
+                .methodAccount(paymentMethod.getAccountNumber())
+                .description(request.getDescription())
+                .referenceCode(request.getReferenceCode())
+                .isAutoDeposit(true)
+                .gatewayType("OKDPAY")
+                .build();
+        
+        Transaction savedTransaction = transactionRepository.save(transaction);
+        
+        // Tạo đơn trên OKDPAY với callback URL
+        // Lưu ý: context-path là /api, nên endpoint đầy đủ là /api/payments/okdpay/callback
+        String notifyUrl = okdpayCallbackBaseUrl + "/api/payments/okdpay/callback";
+        // Return URL: khi user thanh toán xong sẽ quay lại trang wallet với tab deposit
+        String returnUrl = okdpayFrontendBaseUrl + "/wallet?tab=deposit-withdraw&transaction=" + transactionCode;
+        
+        // Xác định channel code: dùng từ PaymentMethod nếu có, nếu không thì dùng mặc định 1001 (ngân hàng Việt Nam)
+        String channelCode = (paymentMethod.getChannelCode() != null && !paymentMethod.getChannelCode().trim().isEmpty())
+                ? paymentMethod.getChannelCode().trim()
+                : okdpayDefaultChannelCode;
+        
+        // Đảm bảo channelCode luôn là "1001" cho ngân hàng Việt Nam nếu không có trong PaymentMethod
+        if (channelCode == null || channelCode.trim().isEmpty()) {
+            channelCode = "1001";
+        }
+        
+        log.info("=== CREATING OKDPAY ORDER ===");
+        log.info("Transaction Code: {}", transactionCode);
+        log.info("Amount: {}", request.getAmount());
+        log.info("Bank Code: {}", paymentMethod.getBankCode());
+        log.info("Channel Code from PaymentMethod: {}", paymentMethod.getChannelCode());
+        log.info("Using Channel Code: {} (default: {})", channelCode, okdpayDefaultChannelCode);
+        log.info("Notify URL (Callback): {}", notifyUrl);
+        log.info("Return URL: {}", returnUrl);
+        log.info("Merchant ID: {}", okdpayMerchantId);
+        
+        OkdpayCreateOrderResponse okdpayResponse;
+        try {
+            okdpayResponse = okdpayService.createOrder(
+                    okdpayMerchantId,
+                    okdpayApiKey,
+                    channelCode, // Dùng channelCode đã xác định (có fallback)
+                    transactionCode,
+                    request.getAmount(),
+                    notifyUrl,
+                    returnUrl
+            );
+            
+            log.info("OKDPAY API response - Status: {}, OrderNo: {}, PayUrl: {}, Msg: {}", 
+                    okdpayResponse.getStatus(), okdpayResponse.getOrderNo(), okdpayResponse.getPayUrl(), okdpayResponse.getMsg());
+            
+            if (!"success".equalsIgnoreCase(okdpayResponse.getStatus())) {
+                String errorMsg = okdpayResponse.getMsg();
+                log.error("OKDPAY API returned error - Status: {}, Msg: {}, ChannelCode: {}", 
+                        okdpayResponse.getStatus(), errorMsg, channelCode);
+                
+                // Kiểm tra nếu là lỗi channel bảo trì
+                if (errorMsg != null && (errorMsg.contains("维护") || errorMsg.contains("维护中") || errorMsg.contains("maintenance"))) {
+                    log.warn("Channel code {} is under maintenance. Error message: {}", channelCode, errorMsg);
+                    throw new RuntimeException("CHANNEL_MAINTENANCE: Channel " + channelCode + " is under maintenance. " + errorMsg);
+                }
+                
+                throw new RuntimeException("OKDPAY API returned error: " + errorMsg);
+            }
+            
+            if (okdpayResponse.getPayUrl() == null || okdpayResponse.getPayUrl().trim().isEmpty()) {
+                log.error("OKDPAY API did not return payment URL. Response: {}", okdpayResponse);
+                throw new RuntimeException("OKDPAY API did not return payment URL");
+            }
+        } catch (Exception e) {
+            log.error("Error calling OKDPAY API for transaction {}: {}", transactionCode, e.getMessage(), e);
+            
+            // Kiểm tra nếu là lỗi channel bảo trì
+            if (e.getMessage() != null && e.getMessage().contains("CHANNEL_MAINTENANCE")) {
+                log.warn("Channel {} is under maintenance, will fallback to manual deposit", channelCode);
+            }
+            
+            // Xóa transaction đã tạo nếu không tạo được đơn trên OKDPAY
+            try {
+                transactionRepository.delete(savedTransaction);
+                log.info("Deleted transaction {} due to OKDPAY API error", transactionCode);
+            } catch (Exception deleteEx) {
+                log.error("Failed to delete transaction {}: {}", transactionCode, deleteEx.getMessage());
+            }
+            
+            throw new RuntimeException("Failed to create order on OKDPAY: " + e.getMessage(), e);
+        }
+        
+        // Cập nhật transaction với thông tin từ gateway
+        savedTransaction.setGatewayOrderNo(okdpayResponse.getOrderNo());
+        savedTransaction.setGatewayPayUrl(okdpayResponse.getPayUrl());
+        savedTransaction.setNote("Auto deposit via OKDPAY gateway. Order No: " + okdpayResponse.getOrderNo());
+        
+        Transaction updatedTransaction = transactionRepository.save(savedTransaction);
+        
+        // Reload transaction từ DB để đảm bảo có đầy đủ thông tin (bao gồm cả lazy-loaded fields)
+        updatedTransaction = transactionRepository.findById(updatedTransaction.getId())
+                .orElseThrow(() -> new RuntimeException("Transaction not found after update"));
+        
+        log.info("Transaction {} updated with gateway info. PayUrl: {}", transactionCode, okdpayResponse.getPayUrl());
+        
+        log.info("Created auto deposit request: {} for user: {} amount: {} via bank: {} (channel: {})", 
+                transactionCode, username, request.getAmount(), paymentMethod.getBankCode(), channelCode);
+        
+        try {
+            String message = "Yêu cầu " + telegramNotificationService.formatBoldText("NẠP TIỀN TỰ ĐỘNG") + " từ khách hàng " + 
+                          telegramNotificationService.formatBoldText(username) + " - Số tiền: " + 
+                          telegramNotificationService.formatBoldText(telegramNotificationService.formatVnd(request.getAmount()));
+            telegramNotificationService.sendMessage(message);
+        } catch (Exception ignore) {}
+        
+        // Map từ entity đã reload để đảm bảo có đầy đủ thông tin
+        TransactionResponseDto response = TransactionResponseDto.fromEntity(updatedTransaction);
+        // Đảm bảo gatewayPayUrl được set đúng
+        response.setGatewayPayUrl(updatedTransaction.getGatewayPayUrl());
+        response.setIsAutoDeposit(updatedTransaction.getIsAutoDeposit());
+        response.setGatewayOrderNo(updatedTransaction.getGatewayOrderNo());
+        response.setGatewayType(updatedTransaction.getGatewayType());
+        response.setNote(updatedTransaction.getNote());
+        
+        log.info("Returning transaction response - ID: {}, isAutoDeposit: {}, gatewayPayUrl: {}", 
+                response.getId(), response.getIsAutoDeposit(), response.getGatewayPayUrl());
+        
+        return response;
+    }
+    
+    /**
+     * Tạo đơn nạp tiền thủ công (fallback)
+     */
+    private TransactionResponseDto createManualDepositRequest(
+            DepositRequestDto request, 
+            String username, 
+            PaymentMethod paymentMethod) {
+        
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
         
         // Tính fee
         BigDecimal fee = calculateFee(paymentMethod, request.getAmount());
@@ -108,10 +326,11 @@ public class TransactionService {
                 .billImage(request.getBillImage()) // Lưu base64 để backup
                 .billImageName(request.getBillImageName())
                 .billImageUrl(billImageUrl) // URL của file đã lưu
+                .isAutoDeposit(false)
                 .build();
         
         Transaction savedTransaction = transactionRepository.save(transaction);
-        log.info("Created deposit request: {} for user: {} amount: {}", 
+        log.info("Created manual deposit request: {} for user: {} amount: {}", 
                 transactionCode, username, request.getAmount());
            try {
                String message = "Yêu cầu " + telegramNotificationService.formatBoldText("NẠP TIỀN") + " từ khách hàng " + 

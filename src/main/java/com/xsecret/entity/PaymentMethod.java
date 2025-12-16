@@ -39,6 +39,9 @@ public class PaymentMethod {
     @Column(name = "bank_code", length = 20)
     private String bankCode;
     
+    @Column(name = "channel_code", length = 100)
+    private String channelCode; // Mã kênh từ OKDPAY (chỉ dùng cho auto deposit)
+    
     @Column(name = "min_amount", nullable = false, precision = 15, scale = 2)
     private BigDecimal minAmount;
     

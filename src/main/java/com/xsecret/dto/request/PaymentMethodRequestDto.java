@@ -27,6 +27,9 @@ public class PaymentMethodRequestDto {
     @Size(max = 20, message = "Bank code cannot exceed 20 characters")
     private String bankCode;
     
+    @Size(max = 100, message = "Channel code cannot exceed 100 characters")
+    private String channelCode; // Mã kênh từ OKDPAY (chỉ dùng cho auto deposit khi type = BANK)
+    
     @NotNull(message = "Minimum amount is required")
     @DecimalMin(value = "1000", message = "Minimum amount must be at least 1,000 VND")
     private BigDecimal minAmount;

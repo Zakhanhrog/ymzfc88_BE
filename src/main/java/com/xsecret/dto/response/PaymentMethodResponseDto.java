@@ -22,6 +22,7 @@ public class PaymentMethodResponseDto {
     private String accountNumber;
     private String accountName;
     private String bankCode;
+    private String channelCode; // Mã kênh từ OKDPAY
     private BigDecimal minAmount;
     private BigDecimal maxAmount;
     private BigDecimal feePercent;
@@ -43,6 +44,7 @@ public class PaymentMethodResponseDto {
                 .accountNumber(entity.getAccountNumber())
                 .accountName(entity.getAccountName())
                 .bankCode(entity.getBankCode())
+                .channelCode(entity.getChannelCode())
                 .minAmount(entity.getMinAmount())
                 .maxAmount(entity.getMaxAmount())
                 .feePercent(entity.getFeePercent())

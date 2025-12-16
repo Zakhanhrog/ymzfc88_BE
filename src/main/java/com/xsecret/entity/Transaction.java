@@ -77,6 +77,23 @@ public class Transaction {
     @Column(name = "bill_image_url", length = 500)
     private String billImageUrl;
     
+    // Gateway fields for auto deposit
+    @Column(name = "is_auto_deposit")
+    @Builder.Default
+    private Boolean isAutoDeposit = false;
+    
+    @Column(name = "gateway_order_no", length = 100)
+    private String gatewayOrderNo;
+    
+    @Column(name = "gateway_transaction_id", length = 100)
+    private String gatewayTransactionId;
+    
+    @Column(name = "gateway_type", length = 50)
+    private String gatewayType; // e.g., "OKDPAY"
+    
+    @Column(name = "gateway_pay_url", length = 500)
+    private String gatewayPayUrl;
+    
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "processed_by")
     private User processedBy;

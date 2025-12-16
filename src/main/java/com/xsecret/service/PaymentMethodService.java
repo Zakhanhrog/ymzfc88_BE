@@ -4,6 +4,7 @@ import com.xsecret.dto.request.PaymentMethodRequestDto;
 import com.xsecret.dto.response.PaymentMethodResponseDto;
 import com.xsecret.entity.PaymentMethod;
 import com.xsecret.repository.PaymentMethodRepository;
+import com.xsecret.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ import java.util.stream.Collectors;
 public class PaymentMethodService {
     
     private final PaymentMethodRepository paymentMethodRepository;
+    private final TransactionRepository transactionRepository;
     
     /**
      * Lấy tất cả payment methods đang active cho user
@@ -77,6 +79,7 @@ public class PaymentMethodService {
                 .accountNumber(request.getAccountNumber())
                 .accountName(request.getAccountName())
                 .bankCode(request.getBankCode())
+                .channelCode(request.getChannelCode()) // Mã kênh từ OKDPAY
                 .minAmount(request.getMinAmount())
                 .maxAmount(request.getMaxAmount())
                 .feePercent(request.getFeePercent() != null ? request.getFeePercent() : BigDecimal.ZERO)
@@ -120,6 +123,7 @@ public class PaymentMethodService {
         paymentMethod.setAccountNumber(request.getAccountNumber());
         paymentMethod.setAccountName(request.getAccountName());
         paymentMethod.setBankCode(request.getBankCode());
+        paymentMethod.setChannelCode(request.getChannelCode()); // Mã kênh từ OKDPAY
         paymentMethod.setMinAmount(request.getMinAmount());
         paymentMethod.setMaxAmount(request.getMaxAmount());
         paymentMethod.setFeePercent(request.getFeePercent() != null ? request.getFeePercent() : BigDecimal.ZERO);
@@ -142,6 +146,15 @@ public class PaymentMethodService {
     public void deletePaymentMethod(Long id) {
         PaymentMethod paymentMethod = paymentMethodRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Payment method not found"));
+        
+        // Kiểm tra xem có transaction nào đang sử dụng payment method này không
+        long transactionCount = transactionRepository.countByPaymentMethod(paymentMethod);
+        if (transactionCount > 0) {
+            log.warn("Cannot delete payment method {} - {} because it is used in {} transactions", 
+                    paymentMethod.getId(), paymentMethod.getName(), transactionCount);
+            throw new RuntimeException("Không thể xóa phương thức thanh toán này vì đang được sử dụng trong " + 
+                    transactionCount + " giao dịch. Vui lòng vô hiệu hóa (deactivate) thay vì xóa.");
+        }
         
         paymentMethodRepository.delete(paymentMethod);
         log.info("Deleted payment method: {} - {}", paymentMethod.getType(), paymentMethod.getName());
