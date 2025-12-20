@@ -44,7 +44,7 @@ public class PaymentMethodResponseDto {
                 .accountNumber(entity.getAccountNumber())
                 .accountName(entity.getAccountName())
                 .bankCode(entity.getBankCode())
-                .channelCode(entity.getChannelCode())
+                .channelCode(entity.getChannelCode()) // Giữ nguyên giá trị từ entity, sẽ được override trong service nếu cần
                 .minAmount(entity.getMinAmount())
                 .maxAmount(entity.getMaxAmount())
                 .feePercent(entity.getFeePercent())

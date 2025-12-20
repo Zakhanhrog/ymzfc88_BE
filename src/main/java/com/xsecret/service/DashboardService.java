@@ -11,6 +11,11 @@ import com.xsecret.repository.TransactionRepository;
 import com.xsecret.repository.SicboBetRepository;
 import com.xsecret.repository.XocDiaBetRepository;
 import com.xsecret.repository.UserRepository;
+import com.xsecret.repository.GameRefundAccrualRepository;
+import com.xsecret.repository.DailyLossRefundRepository;
+import com.xsecret.repository.AgentCommissionPayoutRepository;
+import com.xsecret.repository.PromotionalMoneyRepository;
+import com.xsecret.repository.PointTransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -47,6 +52,11 @@ public class DashboardService {
     private final TransactionRepository transactionRepository;
     private final SicboBetRepository sicboBetRepository;
     private final XocDiaBetRepository xocDiaBetRepository;
+    private final GameRefundAccrualRepository gameRefundAccrualRepository;
+    private final DailyLossRefundRepository dailyLossRefundRepository;
+    private final AgentCommissionPayoutRepository agentCommissionPayoutRepository;
+    private final PromotionalMoneyRepository promotionalMoneyRepository;
+    private final PointTransactionRepository pointTransactionRepository;
 
     private final ZoneId systemZone = ZoneId.systemDefault();
 
@@ -109,14 +119,55 @@ public class DashboardService {
                 )
         );
 
+        // Tính lợi nhuận hôm nay theo công thức Analytics
+        // Doanh thu = Tổng tiền cược - Tổng tiền thắng
+        BigDecimal totalStakeToday = safeBigDecimal(betRepository.sumTotalAmountByFilters(null, startOfDay, endOfDay))
+                .add(safeBigDecimal(sicboBetRepository.sumStakeByCreatedAtFilters(null, startOfDayInstant, endOfDayInstant)))
+                .add(safeBigDecimal(xocDiaBetRepository.sumStakeByCreatedAtFilters(null, startOfDayInstant, endOfDayInstant)));
+        
+        BigDecimal totalWinAmountToday = safeBigDecimal(betRepository.sumWinProfitByFilters(startOfDay, endOfDay))
+                .add(safeBigDecimal(sicboBetRepository.sumWinProfitByCreatedAtFilters(startOfDayInstant, endOfDayInstant)))
+                .add(safeBigDecimal(xocDiaBetRepository.sumWinProfitByCreatedAtFilters(startOfDayInstant, endOfDayInstant)));
+        
+        BigDecimal revenueTodayCalculated = totalStakeToday.subtract(totalWinAmountToday);
+        
+        // Tính các khoản trừ cho lợi nhuận
+        // Tổng hoàn trả (scheduled + instant)
+        BigDecimal scheduledRefund = safeBigDecimal(gameRefundAccrualRepository.sumPaidRefundByDateRange(
+                startOfDayInstant, endOfDayInstant));
+        BigDecimal instantRefund = safeBigDecimal(pointTransactionRepository.sumInstantGameRefundByDateRange(
+                startOfDay, endOfDay));
+        BigDecimal totalRefund = scheduledRefund.add(instantRefund);
+        
+        // Tổng khuyến mãi
+        BigDecimal totalPromotionalMoney = safeBigDecimal(promotionalMoneyRepository.sumAmountByDateRange(
+                startOfDay, endOfDay));
+        
+        // Tổng hoàn thua
+        BigDecimal totalDailyLossRefund = safeBigDecimal(dailyLossRefundRepository.sumPaidRefundByDateRange(
+                startOfDayInstant, endOfDayInstant));
+        
+        // Tổng hoa hồng đại lý
+        BigDecimal totalAgentCommission = safeBigDecimal(agentCommissionPayoutRepository.sumPaidCommissionByDateRange(
+                startOfDay, endOfDay));
+        
+        // Lợi nhuận = Doanh thu - (Hoàn trả + Khuyến mãi + Hoàn Thua + Hoa hồng)
+        BigDecimal profitToday = revenueTodayCalculated
+                .subtract(totalRefund)
+                .subtract(totalPromotionalMoney)
+                .subtract(totalDailyLossRefund)
+                .subtract(totalAgentCommission);
+
         Map<LocalDate, DashboardOverviewResponse.ChartPoint> chartMap = initChartMap(chartStartDate);
 
         populateBetChartData(chartMap, chartStartDateTime, chartEndDateTime);
         populateSicboChartData(chartMap, chartStartDateTime, chartEndDateTime);
         populateXocDiaChartData(chartMap, chartStartDateTime, chartEndDateTime);
         populateTransactionChartData(chartMap, completedStatuses, chartStartDateTime, chartEndDateTime);
+        populateWinLossRefundData(chartMap, chartStartDateTime, chartEndDateTime);
 
         List<DashboardOverviewResponse.ActivityItem> recentActivities = buildRecentActivities(completedStatuses);
+        List<DashboardOverviewResponse.RecentUserItem> recentUsers = buildRecentUsers();
 
         DashboardOverviewResponse.Summary summary = DashboardOverviewResponse.Summary.builder()
                 .totalUsers(totalUsers)
@@ -124,6 +175,7 @@ public class DashboardService {
                 .newUsersToday(newUsersToday)
                 .onlineUsers(onlineUsers)
                 .revenueToday(revenueToday)
+                .profitToday(profitToday)
                 .transactionsTodayCount(transactionsTodayCount)
                 .transactionsTodayAmount(transactionsTodayAmount)
                 .depositsTodayAmount(depositsTodayAmount)
@@ -134,6 +186,7 @@ public class DashboardService {
                 .summary(summary)
                 .chart(new ArrayList<>(chartMap.values()))
                 .recentActivities(recentActivities)
+                .recentUsers(recentUsers)
                 .build();
     }
 
@@ -147,6 +200,9 @@ public class DashboardService {
                     .totalBets(0L)
                     .transactions(0L)
                     .transactionAmount(BigDecimal.ZERO)
+                    .winProfit(BigDecimal.ZERO)
+                    .lostStake(BigDecimal.ZERO)
+                    .totalRefund(BigDecimal.ZERO)
                     .build());
         }
         return chartMap;
@@ -220,6 +276,20 @@ public class DashboardService {
                 .collect(Collectors.toList());
     }
 
+    private List<DashboardOverviewResponse.RecentUserItem> buildRecentUsers() {
+        List<User> users = userRepository.findTop10RecentUsers(
+                PageRequest.of(0, DEFAULT_RECENT_ACTIVITY_LIMIT));
+        return users.stream()
+                .map(user -> DashboardOverviewResponse.RecentUserItem.builder()
+                        .id(user.getId())
+                        .username(user.getUsername())
+                        .createdAt(user.getCreatedAt())
+                        .status(user.getStatus().name())
+                        .points(user.getPoints() != null ? BigDecimal.valueOf(user.getPoints()) : BigDecimal.ZERO)
+                        .build())
+                .collect(Collectors.toList());
+    }
+
     private DashboardOverviewResponse.ActivityItem mapTransactionToActivity(Transaction transaction) {
         String description = String.format(Locale.getDefault(),
                 "%s %s %s",
@@ -251,6 +321,7 @@ public class DashboardService {
                 .type("BET")
                 .username(bet.getUser().getUsername())
                 .description(description)
+                .betCode(bet.getBetType())
                 .amount(amount != null ? amount : BigDecimal.ZERO)
                 .status(bet.getStatus().name())
                 .time(bet.getResultCheckedAt() != null ? bet.getResultCheckedAt() : bet.getUpdatedAt())
@@ -270,6 +341,7 @@ public class DashboardService {
                 .type("SICBO")
                 .username(bet.getUser().getUsername())
                 .description(description)
+                .betCode(bet.getBetCode())
                 .amount(amount != null ? amount : BigDecimal.ZERO)
                 .status(bet.getStatus().name())
                 .time(bet.getSettledAt() != null ? LocalDateTime.ofInstant(bet.getSettledAt(), systemZone) : null)
@@ -287,6 +359,7 @@ public class DashboardService {
         return DashboardOverviewResponse.ActivityItem.builder()
                 .id("xocdia-" + bet.getId())
                 .type("XOCDIA")
+                .betCode(bet.getBetCode())
                 .username(bet.getUser().getUsername())
                 .description(description)
                 .amount(amount != null ? amount : BigDecimal.ZERO)
@@ -362,6 +435,71 @@ public class DashboardService {
             } else {
                 point.setTotalBets(point.getTotalBets() + 1);
             }
+        }
+    }
+
+    private void populateWinLossRefundData(Map<LocalDate, DashboardOverviewResponse.ChartPoint> chartMap,
+                                           LocalDateTime start,
+                                           LocalDateTime end) {
+        // Tính toán cho từng ngày trong chartMap
+        for (Map.Entry<LocalDate, DashboardOverviewResponse.ChartPoint> entry : chartMap.entrySet()) {
+            LocalDate date = entry.getKey();
+            DashboardOverviewResponse.ChartPoint point = entry.getValue();
+            
+            LocalDateTime dayStart = date.atStartOfDay();
+            LocalDateTime dayEnd = date.plusDays(1).atStartOfDay().minusNanos(1);
+            Instant dayStartInstant = dayStart.atZone(systemZone).toInstant();
+            Instant dayEndInstant = dayEnd.atZone(systemZone).toInstant();
+            
+            // Tính Win Profit (tiền thắng cược - không tính gốc)
+            // Lottery: winAmount - totalAmount cho bets WON
+            BigDecimal lotteryWinProfit = safeBigDecimal(
+                    betRepository.sumWinProfitByFilters(dayStart, dayEnd));
+            
+            // Sicbo: winAmount - stake cho bets WON
+            BigDecimal sicboWinProfit = safeBigDecimal(
+                    sicboBetRepository.sumWinProfitByCreatedAtFilters(dayStartInstant, dayEndInstant));
+            
+            // XocDia: winAmount - stake cho bets WON
+            BigDecimal xocDiaWinProfit = safeBigDecimal(
+                    xocDiaBetRepository.sumWinProfitByCreatedAtFilters(dayStartInstant, dayEndInstant));
+            
+            BigDecimal totalWinProfit = lotteryWinProfit.add(sicboWinProfit).add(xocDiaWinProfit);
+            
+            // Tính Lost Stake (tiền thua cược) - đã có trong revenue, nhưng tính riêng để rõ ràng
+            // Lottery: totalAmount cho bets LOST
+            BigDecimal lotteryLostStake = safeBigDecimal(
+                    betRepository.sumTotalAmountByStatusAndResultCheckedAtBetween(Bet.BetStatus.LOST, dayStart, dayEnd));
+            
+            // Sicbo: stake cho bets LOST
+            BigDecimal sicboLostStake = safeBigDecimal(
+                    sicboBetRepository.sumStakeByStatusAndSettledAtBetween(SicboBet.Status.LOST, dayStartInstant, dayEndInstant));
+            
+            // XocDia: stake cho bets LOST
+            BigDecimal xocDiaLostStake = safeBigDecimal(
+                    xocDiaBetRepository.sumStakeByStatusAndSettledAtBetween(XocDiaBet.Status.LOST, dayStartInstant, dayEndInstant));
+            
+            BigDecimal totalLostStake = lotteryLostStake.add(sicboLostStake).add(xocDiaLostStake);
+            
+            // Tính Total Refund (tổng tiền hoàn)
+            // Game refund accrual (scheduled refund)
+            BigDecimal scheduledRefund = safeBigDecimal(
+                    gameRefundAccrualRepository.sumPaidRefundByDateRange(dayStartInstant, dayEndInstant));
+            
+            // Instant game refund
+            BigDecimal instantRefund = safeBigDecimal(
+                    pointTransactionRepository.sumInstantGameRefundByDateRange(dayStart, dayEnd));
+            
+            // Daily loss refund
+            BigDecimal dailyLossRefund = safeBigDecimal(
+                    dailyLossRefundRepository.sumPaidRefundByDateRange(dayStartInstant, dayEndInstant));
+            
+            BigDecimal totalRefund = scheduledRefund.add(instantRefund).add(dailyLossRefund);
+            
+            // Set vào chart point
+            point.setWinProfit(totalWinProfit);
+            point.setLostStake(totalLostStake);
+            point.setTotalRefund(totalRefund);
         }
     }
 

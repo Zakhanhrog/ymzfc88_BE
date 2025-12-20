@@ -25,6 +25,7 @@ public class XocDiaBetHistoryItemResponse {
     private String resultCode;
     private Instant createdAt;
     private Instant settledAt;
+    private String sessionResultCode; // Kết quả của phiên (session result)
     
     // Thông tin hoàn tiền
     private BigDecimal refundAmount;
@@ -42,6 +43,7 @@ public class XocDiaBetHistoryItemResponse {
                 .status(bet.getStatus() != null ? bet.getStatus().name() : null)
                 .winAmount(bet.getWinAmount())
                 .resultCode(bet.getResultCode())
+                .sessionResultCode(bet.getSession() != null ? bet.getSession().getResultCode() : null)
                 .createdAt(bet.getCreatedAt())
                 .settledAt(bet.getSettledAt())
                 .refundAmount(BigDecimal.ZERO)

@@ -4,6 +4,7 @@ import com.xsecret.entity.Notification;
 import com.xsecret.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -48,7 +49,8 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
             @Param("isRead") Boolean isRead,
             Pageable pageable);
 
-    // Admin: Lấy tất cả thông báo
+    // Admin: Lấy tất cả thông báo với EntityGraph để load relationships
+    @EntityGraph(attributePaths = {"targetUser", "createdBy"})
     Page<Notification> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     // Admin: Lấy thông báo broadcast

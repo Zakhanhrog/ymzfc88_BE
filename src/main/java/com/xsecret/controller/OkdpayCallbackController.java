@@ -8,7 +8,6 @@ import com.xsecret.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -16,9 +15,10 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
-@RequestMapping("/payments/okdpay")
+@RequestMapping("")
 @RequiredArgsConstructor
 @Slf4j
 public class OkdpayCallbackController {
@@ -27,17 +27,15 @@ public class OkdpayCallbackController {
     private final TransactionRepository transactionRepository;
     private final UserRepository userRepository;
     
-    @Value("${app.okdpay.merchant-id:9182}")
-    private String okdpayMerchantId;
-    
-    @Value("${app.okdpay.api-key}")
-    private String okdpayApiKey;
+    // OKDPAY Config - Dùng trực tiếp trong code như mẫu
+    private static final String OKDPAY_MERCHANT_ID = "9182";
+    private static final String OKDPAY_API_KEY = "iFilLS5aURGLl4der7krYAZ3LqfwWKJV6O0wDux3jbX50RdH83btRtik31KYzoje";
 
     /**
      * Callback endpoint để nhận thông báo từ OKDPAY
      * OKDPAY sẽ gửi POST request với form data
      */
-    @PostMapping("/callback")
+    @PostMapping("/callbackbank")
     @Transactional
     public ResponseEntity<String> handleCallback(
             @RequestParam Map<String, String> params,
@@ -60,7 +58,7 @@ public class OkdpayCallbackController {
             String successTime = params.get("success_time");
 
             // Bước 1: Xác thực chữ ký TRƯỚC (theo tài liệu: "Kiểm tra chữ ký cho mọi request & callback")
-            boolean signatureValid = okdpayService.verifyCallbackSignature(params, okdpayApiKey);
+            boolean signatureValid = okdpayService.verifyCallbackSignature(params, OKDPAY_API_KEY);
             log.info("Signature verification result: {} for transaction: {}", signatureValid, outTradeNo);
             if (!signatureValid) {
                 log.error("❌ INVALID SIGNATURE in callback. IP: {}, mchid: {}, out_trade_no: {}", 
@@ -72,8 +70,8 @@ public class OkdpayCallbackController {
             log.info("✅ Signature verified successfully for transaction: {}", outTradeNo);
             
             // Bước 2: Kiểm tra merchant ID
-            if (mchid == null || !okdpayMerchantId.equals(mchid)) {
-                log.warn("Invalid or missing merchant ID in callback: {} (expected: {})", mchid, okdpayMerchantId);
+            if (mchid == null || !OKDPAY_MERCHANT_ID.equals(mchid)) {
+                log.warn("Invalid or missing merchant ID in callback: {} (expected: {})", mchid, OKDPAY_MERCHANT_ID);
                 return ResponseEntity.ok("success");
             }
 
@@ -89,42 +87,131 @@ public class OkdpayCallbackController {
                         clientIp, "45.58.184.162");
             }
 
-            // Bước 5: Tìm transaction theo out_trade_no
-            Transaction transaction = transactionRepository.findByTransactionCode(outTradeNo)
-                    .orElse(null);
-
-            if (transaction == null) {
-                log.error("Transaction not found for out_trade_no: {}. mchid: {}", outTradeNo, mchid);
-                return ResponseEntity.ok("success");
-            }
+            // Bước 5: Xử lý callback y hệt mẫu (line 1886)
+            // Mẫu: if (Number(body.amount) > 0) { ... tìm payment và cộng tiền ... }
+            log.info("=== Processing callback - out_trade_no: {}, amount: {}, refCode: {}, transactionId: {} ===", 
+                    outTradeNo, amount, refCode, transactionId);
             
-            // Pre-load user để tránh LazyInitializationException
-            if (transaction.getUser() != null && transaction.getUser().getId() != null) {
-                transaction.getUser().getUsername(); // Trigger lazy load
-            }
-
-            // Bước 6: Xử lý callback dựa trên refCode (theo tài liệu OKDPAY)
-            // refCode: 1=Chưa xử lý, 2=Đã thanh toán (Thành công), 3=Hủy, 4=Hoàn
-            log.info("Processing callback with refCode: {} for transaction: {}", refCode, outTradeNo);
-            if ("2".equals(refCode)) {
-                // refCode = 2: Đã thanh toán thành công (theo tài liệu)
-                log.info("✅ Processing payment SUCCESS callback. Transaction: {}, Amount: {}, TransactionId: {}", 
-                        outTradeNo, amount, transactionId);
-                handlePaymentSuccess(transaction, transactionId, amount, successTime, refMsg);
-                log.info("✅ Payment success callback processed successfully for transaction: {}", outTradeNo);
-            } else if ("3".equals(refCode)) {
-                // refCode = 3: Hủy
-                log.info("Processing payment cancellation callback. Transaction: {}", outTradeNo);
-                handlePaymentCancelled(transaction, refMsg);
-            } else if ("4".equals(refCode)) {
-                // refCode = 4: Hoàn tiền
-                log.info("Processing payment refund callback. Transaction: {}", outTradeNo);
-                handlePaymentRefunded(transaction, refMsg);
+            // Check amount > 0 như mẫu (line 1886) - ĐIỀU KIỆN CHÍNH
+            if (amount != null && !amount.isEmpty()) {
+                try {
+                    BigDecimal amountValue = new BigDecimal(amount);
+                    if (amountValue.compareTo(BigDecimal.ZERO) > 0) {
+                        // Amount > 0: Tìm transaction và cộng điểm (y hệt mẫu)
+                        log.info("✅ Amount > 0, processing payment success. out_trade_no: {}, amount: {}", outTradeNo, amount);
+                        
+                        // Tìm transaction y hệt mẫu (line 1889-1897)
+                        // Mẫu: transactionid: body.out_trade_no, status_payment: "Pending", money: Number(body.amount)
+                        // QUAN TRỌNG: Mẫu dùng findOneAndUpdate - tìm VÀ update cùng lúc
+                        // Nhưng trong Spring JPA, ta tìm trước rồi update sau
+                        Transaction transaction = null;
+                        
+                        // Ưu tiên: Tìm với cả amount match (y hệt mẫu line 1893)
+                        // Nhưng nếu không tìm thấy, thử không check amount (có thể có sai số decimal)
+                        Optional<Transaction> transactionOpt = transactionRepository.findByReferenceCodeAndStatusAndAmount(
+                                outTradeNo,
+                                Transaction.TransactionStatus.PENDING,
+                                amountValue
+                        );
+                        if (transactionOpt.isPresent()) {
+                            transaction = transactionOpt.get();
+                            log.info("✅ Found transaction with amount match. Transaction: {}, Amount: {}, ReferenceCode: {}", 
+                                    transaction.getTransactionCode(), transaction.getAmount(), transaction.getReferenceCode());
+                        } else {
+                            // Fallback: Tìm chỉ bằng referenceCode và status PENDING (KHÔNG check amount)
+                            // Vì có thể amount không match chính xác do decimal precision
+                            log.warn("Transaction not found with amount match. out_trade_no: {}, amount: {}. Trying without amount check...", 
+                                    outTradeNo, amountValue);
+                            transactionOpt = transactionRepository.findByReferenceCode(outTradeNo);
+                            if (transactionOpt.isPresent()) {
+                                Transaction t = transactionOpt.get();
+                                if (t.getStatus() == Transaction.TransactionStatus.PENDING) {
+                                    transaction = t;
+                                    log.info("✅ Found transaction by referenceCode (no amount check). Transaction: {}, Amount: {} (callback amount: {})", 
+                                            transaction.getTransactionCode(), transaction.getAmount(), amountValue);
+                                } else {
+                                    log.warn("Transaction found but status is not PENDING: {} (status: {})", 
+                                            t.getTransactionCode(), t.getStatus());
+                                }
+                            } else {
+                                log.warn("Transaction not found by referenceCode: {}", outTradeNo);
+                            }
+                        }
+                        
+                        // Fallback 2: Thử tìm bằng transactionCode (cho backward compatibility)
+                        if (transaction == null) {
+                            log.warn("Transaction not found with referenceCode. Trying transactionCode...");
+                            transactionOpt = transactionRepository.findByTransactionCode(outTradeNo);
+                            if (transactionOpt.isPresent()) {
+                                Transaction t = transactionOpt.get();
+                                if (t.getStatus() == Transaction.TransactionStatus.PENDING) {
+                                    transaction = t;
+                                    log.info("✅ Found transaction by transactionCode. Transaction: {}, Amount: {} (callback amount: {})", 
+                                            transaction.getTransactionCode(), transaction.getAmount(), amountValue);
+                                } else {
+                                    log.warn("Transaction found by transactionCode but status is not PENDING: {} (status: {})", 
+                                            t.getTransactionCode(), t.getStatus());
+                                }
+                            } else {
+                                log.warn("Transaction not found by transactionCode: {}", outTradeNo);
+                            }
+                        }
+                        
+                        if (transaction == null) {
+                            log.error("❌❌❌ Transaction not found for out_trade_no: {} with amount: {} (tried referenceCode+amount, referenceCode, transactionCode). Cannot process callback.", 
+                                    outTradeNo, amountValue);
+                            log.error("Please check if transaction exists in DB with referenceCode={} and status=PENDING", outTradeNo);
+                            return ResponseEntity.ok("success");
+                        }
+                        
+                        // Double-check status PENDING
+                        if (transaction.getStatus() != Transaction.TransactionStatus.PENDING) {
+                            log.warn("Transaction {} already processed with status: {}. Skipping...", 
+                                    transaction.getTransactionCode(), transaction.getStatus());
+                            return ResponseEntity.ok("success");
+                        }
+                        
+                        // Pre-load user để tránh LazyInitializationException
+                        if (transaction.getUser() != null && transaction.getUser().getId() != null) {
+                            transaction.getUser().getUsername(); // Trigger lazy load
+                        }
+                        
+                        // Cộng điểm (y hệt mẫu line 1946)
+                        log.info("✅ Processing payment SUCCESS callback. Transaction: {}, Amount: {}, TransactionId: {}", 
+                                transaction.getTransactionCode(), amount, transactionId);
+                        log.info("✅ Transaction found - Code: {}, Status: {}, Amount: {}, User: {}", 
+                                transaction.getTransactionCode(), 
+                                transaction.getStatus(),
+                                transaction.getAmount(),
+                                transaction.getUser() != null ? transaction.getUser().getUsername() : "NULL");
+                        
+                        try {
+                            handlePaymentSuccess(transaction, transactionId, amount, successTime, refMsg);
+                            log.info("✅✅✅ Payment success callback processed successfully for transaction: {}", transaction.getTransactionCode());
+                        } catch (Exception e) {
+                            log.error("❌❌❌ EXCEPTION in handlePaymentSuccess for transaction {}: {}", 
+                                    transaction.getTransactionCode(), e.getMessage(), e);
+                            // Không throw để vẫn trả về "success" cho OKDPAY
+                        }
+                    } else {
+                        log.warn("Amount is zero or negative: {} for out_trade_no: {}", amount, outTradeNo);
+                    }
+                } catch (NumberFormatException e) {
+                    log.error("Invalid amount format in callback: {} for out_trade_no: {}", amount, outTradeNo);
+                }
+            } else if (params != null && "timeout".equals(params.get("status"))) {
+                // Xử lý timeout như mẫu (line 1955-1964)
+                log.info("Processing timeout callback for out_trade_no: {}", outTradeNo);
+                Transaction transaction = transactionRepository.findByReferenceCode(outTradeNo).orElse(null);
+                if (transaction == null) {
+                    transaction = transactionRepository.findByTransactionCode(outTradeNo).orElse(null);
+                }
+                if (transaction != null && transaction.getStatus() == Transaction.TransactionStatus.PENDING) {
+                    handlePaymentCancelled(transaction, "Timeout");
+                }
             } else {
-                // refCode = 1 hoặc giá trị khác: Chưa xử lý hoặc không xác định
-                log.info("Callback received with refCode={} (1=Chưa xử lý or unknown). Transaction: {}, refMsg: {}", 
-                        refCode, outTradeNo, refMsg);
-                // Không xử lý, chỉ log
+                log.warn("Callback received with amount={} or status={} for out_trade_no: {}. Not processing.", 
+                        amount, params.get("status"), outTradeNo);
             }
 
             // Bước 7: Bắt buộc trả về "success" (theo tài liệu: "Sau khi nhận callback phải trả về chuỗi: success")
@@ -138,6 +225,18 @@ public class OkdpayCallbackController {
             // NHƯNG cần check logs để fix lỗi
             return ResponseEntity.ok("success");
         }
+    }
+
+    /**
+     * Public method để xử lý payment success (dùng cho scheduled task)
+     */
+    public void processPaymentSuccess(
+            Transaction transaction,
+            String gatewayTransactionId,
+            String amount,
+            String successTime,
+            String refMsg) {
+        handlePaymentSuccess(transaction, gatewayTransactionId, amount, successTime, refMsg);
     }
 
     private void handlePaymentSuccess(
@@ -174,25 +273,34 @@ public class OkdpayCallbackController {
             
             log.info("Loaded user: {} for transaction: {}", user.getUsername(), transactionCode);
 
-            // Cập nhật số tiền thực tế nếu có
-            BigDecimal depositAmount = transaction.getNetAmount();
+            // Cập nhật số tiền thực tế từ callback (y hệt mẫu: dùng amount từ callback)
+            // Mẫu: Number(checkPayment.money) - dùng số tiền đã lưu trong payment
+            BigDecimal depositAmount = transaction.getAmount(); // Dùng amount (số tiền nạp ban đầu)
+            
             if (amount != null && !amount.isEmpty()) {
                 try {
                     BigDecimal actualAmount = new BigDecimal(amount);
+                    // Cập nhật amount từ callback (số tiền thực tế thanh toán)
                     transaction.setAmount(actualAmount);
-                    // Tính lại net amount (có thể không có fee cho auto deposit)
-                    transaction.setNetAmount(actualAmount);
+                    // NetAmount = amount - fee (nếu có fee)
+                    BigDecimal fee = transaction.getFee() != null ? transaction.getFee() : BigDecimal.ZERO;
+                    transaction.setNetAmount(actualAmount.subtract(fee));
+                    // Để tính điểm, dùng actualAmount (số tiền thực tế từ callback)
                     depositAmount = actualAmount;
-                    log.info("Updated transaction amount to: {}", actualAmount);
+                    log.info("Updated transaction - Amount: {}, Fee: {}, NetAmount: {}, DepositAmount for points: {}", 
+                            actualAmount, fee, actualAmount.subtract(fee), depositAmount);
                 } catch (NumberFormatException e) {
-                    log.warn("Invalid amount format in callback: {}, using existing netAmount: {}", 
+                    log.warn("Invalid amount format in callback: {}, using existing amount: {}", 
                             amount, depositAmount);
                 }
             }
 
-            // Cộng điểm cho user (1000 VND = 1 điểm)
-            // Quan trọng: Luôn cộng điểm khi refCode = 2 (Thanh toán thành công)
+            // Cộng điểm cho user (1000 VND = 1 điểm) - y hệt mẫu
+            // Mẫu: money: Number(checkPayment.user.money) + Number(checkPayment.money) + ...
+            // Tức là: cộng số tiền nạp vào tài khoản (1000 VND = 1 điểm)
             BigDecimal pointsToAdd = depositAmount.divide(BigDecimal.valueOf(1000), 0, java.math.RoundingMode.DOWN);
+            
+            log.info("Calculating points - DepositAmount: {}, PointsToAdd: {}", depositAmount, pointsToAdd);
             
             if (pointsToAdd.compareTo(BigDecimal.ZERO) <= 0) {
                 log.warn("Points to add is zero or negative: {} for amount: {}. Transaction: {}", 
@@ -255,7 +363,10 @@ public class OkdpayCallbackController {
         }
     }
 
-    private void handlePaymentCancelled(Transaction transaction, String refMsg) {
+    /**
+     * Public method để xử lý payment cancelled (dùng cho scheduled task)
+     */
+    public void handlePaymentCancelled(Transaction transaction, String refMsg) {
         String transactionCode = transaction.getTransactionCode();
         try {
             if (transaction.getStatus() != Transaction.TransactionStatus.PENDING) {
@@ -278,7 +389,10 @@ public class OkdpayCallbackController {
         }
     }
 
-    private void handlePaymentRefunded(Transaction transaction, String refMsg) {
+    /**
+     * Public method để xử lý payment refunded (dùng cho scheduled task)
+     */
+    public void handlePaymentRefunded(Transaction transaction, String refMsg) {
         String transactionCode = transaction.getTransactionCode();
         try {
             // Nếu đã cộng điểm rồi thì cần trừ lại

@@ -192,4 +192,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
           AND (u.staffRole IS NULL OR u.staffRole = 'AGENT')
     """)
     Page<User> findNonAdminNonStaff(Pageable pageable);
+
+    // Recent registered users (only USER role, exclude staff and admin)
+    @Query("SELECT u FROM User u WHERE u.role = 'USER' AND (u.staffRole IS NULL OR u.staffRole = 'AGENT') ORDER BY u.createdAt DESC")
+    List<User> findTop10RecentUsers(Pageable pageable);
 }

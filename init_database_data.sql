@@ -146,12 +146,6 @@ ON DUPLICATE KEY UPDATE name = name;
 INSERT INTO system_settings (setting_key, setting_value, description, category, created_at, updated_at) VALUES
 -- Withdrawal settings
 ('default_withdrawal_lock_reason', 'Tài khoản của bạn đã bị khóa rút tiền do vi phạm chính sách của hệ thống. Vui lòng liên hệ admin để được hỗ trợ.', 'Lý do mặc định khi khóa rút tiền của người dùng', 'WITHDRAWAL', NOW(), NOW()),
-('min_withdrawal_amount', '50000', 'Số tiền rút tối thiểu', 'WITHDRAWAL', NOW(), NOW()),
-('max_withdrawal_amount', '50000000', 'Số tiền rút tối đa', 'WITHDRAWAL', NOW(), NOW()),
-
--- Deposit settings
-('min_deposit_amount', '50000', 'Số tiền nạp tối thiểu', 'DEPOSIT', NOW(), NOW()),
-('max_deposit_amount', '100000000', 'Số tiền nạp tối đa', 'DEPOSIT', NOW(), NOW()),
 
 -- System settings
 ('system_maintenance_message', 'Hệ thống đang bảo trì. Vui lòng quay lại sau.', 'Thông báo khi hệ thống bảo trì', 'SYSTEM', NOW(), NOW()),

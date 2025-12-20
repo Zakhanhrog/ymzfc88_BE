@@ -7,6 +7,7 @@ import com.xsecret.repository.PaymentMethodRepository;
 import com.xsecret.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,13 +24,32 @@ public class PaymentMethodService {
     private final PaymentMethodRepository paymentMethodRepository;
     private final TransactionRepository transactionRepository;
     
+    @Value("${app.okdpay.default-channel-code:1001}")
+    private String okdpayDefaultChannelCode; // Mã kênh mặc định từ config
+    
+    /**
+     * Helper method để convert PaymentMethod sang DTO với channelCode từ config
+     */
+    private PaymentMethodResponseDto toDto(PaymentMethod entity) {
+        // Tự động set channelCode từ config cho BANK nếu null
+        String channelCode = entity.getChannelCode();
+        if (entity.getType() == PaymentMethod.PaymentType.BANK 
+                && (channelCode == null || channelCode.trim().isEmpty())) {
+            channelCode = okdpayDefaultChannelCode;
+        }
+        
+        PaymentMethodResponseDto dto = PaymentMethodResponseDto.fromEntity(entity);
+        dto.setChannelCode(channelCode); // Override với channelCode từ config nếu cần
+        return dto;
+    }
+    
     /**
      * Lấy tất cả payment methods đang active cho user
      */
     public List<PaymentMethodResponseDto> getActivePaymentMethods() {
         List<PaymentMethod> paymentMethods = paymentMethodRepository.findByIsActiveTrueOrderByDisplayOrderAsc();
         return paymentMethods.stream()
-                .map(PaymentMethodResponseDto::fromEntity)
+                .map(this::toDto)
                 .collect(Collectors.toList());
     }
     
@@ -39,7 +59,7 @@ public class PaymentMethodService {
     public List<PaymentMethodResponseDto> getPaymentMethodsByType(PaymentMethod.PaymentType type) {
         List<PaymentMethod> paymentMethods = paymentMethodRepository.findByTypeAndIsActiveTrueOrderByDisplayOrderAsc(type);
         return paymentMethods.stream()
-                .map(PaymentMethodResponseDto::fromEntity)
+                .map(this::toDto)
                 .collect(Collectors.toList());
     }
     
@@ -49,7 +69,7 @@ public class PaymentMethodService {
     public List<PaymentMethodResponseDto> getAllPaymentMethods() {
         List<PaymentMethod> paymentMethods = paymentMethodRepository.findAll();
         return paymentMethods.stream()
-                .map(PaymentMethodResponseDto::fromEntity)
+                .map(this::toDto)
                 .collect(Collectors.toList());
     }
     
@@ -73,15 +93,63 @@ public class PaymentMethodService {
             request.setDisplayOrder(maxOrder + 1);
         }
         
+        // Tự động set channelCode: Ưu tiên từ request, fallback về mapping từ PaymentType
+        // Cho phép admin set channelCode trong DB (vì DB đã đúng rồi)
+        String channelCode = request.getChannelCode();
+        
+        // Nếu không có channelCode từ request, tự động lấy từ PaymentType
+        if (channelCode == null || channelCode.trim().isEmpty()) {
+            channelCode = OkdpayChannelMapper.getChannelCodeForType(request.getType());
+            log.info("Auto-setting channelCode for PaymentType {} -> {} (from mapper)", 
+                    request.getType(), channelCode);
+        } else {
+            // Admin đã set channelCode, validate xem có hợp lệ không
+            String expectedChannelCode = OkdpayChannelMapper.getChannelCodeForType(request.getType());
+            if (expectedChannelCode != null && !channelCode.equals(expectedChannelCode)) {
+                log.warn("⚠️ Admin set channelCode '{}' but PaymentType '{}' typically maps to '{}'. Using admin value: {}", 
+                        channelCode, request.getType(), expectedChannelCode, channelCode);
+            } else {
+                log.info("Using channelCode from request: {} for PaymentType: {}", channelCode, request.getType());
+            }
+        }
+        
+        // Tự động set minAmount và maxAmount theo quy định OKDPAY (LUÔN dùng từ channel, không dùng từ request)
+        BigDecimal finalMinAmount = null;
+        BigDecimal finalMaxAmount = null;
+        
+        if (channelCode != null) {
+            BigDecimal channelMinAmount = OkdpayChannelMapper.getMinAmountForChannel(channelCode);
+            BigDecimal channelMaxAmount = OkdpayChannelMapper.getMaxAmountForChannel(channelCode);
+            
+            if (channelMinAmount != null) {
+                finalMinAmount = channelMinAmount; // LUÔN dùng minAmount từ channel (cố định theo OKDPAY)
+                log.info("Auto-setting minAmount from channel {}: {}", channelCode, finalMinAmount);
+            }
+            if (channelMaxAmount != null) {
+                finalMaxAmount = channelMaxAmount; // LUÔN dùng maxAmount từ channel (cố định theo OKDPAY)
+                log.info("Auto-setting maxAmount from channel {}: {}", channelCode, finalMaxAmount);
+            }
+        }
+        
+        // Nếu không có channelCode hoặc không lấy được min/max, dùng giá trị từ request (fallback)
+        if (finalMinAmount == null) {
+            finalMinAmount = request.getMinAmount();
+            log.warn("Could not get minAmount from channel {}, using from request: {}", channelCode, finalMinAmount);
+        }
+        if (finalMaxAmount == null) {
+            finalMaxAmount = request.getMaxAmount();
+            log.warn("Could not get maxAmount from channel {}, using from request: {}", channelCode, finalMaxAmount);
+        }
+        
         PaymentMethod paymentMethod = PaymentMethod.builder()
                 .type(request.getType())
                 .name(request.getName())
                 .accountNumber(request.getAccountNumber())
                 .accountName(request.getAccountName())
                 .bankCode(request.getBankCode())
-                .channelCode(request.getChannelCode()) // Mã kênh từ OKDPAY
-                .minAmount(request.getMinAmount())
-                .maxAmount(request.getMaxAmount())
+                .channelCode(channelCode) // Mã kênh từ OKDPAY (tự động set theo PaymentType nếu null)
+                .minAmount(finalMinAmount) // Cố định theo quy định OKDPAY
+                .maxAmount(finalMaxAmount) // Cố định theo quy định OKDPAY
                 .feePercent(request.getFeePercent() != null ? request.getFeePercent() : BigDecimal.ZERO)
                 .feeFixed(request.getFeeFixed() != null ? request.getFeeFixed() : BigDecimal.ZERO)
                 .processingTime(request.getProcessingTime())
@@ -94,7 +162,7 @@ public class PaymentMethodService {
         PaymentMethod savedPaymentMethod = paymentMethodRepository.save(paymentMethod);
         log.info("Created new payment method: {} - {}", savedPaymentMethod.getType(), savedPaymentMethod.getName());
         
-        return PaymentMethodResponseDto.fromEntity(savedPaymentMethod);
+        return toDto(savedPaymentMethod);
     }
     
     /**
@@ -117,15 +185,63 @@ public class PaymentMethodService {
             throw new RuntimeException("Maximum amount must be greater than minimum amount");
         }
         
+        // Tự động set channelCode: Ưu tiên từ request, fallback về mapping từ PaymentType
+        // Cho phép admin set channelCode trong DB (vì DB đã đúng rồi)
+        String channelCode = request.getChannelCode();
+        
+        // Nếu không có channelCode từ request, tự động lấy từ PaymentType
+        if (channelCode == null || channelCode.trim().isEmpty()) {
+            channelCode = OkdpayChannelMapper.getChannelCodeForType(request.getType());
+            log.info("Auto-setting channelCode for PaymentType {} -> {} (from mapper)", 
+                    request.getType(), channelCode);
+        } else {
+            // Admin đã set channelCode, validate xem có hợp lệ không
+            String expectedChannelCode = OkdpayChannelMapper.getChannelCodeForType(request.getType());
+            if (expectedChannelCode != null && !channelCode.equals(expectedChannelCode)) {
+                log.warn("⚠️ Admin set channelCode '{}' but PaymentType '{}' typically maps to '{}'. Using admin value: {}", 
+                        channelCode, request.getType(), expectedChannelCode, channelCode);
+            } else {
+                log.info("Using channelCode from request: {} for PaymentType: {}", channelCode, request.getType());
+            }
+        }
+        
+        // Tự động set minAmount và maxAmount theo quy định OKDPAY (LUÔN dùng từ channel, không dùng từ request)
+        BigDecimal finalMinAmount = null;
+        BigDecimal finalMaxAmount = null;
+        
+        if (channelCode != null) {
+            BigDecimal channelMinAmount = OkdpayChannelMapper.getMinAmountForChannel(channelCode);
+            BigDecimal channelMaxAmount = OkdpayChannelMapper.getMaxAmountForChannel(channelCode);
+            
+            if (channelMinAmount != null) {
+                finalMinAmount = channelMinAmount; // LUÔN dùng minAmount từ channel (cố định theo OKDPAY)
+                log.info("Auto-setting minAmount from channel {}: {}", channelCode, finalMinAmount);
+            }
+            if (channelMaxAmount != null) {
+                finalMaxAmount = channelMaxAmount; // LUÔN dùng maxAmount từ channel (cố định theo OKDPAY)
+                log.info("Auto-setting maxAmount from channel {}: {}", channelCode, finalMaxAmount);
+            }
+        }
+        
+        // Nếu không có channelCode hoặc không lấy được min/max, dùng giá trị từ request (fallback)
+        if (finalMinAmount == null) {
+            finalMinAmount = request.getMinAmount();
+            log.warn("Could not get minAmount from channel {}, using from request: {}", channelCode, finalMinAmount);
+        }
+        if (finalMaxAmount == null) {
+            finalMaxAmount = request.getMaxAmount();
+            log.warn("Could not get maxAmount from channel {}, using from request: {}", channelCode, finalMaxAmount);
+        }
+        
         // Update fields
         paymentMethod.setType(request.getType());
         paymentMethod.setName(request.getName());
         paymentMethod.setAccountNumber(request.getAccountNumber());
         paymentMethod.setAccountName(request.getAccountName());
         paymentMethod.setBankCode(request.getBankCode());
-        paymentMethod.setChannelCode(request.getChannelCode()); // Mã kênh từ OKDPAY
-        paymentMethod.setMinAmount(request.getMinAmount());
-        paymentMethod.setMaxAmount(request.getMaxAmount());
+        paymentMethod.setChannelCode(channelCode); // LUÔN dùng mapping từ PaymentType
+        paymentMethod.setMinAmount(finalMinAmount); // LUÔN dùng từ channel (cố định theo OKDPAY)
+        paymentMethod.setMaxAmount(finalMaxAmount); // LUÔN dùng từ channel (cố định theo OKDPAY)
         paymentMethod.setFeePercent(request.getFeePercent() != null ? request.getFeePercent() : BigDecimal.ZERO);
         paymentMethod.setFeeFixed(request.getFeeFixed() != null ? request.getFeeFixed() : BigDecimal.ZERO);
         paymentMethod.setProcessingTime(request.getProcessingTime());
@@ -137,7 +253,7 @@ public class PaymentMethodService {
         PaymentMethod updatedPaymentMethod = paymentMethodRepository.save(paymentMethod);
         log.info("Updated payment method: {} - {}", updatedPaymentMethod.getType(), updatedPaymentMethod.getName());
         
-        return PaymentMethodResponseDto.fromEntity(updatedPaymentMethod);
+        return toDto(updatedPaymentMethod);
     }
     
     /**
@@ -175,7 +291,7 @@ public class PaymentMethodService {
                 updatedPaymentMethod.getName(), 
                 updatedPaymentMethod.getIsActive() ? "ACTIVE" : "INACTIVE");
         
-        return PaymentMethodResponseDto.fromEntity(updatedPaymentMethod);
+        return toDto(updatedPaymentMethod);
     }
     
     /**
@@ -185,7 +301,7 @@ public class PaymentMethodService {
         PaymentMethod paymentMethod = paymentMethodRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Payment method not found"));
         
-        return PaymentMethodResponseDto.fromEntity(paymentMethod);
+        return toDto(paymentMethod);
     }
     
     /**

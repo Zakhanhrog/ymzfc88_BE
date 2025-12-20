@@ -19,6 +19,7 @@ public class DashboardOverviewResponse {
     private Summary summary;
     private List<ChartPoint> chart;
     private List<ActivityItem> recentActivities;
+    private List<RecentUserItem> recentUsers;
 
     @Data
     @Builder
@@ -30,6 +31,7 @@ public class DashboardOverviewResponse {
         private long newUsersToday;
         private long onlineUsers;
         private BigDecimal revenueToday;
+        private BigDecimal profitToday;
         private long transactionsTodayCount;
         private BigDecimal transactionsTodayAmount;
         private BigDecimal depositsTodayAmount;
@@ -46,6 +48,9 @@ public class DashboardOverviewResponse {
         private long totalBets;
         private long transactions;
         private BigDecimal transactionAmount;
+        private BigDecimal winProfit; // Tiền thắng cược (không tính gốc)
+        private BigDecimal lostStake; // Tiền thua cược
+        private BigDecimal totalRefund; // Tổng tiền hoàn
     }
 
     @Data
@@ -57,9 +62,22 @@ public class DashboardOverviewResponse {
         private String type;
         private String username;
         private String description;
+        private String betCode;
         private BigDecimal amount;
         private String status;
         private LocalDateTime time;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class RecentUserItem {
+        private Long id;
+        private String username;
+        private LocalDateTime createdAt;
+        private String status;
+        private BigDecimal points;
     }
 }
 

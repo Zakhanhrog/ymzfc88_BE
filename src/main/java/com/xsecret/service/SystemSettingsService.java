@@ -260,43 +260,6 @@ public class SystemSettingsService {
                     .build());
         }
 
-        // Min/Max amounts
-        if (!systemSettingsRepository.existsBySettingKey(SystemSettings.MIN_WITHDRAWAL_AMOUNT)) {
-            createOrUpdateSetting(SystemSettingsRequest.builder()
-                    .settingKey(SystemSettings.MIN_WITHDRAWAL_AMOUNT)
-                    .settingValue("50000")
-                    .description("Số tiền rút tối thiểu")
-                    .category("WITHDRAWAL")
-                    .build());
-        }
-
-        if (!systemSettingsRepository.existsBySettingKey(SystemSettings.MAX_WITHDRAWAL_AMOUNT)) {
-            createOrUpdateSetting(SystemSettingsRequest.builder()
-                    .settingKey(SystemSettings.MAX_WITHDRAWAL_AMOUNT)
-                    .settingValue("50000000")
-                    .description("Số tiền rút tối đa")
-                    .category("WITHDRAWAL")
-                    .build());
-        }
-
-        if (!systemSettingsRepository.existsBySettingKey(SystemSettings.MIN_DEPOSIT_AMOUNT)) {
-            createOrUpdateSetting(SystemSettingsRequest.builder()
-                    .settingKey(SystemSettings.MIN_DEPOSIT_AMOUNT)
-                    .settingValue("50000")
-                    .description("Số tiền nạp tối thiểu")
-                    .category("DEPOSIT")
-                    .build());
-        }
-
-        if (!systemSettingsRepository.existsBySettingKey(SystemSettings.MAX_DEPOSIT_AMOUNT)) {
-            createOrUpdateSetting(SystemSettingsRequest.builder()
-                    .settingKey(SystemSettings.MAX_DEPOSIT_AMOUNT)
-                    .settingValue("100000000")
-                    .description("Số tiền nạp tối đa")
-                    .category("DEPOSIT")
-                    .build());
-        }
-
         if (!systemSettingsRepository.existsBySettingKey(SystemSettings.AGENT_COMMISSION_PERCENTAGE)) {
             createOrUpdateSetting(SystemSettingsRequest.builder()
                     .settingKey(SystemSettings.AGENT_COMMISSION_PERCENTAGE)

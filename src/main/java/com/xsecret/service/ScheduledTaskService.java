@@ -1,5 +1,8 @@
 package com.xsecret.service;
 
+import com.xsecret.controller.OkdpayCallbackController;
+import com.xsecret.entity.Transaction;
+import com.xsecret.repository.TransactionRepository;
 import com.xsecret.service.lottery.LotteryResultAutoImportService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,6 +13,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -25,6 +29,9 @@ public class ScheduledTaskService {
     private final LotteryResultService lotteryResultService;
     private final GameRefundService gameRefundService;
     private final DailyLossRefundService dailyLossRefundService;
+    private final OkdpayService okdpayService;
+    private final TransactionRepository transactionRepository;
+    private final OkdpayCallbackController okdpayCallbackController;
     
     // Timezone Vietnam
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
@@ -284,6 +291,134 @@ public class ScheduledTaskService {
             dailyLossRefundService.processDueDailyLossRefunds();
         } catch (Exception ex) {
             log.error("❌ Error while processing scheduled daily loss refunds", ex);
+        }
+    }
+
+    /**
+     * Tự động check lại các transaction PENDING (auto deposit) từ OKDPAY
+     * Chạy mỗi 2 phút để check lại transaction status
+     * Dùng khi callback không đến được (ví dụ: chạy local)
+     * 
+     * ĐÃ TẮT: Thay bằng TransactionPollingService - check liên tục cho từng transaction ngay sau khi tạo
+     */
+    // @Scheduled(cron = "0 */2 * * * ?", zone = "Asia/Ho_Chi_Minh")
+    public void checkPendingOkdpayTransactions() {
+        try {
+            log.info("🔄 Checking pending OKDPAY transactions...");
+            
+            // Tìm tất cả transaction PENDING
+            List<com.xsecret.entity.Transaction> pendingTransactions = transactionRepository.findByStatusOrderByCreatedAtAsc(
+                    com.xsecret.entity.Transaction.TransactionStatus.PENDING
+            );
+            
+            log.info("Found {} total PENDING transactions", pendingTransactions.size());
+            
+            int checkedCount = 0;
+            int successCount = 0;
+            int skippedNotAutoDeposit = 0;
+            int skippedTooNew = 0;
+            int skippedTooOld = 0;
+            int skippedNoReferenceCode = 0;
+            
+            for (com.xsecret.entity.Transaction transaction : pendingTransactions) {
+                // Check auto deposit transactions HOẶC có gateway_type = OKDPAY
+                // Vì có thể transaction cũ không có isAutoDeposit set nhưng vẫn là OKDPAY
+                boolean isAutoDeposit = transaction.getIsAutoDeposit() != null && transaction.getIsAutoDeposit();
+                boolean isOkdpay = "OKDPAY".equalsIgnoreCase(transaction.getGatewayType());
+                String referenceCode = transaction.getReferenceCode();
+                boolean hasReferenceCode = referenceCode != null && !referenceCode.isEmpty();
+                
+                // Chỉ check nếu là auto deposit HOẶC có gateway_type = OKDPAY
+                // Nếu không phải auto deposit và không phải OKDPAY thì skip
+                if (!isAutoDeposit && !isOkdpay) {
+                    skippedNotAutoDeposit++;
+                    continue;
+                }
+                
+                // Nếu là OKDPAY nhưng không có referenceCode thì skip
+                if (isOkdpay && !hasReferenceCode) {
+                    skippedNoReferenceCode++;
+                    log.warn("Skipping OKDPAY transaction {} - no referenceCode", transaction.getTransactionCode());
+                    continue;
+                }
+                
+                // Chỉ check transactions cũ hơn 30 giây (tránh check ngay sau khi tạo)
+                // Giảm từ 1 phút xuống 30 giây để check nhanh hơn
+                if (transaction.getCreatedAt().isAfter(java.time.LocalDateTime.now().minusSeconds(30))) {
+                    skippedTooNew++;
+                    log.debug("Skipping transaction {} - too new (created: {}, now: {})", 
+                            transaction.getTransactionCode(), transaction.getCreatedAt(), java.time.LocalDateTime.now());
+                    continue;
+                }
+                
+                // TẠM THỜI: Bỏ giới hạn thời gian để check toàn bộ giao dịch
+                // Vì đang lệch giờ, sau sẽ chỉnh lại
+                // if (transaction.getCreatedAt().isBefore(java.time.LocalDateTime.now().minusHours(24))) {
+                //     skippedTooOld++;
+                //     log.debug("Skipping transaction {} - too old (created: {}, now: {})", 
+                //             transaction.getTransactionCode(), transaction.getCreatedAt(), java.time.LocalDateTime.now());
+                //     continue;
+                // }
+                
+                try {
+                    checkedCount++;
+                    log.info("🔍 Checking transaction: {}, ReferenceCode: {}, CreatedAt: {}, GatewayType: {}, IsAutoDeposit: {}", 
+                            transaction.getTransactionCode(), referenceCode, transaction.getCreatedAt(), 
+                            transaction.getGatewayType(), transaction.getIsAutoDeposit());
+                    
+                    // Query order status từ OKDPAY
+                    OkdpayService.OkdpayQueryOrderResponse queryResponse = okdpayService.queryOrder(referenceCode);
+                    
+                    log.info("📥 OKDPAY Response for transaction {}: status={}, refCode={}, msg={}, transactionId={}, amount={}", 
+                            transaction.getTransactionCode(), queryResponse.getStatus(), queryResponse.getRefCode(), 
+                            queryResponse.getMsg(), queryResponse.getTransactionId(), queryResponse.getAmount());
+                    
+                    if (!"success".equalsIgnoreCase(queryResponse.getStatus())) {
+                        log.warn("⚠️ Query order failed for transaction {}: {}", transaction.getTransactionCode(), queryResponse.getMsg());
+                        continue;
+                    }
+                    
+                    // Check refCode: 2 = đã thanh toán
+                    String refCode = queryResponse.getRefCode();
+                    if ("2".equals(refCode)) {
+                        log.info("✅ Transaction {} is PAID (refCode=2). Amount: {}, TransactionId: {}. Processing payment success...", 
+                                transaction.getTransactionCode(), queryResponse.getAmount(), queryResponse.getTransactionId());
+                        
+                        // Gọi handlePaymentSuccess để cộng điểm
+                        okdpayCallbackController.processPaymentSuccess(
+                                transaction,
+                                queryResponse.getTransactionId(),
+                                queryResponse.getAmount(),
+                                queryResponse.getSuccessTime(),
+                                queryResponse.getRefMsg()
+                        );
+                        successCount++;
+                        log.info("✅ Successfully processed transaction {} - points should be added", transaction.getTransactionCode());
+                    } else if ("3".equals(refCode)) {
+                        log.info("❌ Transaction {} is cancelled (refCode=3)", transaction.getTransactionCode());
+                        okdpayCallbackController.handlePaymentCancelled(transaction, queryResponse.getRefMsg());
+                    } else if ("4".equals(refCode)) {
+                        log.info("🔄 Transaction {} is refunded (refCode=4)", transaction.getTransactionCode());
+                        okdpayCallbackController.handlePaymentRefunded(transaction, queryResponse.getRefMsg());
+                    } else {
+                        log.info("⏳ Transaction {} still pending (refCode={}, expected 2 for paid)", 
+                                transaction.getTransactionCode(), refCode);
+                    }
+                    
+                } catch (Exception e) {
+                    log.error("❌ Error checking transaction {}: {}", transaction.getTransactionCode(), e.getMessage(), e);
+                }
+            }
+            
+            // Log tổng kết
+            log.info("✅ Checked {} pending OKDPAY transactions, {} processed successfully", checkedCount, successCount);
+            if (skippedNotAutoDeposit > 0 || skippedTooNew > 0 || skippedTooOld > 0 || skippedNoReferenceCode > 0) {
+                log.info("Skipped: {} not auto deposit, {} too new, {} too old, {} no referenceCode", 
+                        skippedNotAutoDeposit, skippedTooNew, skippedTooOld, skippedNoReferenceCode);
+            }
+            
+        } catch (Exception ex) {
+            log.error("❌ Error while checking pending OKDPAY transactions", ex);
         }
     }
 }

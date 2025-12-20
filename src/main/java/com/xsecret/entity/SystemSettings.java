@@ -47,10 +47,6 @@ public class SystemSettings {
     // Các setting keys mặc định
     public static final String DEFAULT_WITHDRAWAL_LOCK_REASON = "default_withdrawal_lock_reason";
     public static final String SYSTEM_MAINTENANCE_MESSAGE = "system_maintenance_message";
-    public static final String MIN_WITHDRAWAL_AMOUNT = "min_withdrawal_amount";
-    public static final String MAX_WITHDRAWAL_AMOUNT = "max_withdrawal_amount";
-    public static final String MIN_DEPOSIT_AMOUNT = "min_deposit_amount";
-    public static final String MAX_DEPOSIT_AMOUNT = "max_deposit_amount";
     public static final String AGENT_COMMISSION_PERCENTAGE = "agent_commission_percentage";
     
     // Contact page links

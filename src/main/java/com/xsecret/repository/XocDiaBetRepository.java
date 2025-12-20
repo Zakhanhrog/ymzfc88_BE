@@ -22,10 +22,11 @@ public interface XocDiaBetRepository extends JpaRepository<XocDiaBet, Long> {
 
     Page<XocDiaBet> findByUserOrderByCreatedAtDesc(User user, Pageable pageable);
 
+    @Query("SELECT b FROM XocDiaBet b JOIN FETCH b.session WHERE b.user = :user AND b.createdAt BETWEEN :start AND :end ORDER BY b.createdAt DESC")
     Page<XocDiaBet> findByUserAndCreatedAtBetweenOrderByCreatedAtDesc(
-            User user,
-            Instant start,
-            Instant end,
+            @Param("user") User user,
+            @Param("start") Instant start,
+            @Param("end") Instant end,
             Pageable pageable
     );
 

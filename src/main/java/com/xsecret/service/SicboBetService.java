@@ -885,13 +885,27 @@ public class SicboBetService {
         int sanitizedSize = Math.min(Math.max(size, 1), 100); // Tăng max lên 100 để FE có thể tự điều chỉnh
 
         // Validate và tính toán date range
-        // Mặc định chỉ cho phép xem tối đa 14 ngày gần nhất
+        // days = null hoặc 0: Hôm nay (từ 00:00:00 hôm nay)
+        // days = -1: Hôm qua (từ 00:00:00 đến 23:59:59 hôm qua)
+        // days > 0: Số ngày gần nhất (tối đa 14 ngày)
+        Instant startDate;
         Instant endDate = Instant.now();
-        int daysToUse = (days != null && days > 0) ? days : 14;
-        if (daysToUse > 14) {
-                throw new IllegalArgumentException("Chỉ được xem lịch sử tối đa 14 ngày");
-            }
-        Instant startDate = endDate.minus(daysToUse, java.time.temporal.ChronoUnit.DAYS);
+        
+        if (days == null || days == 0) {
+            // Hôm nay: từ 00:00:00 hôm nay đến bây giờ
+            java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
+            startDate = today.atStartOfDay(java.time.ZoneId.of("Asia/Ho_Chi_Minh")).toInstant();
+        } else if (days == -1) {
+            // Hôm qua: từ 00:00:00 đến 23:59:59 hôm qua
+            java.time.LocalDate yesterday = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh")).minusDays(1);
+            startDate = yesterday.atStartOfDay(java.time.ZoneId.of("Asia/Ho_Chi_Minh")).toInstant();
+            endDate = yesterday.atTime(23, 59, 59).atZone(java.time.ZoneId.of("Asia/Ho_Chi_Minh")).toInstant();
+        } else if (days > 0 && days <= 14) {
+            // Số ngày gần nhất (tối đa 14 ngày)
+            startDate = endDate.minus(days, java.time.temporal.ChronoUnit.DAYS);
+        } else {
+            throw new IllegalArgumentException("Tham số days không hợp lệ. Chấp nhận: null/0 (Hôm nay), -1 (Hôm qua), hoặc 1-14 ngày");
+        }
 
         Pageable pageable = PageRequest.of(sanitizedPage, sanitizedSize);
         Page<SicboBet> betPage = betRepository.findByUserAndCreatedAtBetweenOrderByCreatedAtDesc(

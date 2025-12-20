@@ -19,6 +19,17 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     
     Optional<Transaction> findByTransactionCode(String transactionCode);
     
+    // Tìm transaction theo referenceCode (dùng cho OKDPAY out_trade_no)
+    Optional<Transaction> findByReferenceCode(String referenceCode);
+    
+    // Tìm transaction theo referenceCode, status và amount (y hệt mẫu: transactionid, status_payment, money)
+    @Query("SELECT t FROM Transaction t WHERE t.referenceCode = :referenceCode AND t.status = :status AND t.amount = :amount")
+    Optional<Transaction> findByReferenceCodeAndStatusAndAmount(
+            @Param("referenceCode") String referenceCode,
+            @Param("status") Transaction.TransactionStatus status,
+            @Param("amount") BigDecimal amount
+    );
+    
     List<Transaction> findByUserOrderByCreatedAtDesc(User user);
     
     Page<Transaction> findByUserOrderByCreatedAtDesc(User user, Pageable pageable);
